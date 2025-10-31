@@ -1,4 +1,4 @@
-import type { Config } from 'tailwindcss'
+import type { Config } from 'tailwindcss';
 
 const config: Config = {
   content: [
@@ -14,7 +14,7 @@ const config: Config = {
         'brand-pink': '#E91E63',
         'brand-pink-dark': '#B81A4F',
         'brand-pink-light': '#FFEDF4',
-        
+
         'gradient-start': '#A78BFA',
         'gradient-middle': '#F472B6',
         'gradient-end': '#60A5FA',
@@ -32,5 +32,5 @@ const config: Config = {
     },
   },
   plugins: [],
-}
-export default config
+};
+export default config;

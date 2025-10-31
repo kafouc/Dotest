@@ -30,7 +30,10 @@ export async function POST(req: Request) {
     const count = Math.min(Math.max(1, numQuestions), 10); // Force entre 1 et 10
 
     if (!userQuery) {
-      return NextResponse.json({ error: 'Question ("query") manquante' }, { status: 400 });
+      return NextResponse.json(
+        { error: 'Question ("query") manquante' },
+        { status: 400 }
+      );
     }
 
     // 1. Client Supabase
@@ -39,15 +42,23 @@ export async function POST(req: Request) {
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
       {
         cookies: {
-          get(name: string) { return cookies().get(name)?.value; },
-          set(name: string, value: string, options) { cookies().set(name, value, options); },
-          remove(name: string, options) { cookies().delete({ ...options, name }); },
+          get(name: string) {
+            return cookies().get(name)?.value;
+          },
+          set(name: string, value: string, options) {
+            cookies().set(name, value, options);
+          },
+          remove(name: string, options) {
+            cookies().delete({ ...options, name });
+          },
         },
       }
     );
 
     // 2. Vérifier l'utilisateur
-    const { data: { user } } = await supabase.auth.getUser();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
     if (!user) {
       return NextResponse.json({ error: 'Non autorisé' }, { status: 401 });
     }
@@ -64,27 +75,37 @@ export async function POST(req: Request) {
       throw new Error("Cohere n'a pas retourné d'embedding pour la question.");
     }
     // @ts-expect-error (Corrige l'erreur ESLint)
-    const queryEmbedding = embedResponse.embeddings[0]; 
+    const queryEmbedding = embedResponse.embeddings[0];
 
     // 4. Appel de la fonction SQL (RAG)
     const { data: sections, error: matchError } = await supabase.rpc(
-      'match_document_sections', 
+      'match_document_sections',
       {
-        query_embedding: queryEmbedding, 
+        query_embedding: queryEmbedding,
         match_threshold: 0.4,
         match_count: 7,
         p_user_id: user.id,
-        p_document_path: documentPath 
+        p_document_path: documentPath,
       }
     );
 
-    if (matchError) { throw new Error(matchError.message); }
+    if (matchError) {
+      throw new Error(matchError.message);
+    }
     if (!sections || sections.length === 0) {
-      return NextResponse.json({ error: "Je n'ai trouvé aucune information pertinente dans vos documents pour répondre à cette demande." }, { status: 404 });
+      return NextResponse.json(
+        {
+          error:
+            "Je n'ai trouvé aucune information pertinente dans vos documents pour répondre à cette demande.",
+        },
+        { status: 404 }
+      );
     }
 
     // 5. Contexte (Type 'any' corrigé en 'unknown' puis vérifié)
-    const context = (sections as { content: string }[]).map((s) => s.content).join('\n\n---\n\n');
+    const context = (sections as { content: string }[])
+      .map((s) => s.content)
+      .join('\n\n---\n\n');
 
     // 6. Prompt pour Groq
     const prompt = `
@@ -104,36 +125,52 @@ export async function POST(req: Request) {
     // 7. Appel Groq
     const chatCompletion = await groq.chat.completions.create({
       messages: [
-        { role: 'system', content: 'Tu réponds uniquement en format JSON valide.' },
-        { role: 'user', content: prompt }
+        {
+          role: 'system',
+          content: 'Tu réponds uniquement en format JSON valide.',
+        },
+        { role: 'user', content: prompt },
       ],
       model: 'qwen/qwen3-32b', // Le modèle que vous avez choisi
       temperature: 0.1,
-      response_format: { type: 'json_object' }, 
+      response_format: { type: 'json_object' },
     });
-    
+
     const text = chatCompletion.choices[0]?.message?.content;
-    if (!text) { throw new Error("L'IA n'a pas renvoyé de réponse."); }
+    if (!text) {
+      throw new Error("L'IA n'a pas renvoyé de réponse.");
+    }
 
     // 8. Parser la réponse
     let quizData;
     try {
       quizData = JSON.parse(text);
       if (!quizData || !Array.isArray(quizData.quiz)) {
-        throw new Error("Le JSON reçu n'a pas la structure attendue { quiz: [...] }.");
+        throw new Error(
+          "Le JSON reçu n'a pas la structure attendue { quiz: [...] }."
+        );
       }
-    } catch (parseError) { // 'parseError' est maintenant utilisé
-      console.error("Erreur de parsing du JSON de Groq:", parseError, "Texte reçu:", text);
+    } catch (parseError) {
+      // 'parseError' est maintenant utilisé
+      console.error(
+        'Erreur de parsing du JSON de Groq:',
+        parseError,
+        'Texte reçu:',
+        text
+      );
       // On lance une nouvelle erreur qui inclut le message d'origine
-      throw new Error(`L'IA a renvoyé une réponse JSON mal formatée. Erreur: ${parseError instanceof Error ? parseError.message : String(parseError)}`);
+      throw new Error(
+        `L'IA a renvoyé une réponse JSON mal formatée. Erreur: ${parseError instanceof Error ? parseError.message : String(parseError)}`
+      );
     }
 
     // 9. Renvoyer le quiz
     return NextResponse.json({ quiz: quizData.quiz }, { status: 200 });
-
-  } catch (error: unknown) { // 'any' corrigé en 'unknown'
+  } catch (error: unknown) {
+    // 'any' corrigé en 'unknown'
     console.error('Erreur API Generate Quiz:', error);
-    const errorMessage = error instanceof Error ? error.message : "Erreur inconnue";
+    const errorMessage =
+      error instanceof Error ? error.message : 'Erreur inconnue';
     return NextResponse.json({ error: errorMessage }, { status: 500 });
   }
 }

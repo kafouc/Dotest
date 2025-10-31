@@ -16,14 +16,19 @@ const cohere = new CohereClient({
 });
 
 // --- Notre propre fonction de découpage ---
-function createChunks(text: string, chunkSize: number, chunkOverlap: number): string[] {
+function createChunks(
+  text: string,
+  chunkSize: number,
+  chunkOverlap: number
+): string[] {
   // ... (code de createChunks, inchangé)
-  const chunks: string[] = []; let i = 0;
+  const chunks: string[] = [];
+  let i = 0;
   while (i < text.length) {
     let endIndex = i + chunkSize;
     if (endIndex > text.length) endIndex = text.length;
     chunks.push(text.substring(i, endIndex));
-    i += (chunkSize - chunkOverlap);
+    i += chunkSize - chunkOverlap;
   }
   return chunks;
 }
@@ -32,10 +37,13 @@ function createChunks(text: string, chunkSize: number, chunkOverlap: number): st
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { path: filePath } = body; 
+    const { path: filePath } = body;
 
     if (!filePath) {
-      return NextResponse.json({ error: 'Chemin du fichier ("path") manquant' }, { status: 400 });
+      return NextResponse.json(
+        { error: 'Chemin du fichier ("path") manquant' },
+        { status: 400 }
+      );
     }
 
     // 1. Crée un client Supabase
@@ -44,15 +52,23 @@ export async function POST(req: Request) {
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
       {
         cookies: {
-          get(name: string) { return cookies().get(name)?.value; },
-          set(name: string, value: string, options) { cookies().set(name, value, options); },
-          remove(name: string, options) { cookies().delete({ ...options, name }); },
+          get(name: string) {
+            return cookies().get(name)?.value;
+          },
+          set(name: string, value: string, options) {
+            cookies().set(name, value, options);
+          },
+          remove(name: string, options) {
+            cookies().delete({ ...options, name });
+          },
         },
       }
     );
 
     // 2. Vérifie l'utilisateur
-    const { data: { user } } = await supabase.auth.getUser();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
     if (!user) {
       return NextResponse.json({ error: 'Non autorisé' }, { status: 401 });
     }
@@ -61,14 +77,16 @@ export async function POST(req: Request) {
     const { data: fileData, error: downloadError } = await supabase.storage
       .from('pdfs')
       .download(filePath);
-    if (downloadError) { throw new Error(downloadError.message); }
+    if (downloadError) {
+      throw new Error(downloadError.message);
+    }
 
     const buffer = await fileData.arrayBuffer();
-    const uint8array = new Uint8Array(buffer); 
+    const uint8array = new Uint8Array(buffer);
 
     // --- 4. Lit le texte du PDF (avec unpdf) ---
-    const { text: textPages } = await extractText(uint8array); 
-    const text = textPages.join('\n\n'); 
+    const { text: textPages } = await extractText(uint8array);
+    const text = textPages.join('\n\n');
     // --- FIN MODIFICATION ---
 
     // 5. Découpe le texte en "chunks"
@@ -77,8 +95,8 @@ export async function POST(req: Request) {
     // 6. Génère les embeddings (vecteurs)
     const embedResponse = await cohere.embed({
       texts: textsToEmbed,
-      model: 'embed-multilingual-v3.0', 
-      inputType: 'search_document', 
+      model: 'embed-multilingual-v3.0',
+      inputType: 'search_document',
     });
 
     // @ts-expect-error (Corrige l'erreur ESLint)
@@ -91,11 +109,15 @@ export async function POST(req: Request) {
       // @ts-expect-error (Corrige l'erreur ESLint)
       const embedding = embedResponse.embeddings[index];
       if (embedding.length !== 1024) {
-        throw new Error(`Taille de vecteur Cohere inattendue: ${embedding.length}`);
+        throw new Error(
+          `Taille de vecteur Cohere inattendue: ${embedding.length}`
+        );
       }
       return {
-        user_id: user.id, content: content,
-        embedding: embedding, document_path: filePath 
+        user_id: user.id,
+        content: content,
+        embedding: embedding,
+        document_path: filePath,
       };
     });
 
@@ -103,14 +125,20 @@ export async function POST(req: Request) {
     const { error: insertError } = await supabase
       .from('document_sections')
       .insert(sections);
-    if (insertError) { throw new Error(insertError.message); }
+    if (insertError) {
+      throw new Error(insertError.message);
+    }
 
     // 9. Renvoie un succès
-    return NextResponse.json({ success: true, chunksCount: sections.length }, { status: 200 });
-
-  } catch (error: unknown) { // 'any' corrigé en 'unknown'
+    return NextResponse.json(
+      { success: true, chunksCount: sections.length },
+      { status: 200 }
+    );
+  } catch (error: unknown) {
+    // 'any' corrigé en 'unknown'
     console.error('Erreur API Embed:', error);
-    const errorMessage = error instanceof Error ? error.message : "Erreur inconnue";
+    const errorMessage =
+      error instanceof Error ? error.message : 'Erreur inconnue';
     return NextResponse.json({ error: errorMessage }, { status: 500 });
   }
 }
