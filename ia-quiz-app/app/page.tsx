@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Auth } from '@supabase/auth-ui-react';
 import { ThemeSupa } from '@supabase/auth-ui-shared';
-import type { Session } from '@supabase/supabase-js'; // 'SupabaseClient' inutilisé retiré
+import type { Session } from '@supabase/supabase-js'; 
 import { createSupabaseBrowserClient } from '@/lib/supabaseClient'; 
 
 import UploadForm from '../components/UploadForm';
@@ -121,12 +121,12 @@ export default function Home() {
                variables: {
                  sign_in: { email_label: 'Adresse email', password_label: 'Mot de passe', button_label: 'Se connecter', link_text: "Vous n'avez pas de compte ? S'inscrire" },
                  sign_up: { email_label: 'Adresse email', password_label: 'Mot de passe', button_label: "S'inscrire", link_text: 'Vous avez déjà un compte ? Se connecter' },
+                 forgotten_password: { email_label: 'Adresse email', email_input_placeholder: 'Votre adresse email', button_label: 'Envoyer les instructions', link_text: 'Retour à la connexion' },
                  
                  // --- CORRECTION ICI ---
-                 forgotten_password: { email_label: 'Adresse email', email_input_placeholder: 'Votre adresse email', button_label: 'Envoyer les instructions', link_text: 'Retour à la connexion' },
+                 loading_text: 'Chargement...',
+                 empty_email_address: 'Veuillez entrer une adresse email'
                  // --- FIN CORRECTION ---
-                 
-                 common: { loading_text: 'Chargement...', empty_email_address: 'Veuillez entrer une adresse email' }
                }
              }}
            />
