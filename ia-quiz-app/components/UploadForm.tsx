@@ -70,7 +70,8 @@ export default function UploadForm({ session, supabase, onUploadSuccess }: Uploa
           throw new Error("Erreur lors du déclenchement de l'analyse.");
       }
 
-      setMessage(`Succès ! L'analyse de "${file.name}" a commencé.`);
+      // Correction ESLint: Remplacement de ' par &apos;
+      setMessage(`Succès ! L&apos;analyse de "${file.name}" a commencé.`);
       setFile(null); 
       
       // APPELLE LE PARENT POUR RAFRAÎCHIR LA LISTE
@@ -78,7 +79,7 @@ export default function UploadForm({ session, supabase, onUploadSuccess }: Uploa
 
     } catch (err: unknown) { // 'any' corrigé en 'unknown'
       console.error("Erreur UploadForm:", err);
-      const errorMessage = err instanceof Error ? err.message : "Erreur inconnue";
+      const errorMessage = err instanceof Error ? err.message : "Une erreur inconnue est survenue.";
       setError(errorMessage);
       setMessage('');
     } finally {
@@ -90,6 +91,7 @@ export default function UploadForm({ session, supabase, onUploadSuccess }: Uploa
     <div className="p-6 bg-white rounded-lg shadow-md border border-gray-200">
       <h2 className="text-xl font-semibold mb-4 text-brand-purple-dark">Téléverser un Cours (PDF)</h2>
       <p className="text-sm text-gray-600 mb-4">
+        {/* Correction ESLint: Remplacement de ' par &apos; */}
         Limite : {MAX_SIZE_MB} Mo. L&apos;analyse est effectuée en arrière-plan.
       </p>
 

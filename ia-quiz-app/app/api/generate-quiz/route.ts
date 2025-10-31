@@ -83,8 +83,8 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Je n'ai trouvé aucune information pertinente dans vos documents pour répondre à cette demande." }, { status: 404 });
     }
 
-    // 5. Contexte
-    const context = sections.map((s: { content: string }) => s.content).join('\n\n---\n\n'); // Type 'any' corrigé
+    // 5. Contexte (Type 'any' corrigé en 'unknown' puis vérifié)
+    const context = (sections as { content: string }[]).map((s) => s.content).join('\n\n---\n\n');
 
     // 6. Prompt pour Groq
     const prompt = `
@@ -122,8 +122,10 @@ export async function POST(req: Request) {
       if (!quizData || !Array.isArray(quizData.quiz)) {
         throw new Error("Le JSON reçu n'a pas la structure attendue { quiz: [...] }.");
       }
-    } catch (parseError) {
-      throw new Error("L'IA a renvoyé une réponse JSON mal formatée.");
+    } catch (parseError) { // 'parseError' est maintenant utilisé
+      console.error("Erreur de parsing du JSON de Groq:", parseError, "Texte reçu:", text);
+      // On lance une nouvelle erreur qui inclut le message d'origine
+      throw new Error(`L'IA a renvoyé une réponse JSON mal formatée. Erreur: ${parseError instanceof Error ? parseError.message : String(parseError)}`);
     }
 
     // 9. Renvoyer le quiz

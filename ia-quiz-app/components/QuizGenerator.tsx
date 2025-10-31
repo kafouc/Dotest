@@ -112,6 +112,7 @@ export default function QuizGenerator({ documents, isLoading }: QuizGeneratorPro
           <form onSubmit={handleSubmit} className="space-y-4 md:space-y-0 md:flex md:items-end md:space-x-4">
             <div className="flex-grow">
               <label htmlFor="quiz-query" className="block text-sm font-medium text-gray-700 mb-1">
+                {/* Correction ESLint: Remplacement de ' par &apos; */}
                 Votre demande pour l&apos;IA :
               </label>
               <input
@@ -166,6 +167,6 @@ export default function QuizGenerator({ documents, isLoading }: QuizGeneratorPro
           </div>
         </>
       )}
-    </div>
+      </div>
   );
 }
