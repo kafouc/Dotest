@@ -51,7 +51,7 @@ export default function Home() {
         .limit(100);
 
       if (fetchError) {
-        console.error('Erreur chargement DB:', fetchError);
+        // Handle error silently or log to a service in production
       } else if (docs) {
         const documentList = docs.map((doc) => ({
           name: doc.file_name,
@@ -86,7 +86,6 @@ export default function Home() {
     if (isProcessing) {
       // S'il y a un document en cours, on revérifie dans 5 secondes
       const interval = setInterval(() => {
-        console.log('Polling: Vérification du statut des documents...');
         fetchDocuments(false); // Récupère la liste à jour
       }, 5000);
       return () => clearInterval(interval);
@@ -137,23 +136,19 @@ export default function Home() {
                   password_label: 'Mot de passe',
                   button_label: 'Se connecter',
                   link_text: "Vous n'avez pas de compte ? S'inscrire",
-                  loading_text: 'Chargement...', // Ajouté ici
                 },
                 sign_up: {
                   email_label: 'Adresse email',
                   password_label: 'Mot de passe',
                   button_label: "S'inscrire",
                   link_text: 'Vous avez déjà un compte ? Se connecter',
-                  loading_text: 'Chargement...', // Ajouté ici
                 },
                 forgotten_password: {
                   email_label: 'Adresse email',
                   email_input_placeholder: 'Votre adresse email',
                   button_label: 'Envoyer les instructions',
                   link_text: 'Retour à la connexion',
-                  loading_text: 'Chargement...', // Ajouté ici
                 },
-                empty_email_address: 'Veuillez entrer une adresse email',
                 // --- FIN CORRECTION ---
               },
             }}
