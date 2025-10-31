@@ -2,7 +2,7 @@
   "imports": {
     "https://esm.sh/": "https://esm.sh/",
     "https://deno.land/": "https://deno.land/",
-    
+
     "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@2.44.0",
     "cohere-ai": "https://esm.sh/cohere-ai"
   }

@@ -7,8 +7,11 @@ body {
   @apply min-h-screen;
 }
 
-input, select, button, textarea {
-   color-scheme: light;
+input,
+select,
+button,
+textarea {
+  color-scheme: light;
 }
 
 * {
