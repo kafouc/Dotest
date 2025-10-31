@@ -1,9 +1,10 @@
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { createServerClient } from '@supabase/ssr';
-import { RecursiveCharacterTextSplitter } from '@langchain/textsplitters';
+import { RecursiveCharacterTextSplitter } from '@langchain/textsplitters'; // Nous n'utilisons plus Langchain, mais l'import reste
 import { CohereClient } from 'cohere-ai';
-import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf.mjs'; // Gardons l'import ESM standard pour la définition du type
+// --- NOUVEL IMPORT ---
+import { extractText } from 'unpdf'; // On remplace pdfjs-dist par unpdf
 
 // --- Initialisation du client Cohere ---
 if (!process.env.COHERE_API_KEY) {
@@ -12,6 +13,24 @@ if (!process.env.COHERE_API_KEY) {
 const cohere = new CohereClient({
   token: process.env.COHERE_API_KEY,
 });
+
+// --- NOTRE PROPRE FONCTION DE DÉCOUPAGE ---
+function createChunks(text: string, chunkSize: number, chunkOverlap: number): string[] {
+  if (chunkOverlap >= chunkSize) {
+    throw new Error("chunkOverlap doit être plus petit que chunkSize");
+  }
+  const chunks: string[] = [];
+  let i = 0;
+  while (i < text.length) {
+    let endIndex = i + chunkSize;
+    if (endIndex > text.length) {
+      endIndex = text.length;
+    }
+    chunks.push(text.substring(i, endIndex));
+    i += (chunkSize - chunkOverlap);
+  }
+  return chunks;
+}
 
 // --- Handler de la route API (POST) ---
 export async function POST(req: Request) {
@@ -46,60 +65,36 @@ export async function POST(req: Request) {
     const { data: fileData, error: downloadError } = await supabase.storage
       .from('pdfs')
       .download(filePath);
-
-    if (downloadError) {
-      console.error('Erreur de téléchargement Supabase:', downloadError);
-      throw new Error(downloadError.message);
-    }
+    if (downloadError) { throw new Error(downloadError.message); }
     
     const buffer = await fileData.arrayBuffer();
+    const uint8array = new Uint8Array(buffer); 
 
-    // --- CONTOURNNEMENT DU BUG (Chargement dynamique) ---
-    // Nous utilisons require() ici, à l'intérieur de la fonction, pour forcer 
-    // le chargement du module CommonJS au moment précis de l'exécution.
-
-    const pdfLib = require('pdfjs-dist/legacy/build/pdf.js');
-    pdfLib.GlobalWorkerOptions.workerSrc = ''; // Applique le correctif au module chargé
-
-    // 4. Lit le texte du PDF
-    const loadingTask = pdfLib.getDocument(buffer); // Utilise le module chargé
-    const pdf = await loadingTask.promise;
-    // ... (suite de l'extraction inchangée) ...
-    let fullText = '';
-    
-    for (let i = 1; i <= pdf.numPages; i++) {
-      const page = await pdf.getPage(i);
-      const textContent = await page.getTextContent();
-      const pageText = textContent.items.map((item: any) => item.str).join(' ');
-      fullText += pageText + '\n\n'; 
-    }
-    const text = fullText;
-    // --- FIN DU CONTOURNEMENT ---
+    // --- 4. Lit le texte du PDF (MODIFIÉ : utilise unpdf) ---
+    const { text: textPages } = await extractText(uint8array); 
+    // CORRECTION du bug 'text.substring' : on joint le tableau de pages
+    const text = textPages.join('\n\n'); 
+    // --- FIN MODIFICATION ---
 
     // 5. Découpe le texte en "chunks" (morceaux)
-    const splitter = new RecursiveCharacterTextSplitter({
-      chunkSize: 500, 
-      chunkOverlap: 50,  
-    });
-    const chunks = await splitter.createDocuments([text]);
+    // On utilise notre propre fonction createChunks au lieu de Langchain
+    const textsToEmbed = createChunks(text, 500, 50);
     
-    const textsToEmbed = chunks.map(chunk => chunk.pageContent);
-
-    // 6. Génère les embeddings (vecteurs) avec l'API Cohere (inchangé)
+    // 6. Génère les embeddings (vecteurs) avec l'API Cohere
     const embedResponse = await cohere.embed({
       texts: textsToEmbed,
       model: 'embed-multilingual-v3.0', 
       inputType: 'search_document', 
     });
 
-    // @ts-ignore
+    // @ts-expect-error (Corrige l'erreur ESLint)
     if (!embedResponse.embeddings || embedResponse.embeddings.length === 0) {
       throw new Error("Cohere n'a pas retourné d'embeddings.");
     }
 
-    // 7. Prépare les données à insérer dans Supabase (inchangé)
+    // 7. Prépare les données à insérer dans Supabase
     const sections = textsToEmbed.map((content, index) => {
-      // @ts-ignore
+      // @ts-expect-error (Corrige l'erreur ESLint)
       const embedding = embedResponse.embeddings[index];
       
       if (embedding.length !== 1024) {
@@ -114,21 +109,18 @@ export async function POST(req: Request) {
       };
     });
 
-    // 8. Insère les nouveaux chunks et vecteurs (inchangé)
+    // 8. Insère les nouveaux chunks et vecteurs
     const { error: insertError } = await supabase
       .from('document_sections')
       .insert(sections);
-      
-    if (insertError) {
-      console.error("Erreur d'insertion Supabase:", insertError);
-      throw new Error(insertError.message);
-    }
+    if (insertError) { throw new Error(insertError.message); }
 
     // 9. Renvoie un succès
     return NextResponse.json({ success: true, chunksCount: sections.length }, { status: 200 });
 
-  } catch (error: any) {
+  } catch (error: unknown) { // Corrige l'erreur ESLint (any -> unknown)
     console.error('Erreur API Embed:', error);
-    return NextResponse.json({ error: error.message || "Erreur inconnue" }, { status: 500 });
+    const errorMessage = error instanceof Error ? error.message : "Erreur inconnue";
+    return NextResponse.json({ error: errorMessage }, { status: 500 });
   }
 }

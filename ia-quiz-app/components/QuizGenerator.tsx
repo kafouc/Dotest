@@ -2,21 +2,17 @@
 
 import { useState } from 'react';
 import QuizAttempt from './QuizAttempt'; 
+import type { DocumentInfo } from '../app/page'; // Importe le type partagé
 
-// Types (doivent correspondre à ceux de page.tsx)
+// Types
 type QuizQuestion = {
   question: string;
   options: { [key: string]: string };
   reponse_correcte: string;
   justification?: string;
 };
-type DocumentInfo = {
-  name: string;
-  path: string;
-  status: string;
-};
 
-// Reçoit les props du parent (page.tsx)
+// Props reçues de page.tsx
 type QuizGeneratorProps = {
   documents: DocumentInfo[];
   isLoading: boolean;
@@ -32,8 +28,7 @@ export default function QuizGenerator({ documents, isLoading }: QuizGeneratorPro
   const [numQuestions, setNumQuestions] = useState<number>(5);
   const [isAttemptingQuiz, setIsAttemptingQuiz] = useState<boolean>(false); 
 
-  // --- La logique de fetch/useEffect a été SUPPRIMÉE d'ici ---
-
+  // --- handleSubmit ---
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!query) return;
@@ -62,7 +57,10 @@ export default function QuizGenerator({ documents, isLoading }: QuizGeneratorPro
         setQuiz(data.quiz);
       } else { throw new Error("L'API n'a pas renvoyé de quiz valide."); }
 
-    } catch (err: any) { setError(err.message); }
+    } catch (err: unknown) { // 'any' corrigé en 'unknown'
+      const errorMessage = err instanceof Error ? err.message : "Erreur inconnue";
+      setError(errorMessage);
+    }
     finally { setLoading(false); }
   };
 
@@ -92,7 +90,7 @@ export default function QuizGenerator({ documents, isLoading }: QuizGeneratorPro
               id="document-select"
               value={selectedDocument}
               onChange={(e) => setSelectedDocument(e.target.value)}
-              disabled={loading || isLoading || documents.length === 0} // Désactivé si la liste charge
+              disabled={loading || isLoading || documents.length === 0} 
               className="p-2 border border-gray-300 rounded-md shadow-sm focus:ring-brand-purple focus:border-brand-purple w-full md:w-auto"
             >
               <option value="all">Documents Prêts (Tous)</option>
@@ -100,7 +98,7 @@ export default function QuizGenerator({ documents, isLoading }: QuizGeneratorPro
                 <option 
                   key={doc.path} 
                   value={doc.path} 
-                  disabled={doc.status !== 'completed'} // Désactive si non "completed"
+                  disabled={doc.status !== 'completed'} 
                 >
                   {doc.name} 
                   {doc.status === 'completed' ? ' ✅' : ` (Analyse... ⏳)`}
@@ -114,7 +112,7 @@ export default function QuizGenerator({ documents, isLoading }: QuizGeneratorPro
           <form onSubmit={handleSubmit} className="space-y-4 md:space-y-0 md:flex md:items-end md:space-x-4">
             <div className="flex-grow">
               <label htmlFor="quiz-query" className="block text-sm font-medium text-gray-700 mb-1">
-                Votre demande pour l'IA :
+                Votre demande pour l&apos;IA :
               </label>
               <input
                 type="text"

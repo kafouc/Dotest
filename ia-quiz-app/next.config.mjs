@@ -3,8 +3,12 @@ const config = {
   reactStrictMode: true,
   
   webpack: (config) => {
-    // La fonction doit maintenant retourner la configuration sans le bloc config.externals
-    // puisque nous supprimons les correctifs qui n'affectent que l'API /embed
+    config.externals.push(
+      // On garde celui-ci pour @xenova/transformers
+      { 'onnxruntime-node': 'commonjs onnxruntime-node' }
+      // On a RETIRÉ la ligne pour 'pdfjs-dist'
+    );
+    
     return config;
   }
 }

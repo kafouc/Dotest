@@ -3,10 +3,11 @@
 import { useState } from 'react';
 import type { Session, SupabaseClient } from '@supabase/supabase-js';
 
+// Props reçues de page.tsx
 type UploadFormProps = {
   session: Session;
   supabase: SupabaseClient;
-  onUploadSuccess: () => void; // Fonction de rafraîchissement du parent
+  onUploadSuccess: () => void; // Fonction pour rafraîchir la liste parente
 };
 
 export default function UploadForm({ session, supabase, onUploadSuccess }: UploadFormProps) {
@@ -15,10 +16,12 @@ export default function UploadForm({ session, supabase, onUploadSuccess }: Uploa
   const [message, setMessage] = useState('');
   const [error, setError] = useState<string | null>(null);
 
+  const MAX_SIZE_MB = 1; // Limite de 1 Mo
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
-      if (e.target.files[0].size > 5 * 1024 * 1024) { 
-         setError('Erreur : Le fichier est trop volumineux (limite de 5 Mo).');
+      if (e.target.files[0].size > MAX_SIZE_MB * 1024 * 1024) { 
+         setError(`Erreur : Le fichier est trop volumineux (limite de ${MAX_SIZE_MB} Mo).`);
          setMessage(''); setFile(null); return;
       }
       setFile(e.target.files[0]);
@@ -70,12 +73,13 @@ export default function UploadForm({ session, supabase, onUploadSuccess }: Uploa
       setMessage(`Succès ! L'analyse de "${file.name}" a commencé.`);
       setFile(null); 
       
-      // --- APPELLE LE PARENT POUR RAFRAÎCHIR LA LISTE ---
+      // APPELLE LE PARENT POUR RAFRAÎCHIR LA LISTE
       onUploadSuccess(); 
 
-    } catch (err: any) {
+    } catch (err: unknown) { // 'any' corrigé en 'unknown'
       console.error("Erreur UploadForm:", err);
-      setError(err.message || "Une erreur est survenue.");
+      const errorMessage = err instanceof Error ? err.message : "Erreur inconnue";
+      setError(errorMessage);
       setMessage('');
     } finally {
       setUploading(false);
@@ -85,7 +89,9 @@ export default function UploadForm({ session, supabase, onUploadSuccess }: Uploa
   return (
     <div className="p-6 bg-white rounded-lg shadow-md border border-gray-200">
       <h2 className="text-xl font-semibold mb-4 text-brand-purple-dark">Téléverser un Cours (PDF)</h2>
-      <p className="text-sm text-gray-600 mb-4">L'analyse est effectuée en arrière-plan.</p>
+      <p className="text-sm text-gray-600 mb-4">
+        Limite : {MAX_SIZE_MB} Mo. L&apos;analyse est effectuée en arrière-plan.
+      </p>
 
       <div className="flex items-center space-x-4">
         <label
