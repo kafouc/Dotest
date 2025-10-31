@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from 'react'; 
+import { useState } from 'react'; // <-- LIGNE CORRIGÉE 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { DocumentInfo } from '../app/page'; // Importe le type partagé
 
