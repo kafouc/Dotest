@@ -30,7 +30,7 @@ export default function Home() {
   const [documents, setDocuments] = useState<DocumentInfo[]>([]);
   const [isLoadingDocs, setIsLoadingDocs] = useState(true);
 
-  // Fonction pour récupérer les documents
+  // Fonction pour récupérer les documents (Source de données)
   const fetchDocuments = useCallback(async (isInitialLoad = false) => {
     if (isInitialLoad) setIsLoadingDocs(true);
 
@@ -63,30 +63,27 @@ export default function Home() {
     }
     
     if (isInitialLoad) setIsLoadingDocs(false);
-  }, [supabase]); // Dépend de supabase
+  }, [supabase]);
 
-  // Effet 1 : Chargement Initial (quand la session change)
+  // Effet 1 : Chargement Initial et Polling (Vérification du statut)
   useEffect(() => {
     if (session) {
-      fetchDocuments(true); 
-    }
-  }, [session, fetchDocuments]);
+      fetchDocuments(true); // Premier chargement
 
-  // Effet 2 : Polling (Vérification du statut)
-  useEffect(() => {
-    const isProcessing = documents.some(
-      doc => doc.status === 'pending' || doc.status === 'processing'
-    );
+      const isProcessing = documents.some(
+        doc => doc.status === 'pending' || doc.status === 'processing'
+      );
 
-    if (isProcessing) {
-      // S'il y a un document en cours, on revérifie dans 5 secondes
-      const interval = setInterval(() => {
-        console.log("Polling: Vérification du statut des documents...");
-        fetchDocuments(false); // Récupère la liste à jour
-      }, 5000); 
-      return () => clearInterval(interval);
+      if (isProcessing) {
+        // S'il y a un document en cours, on revérifie toutes les 5 secondes (Polling)
+        const interval = setInterval(() => {
+          console.log("Polling: Vérification du statut des documents...");
+          fetchDocuments(false); // Récupère la liste à jour
+        }, 5000); 
+        return () => clearInterval(interval);
+      }
     }
-  }, [documents, fetchDocuments]); // Se re-déclenche si 'documents' change
+  }, [session, documents, fetchDocuments]); // Dépend de la session et de la liste des documents
 
   // Gestion de la session (Authentification)
   useEffect(() => {
@@ -99,7 +96,6 @@ export default function Home() {
     return () => subscription.unsubscribe();
   }, [supabase]);
 
-  // Fonction de déconnexion
   const handleLogout = async () => {
     await supabase.auth.signOut();
     setSession(null);
@@ -122,33 +118,10 @@ export default function Home() {
              providers={['github', 'google']}
              localization={{
                variables: {
-                 // --- CORRECTION FINALE ICI ---
-                 sign_in: { 
-                   email_label: 'Adresse email', 
-                   password_label: 'Mot de passe', 
-                   button_label: 'Se connecter', 
-                   link_text: "Vous n'avez pas de compte ? S'inscrire",
-                   loading_button_label: 'Chargement...' // Corrigé
-                 },
-                 sign_up: { 
-                   email_label: 'Adresse email', 
-                   password_label: 'Mot de passe', 
-                   button_label: "S'inscrire", 
-                   link_text: 'Vous avez déjà un compte ? Se connecter',
-                   loading_button_label: 'Chargement...' // Corrigé
-                 },
-                 forgotten_password: { 
-                   email_label: 'Adresse email', 
-                   email_input_placeholder: 'Votre adresse email', 
-                   button_label: 'Envoyer les instructions', 
-                   link_text: 'Retour à la connexion',
-                   loading_button_label: 'Chargement...' // Corrigé
-                 },
-                 // Clé pour l'erreur "email vide" (utilisée par magic_link, etc.)
-                 magic_link: {
-                   empty_email_address: 'Veuillez entrer une adresse email'
-                 }
-                 // --- FIN CORRECTION ---
+                 sign_in: { email_label: 'Adresse email', password_label: 'Mot de passe', button_label: 'Se connecter', link_text: "Vous n'avez pas de compte ? S'inscrire", loading_button_label: 'Chargement...' },
+                 sign_up: { email_label: 'Adresse email', password_label: 'Mot de passe', button_label: "S'inscrire", link_text: 'Vous avez déjà un compte ? Se connecter', loading_button_label: 'Chargement...' },
+                 forgotten_password: { email_label: 'Adresse email', email_input_placeholder: 'Votre adresse email', button_label: 'Envoyer les instructions', link_text: 'Retour à la connexion', loading_button_label: 'Chargement...' },
+                 magic_link: { empty_email_address: 'Veuillez entrer une adresse email' }
                }
              }}
            />
@@ -208,7 +181,7 @@ export default function Home() {
           <UploadForm 
             session={session} 
             supabase={supabase} 
-            onUploadSuccess={() => fetchDocuments(false)} 
+            onUploadSuccess={() => fetchDocuments(false)} // Le trigger de rafraîchissement
           />
           <QuizGenerator documents={documents} isLoading={isLoadingDocs} />
         </motion.div>
