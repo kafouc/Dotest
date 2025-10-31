@@ -124,7 +124,7 @@ export default function Home() {
                  forgotten_password: { email_label: 'Adresse email', email_input_placeholder: 'Votre adresse email', button_label: 'Envoyer les instructions', link_text: 'Retour à la connexion' },
                  
                  // --- CORRECTION ICI ---
-                 loading_text: 'Chargement...',
+                 loading_text_text: 'Chargement...', // 'loading_text' renommé
                  empty_email_address: 'Veuillez entrer une adresse email'
                  // --- FIN CORRECTION ---
                }
