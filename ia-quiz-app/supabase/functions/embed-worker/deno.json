@@ -1,0 +1,14 @@
+{
+  "imports": {
+    "httpsentry": "file:///workspaces/Dotest/ia-quiz-app/supabase/functions/embed-worker/index.ts",
+    "https://esm.sh/": "https://esm.sh/",
+    "https://deno.land/": "https://deno.land/",
+    
+    "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@2.44.0",
+    
+    /* On utilise unpdf (version 'latest' de npm) */
+    "unpdf": "npm:unpdf@latest" 
+    
+    /* Cohere et Langchain ont été supprimés */
+  }
+}
