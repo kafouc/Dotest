@@ -41,7 +41,7 @@ export async function POST(req: Request) {
         cookies: {
           get(name: string) { return cookies().get(name)?.value; },
           set(name: string, value: string, options) { cookies().set(name, value, options); },
-          remove(name: string, options) { cookies().delete(name, options); },
+          remove(name: string, options) { cookies().delete({ ...options, name }); },
         },
       }
     );
