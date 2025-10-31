@@ -29,7 +29,7 @@ export default function Home() {
   const [documents, setDocuments] = useState<DocumentInfo[]>([]);
   const [isLoadingDocs, setIsLoadingDocs] = useState(true);
 
-  // Fonction pour récupérer les documents (appelée au chargement et par polling)
+  // Fonction pour récupérer les documents
   const fetchDocuments = useCallback(async (isInitialLoad = false) => {
     if (isInitialLoad) setIsLoadingDocs(true);
 
@@ -81,12 +81,12 @@ export default function Home() {
       const interval = setInterval(() => {
         console.log("Polling: Vérification du statut des documents...");
         fetchDocuments(false); 
-      }, 5000); // Vérifie toutes les 5 secondes
+      }, 5000); 
       return () => clearInterval(interval);
     }
   }, [documents, fetchDocuments]);
 
-  // Gestion de la session (Authentification)
+  // Gestion de la session
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
@@ -121,7 +121,11 @@ export default function Home() {
                variables: {
                  sign_in: { email_label: 'Adresse email', password_label: 'Mot de passe', button_label: 'Se connecter', link_text: "Vous n'avez pas de compte ? S'inscrire" },
                  sign_up: { email_label: 'Adresse email', password_label: 'Mot de passe', button_label: "S'inscrire", link_text: 'Vous avez déjà un compte ? Se connecter' },
-                 forgot_password: { email_label: 'Adresse email', email_input_placeholder: 'Votre adresse email', button_label: 'Envoyer les instructions', link_text: 'Retour à la connexion' },
+                 
+                 // --- CORRECTION ICI ---
+                 forgotten_password: { email_label: 'Adresse email', email_input_placeholder: 'Votre adresse email', button_label: 'Envoyer les instructions', link_text: 'Retour à la connexion' },
+                 // --- FIN CORRECTION ---
+                 
                  common: { loading_text: 'Chargement...', empty_email_address: 'Veuillez entrer une adresse email' }
                }
              }}
@@ -167,7 +171,7 @@ export default function Home() {
             supabase={supabase} 
             documents={documents} 
             isLoading={isLoadingDocs}
-            onDeleteSuccess={() => fetchDocuments(false)} // Rafraîchit après suppression
+            onDeleteSuccess={() => fetchDocuments(false)} 
           />
           <ProgressTracker supabase={supabase} />
         </motion.div>
@@ -182,7 +186,7 @@ export default function Home() {
           <UploadForm 
             session={session} 
             supabase={supabase} 
-            onUploadSuccess={() => fetchDocuments(false)} // Rafraîchit après upload
+            onUploadSuccess={() => fetchDocuments(false)} 
           />
           <QuizGenerator documents={documents} isLoading={isLoadingDocs} />
         </motion.div>
