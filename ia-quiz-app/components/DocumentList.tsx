@@ -1,18 +1,10 @@
 "use client";
 
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react'; 
 import type { SupabaseClient } from '@supabase/supabase-js';
+import type { DocumentInfo } from '../app/page'; // Importe le type partagé
 
-// Type (doit correspondre à celui de page.tsx)
-type DocumentInfo = {
-  name: string;
-  path: string;
-  created_at: string;
-  status: 'pending' | 'processing' | 'completed' | 'failed';
-  status_message?: string;
-};
-
-// Reçoit les props du parent (page.tsx)
+// Props reçues de page.tsx
 type DocumentListProps = {
   supabase: SupabaseClient;
   documents: DocumentInfo[];
@@ -24,7 +16,7 @@ export default function DocumentList({ supabase, documents, isLoading, onDeleteS
   const [deletingPath, setDeletingPath] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
-  // --- La logique de fetch/useEffect a été SUPPRIMÉE d'ici ---
+  // La logique de fetch/useEffect a été déplacée vers page.tsx
 
   const handleDelete = async (documentPath: string) => {
     if (!window.confirm(`Êtes-vous sûr de vouloir supprimer ce document et ses données associées ? Cette action est irréversible.`)) {
@@ -51,8 +43,10 @@ export default function DocumentList({ supabase, documents, isLoading, onDeleteS
       // 4. Appelle la fonction de rafraîchissement du parent
       onDeleteSuccess();
 
-    } catch (err: any) {
-      setDeleteError(err.message || "Une erreur est survenue lors de la suppression.");
+    } catch (err: unknown) { // <-- CORRECTION ICI (any -> unknown)
+      console.error("Erreur suppression:", err);
+      const errorMessage = err instanceof Error ? err.message : "Une erreur inconnue est survenue.";
+      setDeleteError(errorMessage);
     } finally {
       setDeletingPath(null); 
     }
