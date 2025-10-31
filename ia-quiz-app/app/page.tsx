@@ -128,23 +128,26 @@ export default function Home() {
                    password_label: 'Mot de passe', 
                    button_label: 'Se connecter', 
                    link_text: "Vous n'avez pas de compte ? S'inscrire",
-                   loading_button_label: 'Chargement...' // Corrigé de 'loading_text'
+                   loading_button_label: 'Chargement...' // Corrigé
                  },
                  sign_up: { 
                    email_label: 'Adresse email', 
                    password_label: 'Mot de passe', 
                    button_label: "S'inscrire", 
                    link_text: 'Vous avez déjà un compte ? Se connecter',
-                   loading_button_label: 'Chargement...' // Corrigé de 'loading_text'
+                   loading_button_label: 'Chargement...' // Corrigé
                  },
                  forgotten_password: { 
                    email_label: 'Adresse email', 
                    email_input_placeholder: 'Votre adresse email', 
                    button_label: 'Envoyer les instructions', 
                    link_text: 'Retour à la connexion',
-                   loading_button_label: 'Chargement...' // Corrigé de 'loading_text'
+                   loading_button_label: 'Chargement...' // Corrigé
                  },
-                 empty_email_address: 'Veuillez entrer une adresse email'
+                 // Clé pour l'erreur "email vide" (utilisée par magic_link, etc.)
+                 magic_link: {
+                   empty_email_address: 'Veuillez entrer une adresse email'
+                 }
                  // --- FIN CORRECTION ---
                }
              }}
