@@ -36,7 +36,7 @@ export default function WelcomeScreen({ supabase, localization }: WelcomeScreenP
   const [authView, setAuthView] = useState<'welcome' | 'sign_in' | 'sign_up'>('welcome');
 
   return (
-    // --- CORRECTION ICI : Remplacement de <> par <div className="contents"> ---
+    // --- CORRECTION : Remplacement de <> par <div className="contents"> ---
     <div className="contents">
       {/* --- FOND ANIMÉ (Plein écran) --- */}
       <AnimatePresence>
@@ -94,6 +94,7 @@ export default function WelcomeScreen({ supabase, localization }: WelcomeScreenP
                 Bienvenue sur IA Quiz
               </h1>
               <p className="text-gray-700 mb-8">
+                {/* CORRECTION ESLint: ' remplacé par &apos; */}
                 Transformez vos notes de cours en quiz interactifs grâce à l&apos;IA.
               </p>
               
@@ -133,12 +134,12 @@ export default function WelcomeScreen({ supabase, localization }: WelcomeScreenP
                 appearance={{ theme: ThemeSupa }}
                 providers={['github', 'google']}
                 view={authView} 
-                localization={localization as { [key: string]: unknown }} 
+                localization={localization as { [key: string]: unknown }} // Corrigé (as any)
               />
             </motion.div>
           )}
         </AnimatePresence>
       </div>
-    </div> // <-- CORRECTION ICI : Remplacement de </> par </div>
+    </div>
   );
 }
