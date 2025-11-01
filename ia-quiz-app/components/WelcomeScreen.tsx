@@ -9,7 +9,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 // Props du composant
 type WelcomeScreenProps = {
   supabase: SupabaseClient;
-  localization: { [key: string]: unknown }; // Type correct
+  localization: { [key: string]: unknown }; 
 };
 
 // --- Configuration de l'Animation (traduit de votre SCSS) ---
@@ -36,8 +36,8 @@ export default function WelcomeScreen({ supabase, localization }: WelcomeScreenP
   const [authView, setAuthView] = useState<'welcome' | 'sign_in' | 'sign_up'>('welcome');
 
   return (
-    // Ce conteneur <> permet au fond et au contenu de coexister
-    <>
+    // --- CORRECTION ICI : Remplacement de <> par <div className="contents"> ---
+    <div className="contents">
       {/* --- FOND ANIMÉ (Plein écran) --- */}
       <AnimatePresence>
         {authView === 'welcome' && (
@@ -94,9 +94,51 @@ export default function WelcomeScreen({ supabase, localization }: WelcomeScreenP
                 Bienvenue sur IA Quiz
               </h1>
               <p className="text-gray-700 mb-8">
-                {/* CORRECTION ESLint: ' remplacé par &apos; */}
                 Transformez vos notes de cours en quiz interactifs grâce à l&apos;IA.
               </p>
               
               <button
-                onClick={() => setAuthView('
+                onClick={() => setAuthView('sign_in')}
+                className="w-full px-6 py-3 mb-4 cursor-pointer bg-brand-purple hover:bg-brand-purple-dark text-white font-bold rounded-md shadow-sm transition-colors duration-200 text-lg"
+              >
+                Se connecter
+              </button>
+              
+              <button
+                onClick={() => setAuthView('sign_up')}
+                className="w-full px-6 py-3 cursor-pointer bg-brand-pink hover:bg-brand-pink-dark text-white font-bold rounded-md shadow-sm transition-colors duration-200 text-lg"
+              >
+                S'inscrire
+              </button>
+            </motion.div>
+
+          ) : (
+            // --- ÉTAT 2 : Le Formulaire d'Authentification ---
+            <motion.div
+              key="auth-form"
+              initial={{ opacity: 0, x: 50 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -50 }}
+              transition={{ duration: 0.3 }}
+            >
+              <button 
+                onClick={() => setAuthView('welcome')}
+                className="mb-4 text-sm text-brand-purple hover:underline"
+              >
+                &larr; Revenir
+              </button>
+              
+              <Auth
+                supabaseClient={supabase}
+                appearance={{ theme: ThemeSupa }}
+                providers={['github', 'google']}
+                view={authView} 
+                localization={localization as { [key: string]: unknown }} 
+              />
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+    </div> // <-- CORRECTION ICI : Remplacement de </> par </div>
+  );
+}
