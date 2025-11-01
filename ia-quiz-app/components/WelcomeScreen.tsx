@@ -6,6 +6,12 @@ import { ThemeSupa } from '@supabase/auth-ui-shared';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
+// Props du composant
+type WelcomeScreenProps = {
+  supabase: SupabaseClient;
+  localization: { [key: string]: unknown }; // Type correct
+};
+
 // --- Configuration de l'Animation (traduit de votre SCSS) ---
 const animationTime = 45; // 45s
 const numberOfRainbows = 25;
@@ -15,7 +21,7 @@ const colors = {
   green: 'rgb(94 234 212)',
 };
 
-// Fonction pour mélanger les couleurs (simule le random())
+// Fonction pour mélanger les couleurs
 const getRandomColors = () => {
   const colorArray = [colors.purple, colors.blue, colors.green];
   for (let i = colorArray.length - 1; i > 0; i--) {
@@ -26,34 +32,22 @@ const getRandomColors = () => {
 };
 // --- Fin Configuration Animation ---
 
-// Props du composant
-type WelcomeScreenProps = {
-  supabase: SupabaseClient;
-  localization: { [key: string]: unknown }; 
-};
-
 export default function WelcomeScreen({ supabase, localization }: WelcomeScreenProps) {
-  // 'welcome' = page d'accueil, 'sign_in' | 'sign_up' = formulaire
   const [authView, setAuthView] = useState<'welcome' | 'sign_in' | 'sign_up'>('welcome');
 
   return (
-    // Ce conteneur "fragment" (<>) permet d'avoir deux éléments frères :
-    // 1. L'arrière-plan (en plein écran)
-    // 2. Le contenu (centré)
+    // Ce conteneur <> permet au fond et au contenu de coexister
     <>
       {/* --- FOND ANIMÉ (Plein écran) --- */}
       <AnimatePresence>
-        {authView === 'welcome' && ( // Ne s'affiche que sur la vue 'welcome'
+        {authView === 'welcome' && (
           <motion.div 
-            // CORRECTION: 'fixed inset-0' force le plein écran
-            // 'z-0' le place en arrière-plan
-            className="welcome-background fixed inset-0 z-0"
+            className="welcome-background fixed inset-0 z-0" // z-0 = arrière-plan
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 1 }}
           >
-            {/* Recrée la boucle SCSS en JavaScript */}
             {Array.from({ length: numberOfRainbows }).map((_, i) => {
               const [color1, color2, color3] = getRandomColors();
               const delay = -((i / numberOfRainbows) * animationTime);
@@ -62,7 +56,7 @@ export default function WelcomeScreen({ supabase, localization }: WelcomeScreenP
               return (
                 <div
                   key={i}
-                  className="rainbow" // Style de globals.css
+                  className="rainbow"
                   style={{
                     boxShadow: `
                       -130px 0 80px 40px white, 
@@ -77,7 +71,6 @@ export default function WelcomeScreen({ supabase, localization }: WelcomeScreenP
                 />
               );
             })}
-            {/* Vignettes blanches (CSS de globals.css) */}
             <div className="h-vignette"></div>
             <div className="v-vignette"></div>
           </motion.div>
@@ -85,9 +78,6 @@ export default function WelcomeScreen({ supabase, localization }: WelcomeScreenP
       </AnimatePresence>
 
       {/* --- CONTENU CENTRÉ (Au-dessus du fond) --- */}
-      {/* Ce 'div' est celui qui est centré par 'page.tsx'.
-        'relative z-10' le place au-dessus du fond animé.
-      */}
       <div className="w-full max-w-md p-8 bg-white/90 backdrop-blur-md rounded-xl shadow-2xl border border-white/50 relative z-10">
         <AnimatePresence mode="wait">
           {authView === 'welcome' ? (
@@ -104,6 +94,7 @@ export default function WelcomeScreen({ supabase, localization }: WelcomeScreenP
                 Bienvenue sur IA Quiz
               </h1>
               <p className="text-gray-700 mb-8">
+                {/* CORRECTION ESLint: ' remplacé par &apos; */}
                 Transformez vos notes de cours en quiz interactifs grâce à l&apos;IA.
               </p>
               
@@ -143,7 +134,8 @@ export default function WelcomeScreen({ supabase, localization }: WelcomeScreenP
                 appearance={{ theme: ThemeSupa }}
                 providers={['github', 'google']}
                 view={authView} 
-                localization={localization as any} 
+                // CORRECTION ESLint: 'as any' supprimé
+                localization={localization as { [key: string]: unknown }} 
               />
             </motion.div>
           )}
