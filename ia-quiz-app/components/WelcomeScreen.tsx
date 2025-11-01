@@ -109,7 +109,7 @@ export default function WelcomeScreen({ supabase, localization }: WelcomeScreenP
                 onClick={() => setAuthView('sign_up')}
                 className="w-full px-6 py-3 cursor-pointer bg-brand-pink hover:bg-brand-pink-dark text-white font-bold rounded-md shadow-sm transition-colors duration-200 text-lg"
               >
-                S'inscrire
+                inscrire
               </button>
             </motion.div>
 
