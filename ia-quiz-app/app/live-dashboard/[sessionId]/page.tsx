@@ -75,8 +75,14 @@ export default function LiveDashboardPage() {
         setParticipants(participantsData);
         setAnswers(answersData);
       } catch (err) {
-        console.error(err);
-        setError('Erreur lors du chargement.');
+        // Afficher plus d'infos pour diagnostiquer (code/message)
+        const e = err as { message?: string; code?: string };
+        console.error('Dashboard load error:', e);
+        setError(
+          e?.message
+            ? `Erreur lors du chargement: ${e.message}${e?.code ? ` (code ${e.code})` : ''}`
+            : 'Erreur lors du chargement.'
+        );
       } finally {
         setLoading(false);
       }
