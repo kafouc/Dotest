@@ -1,4 +1,18 @@
 -- Séparer les policies SELECT des policies WRITE pour éviter l'évaluation de auth.uid() sur SELECT
+-- IMPORTANT: Pour éviter les récursions RLS, on utilise une fonction SECURITY DEFINER pour les checks
+
+-- Fonction helper pour vérifier si l'utilisateur est créateur d'un quiz (bypass RLS)
+create or replace function public.is_quiz_creator(p_shared_quiz_id uuid, p_user_id uuid)
+returns boolean
+language sql
+security definer
+stable
+as $$
+  select exists(
+    select 1 from public.shared_quizzes
+    where id = p_shared_quiz_id and creator_id = p_user_id
+  );
+$$;
 
 do $$
 begin
@@ -67,11 +81,7 @@ begin
       on public.quiz_sessions
       for insert
       with check (
-        exists (
-          select 1 from public.shared_quizzes sq
-          where sq.id = shared_quiz_id
-            and sq.creator_id = auth.uid()
-        )
+        public.is_quiz_creator(shared_quiz_id, auth.uid())
       );
   end if;
 
@@ -84,18 +94,10 @@ begin
       on public.quiz_sessions
       for update
       using (
-        exists (
-          select 1 from public.shared_quizzes sq
-          where sq.id = quiz_sessions.shared_quiz_id
-            and sq.creator_id = auth.uid()
-        )
+        public.is_quiz_creator(quiz_sessions.shared_quiz_id, auth.uid())
       )
       with check (
-        exists (
-          select 1 from public.shared_quizzes sq
-          where sq.id = quiz_sessions.shared_quiz_id
-            and sq.creator_id = auth.uid()
-        )
+        public.is_quiz_creator(quiz_sessions.shared_quiz_id, auth.uid())
       );
   end if;
 
@@ -108,11 +110,7 @@ begin
       on public.quiz_sessions
       for delete
       using (
-        exists (
-          select 1 from public.shared_quizzes sq
-          where sq.id = quiz_sessions.shared_quiz_id
-            and sq.creator_id = auth.uid()
-        )
+        public.is_quiz_creator(quiz_sessions.shared_quiz_id, auth.uid())
       );
   end if;
 
