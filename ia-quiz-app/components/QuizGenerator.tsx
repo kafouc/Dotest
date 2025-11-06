@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import QuizAttempt from './QuizAttempt'; 
+import ShareQuizButton from './ShareQuizButton';
 import type { DocumentInfo } from '../app/page'; // Importe le type partagé
 
 // Types
@@ -246,12 +247,18 @@ export default function QuizGenerator({ documents, isLoading }: QuizGeneratorPro
               <div className="p-4 bg-purple-50 rounded-lg text-center">
                 <h3 className="text-lg font-medium text-brand-purple-dark">Quiz Généré !</h3>
                 <p className="mt-1 text-gray-700">Un quiz de {quiz.length} questions est prêt.</p>
-                <button
-                  onClick={() => setIsAttemptingQuiz(true)} 
-                  className="mt-4 px-6 py-2 cursor-pointer bg-brand-pink hover:bg-brand-pink-dark text-white font-bold rounded-md shadow-sm transition-colors duration-200 text-lg"
-                >
-                  Commencer le Quiz !
-                </button>
+                <div className="mt-4 flex flex-col sm:flex-row gap-3 justify-center items-center">
+                  <button
+                    onClick={() => setIsAttemptingQuiz(true)} 
+                    className="px-6 py-2 cursor-pointer bg-brand-pink hover:bg-brand-pink-dark text-white font-bold rounded-md shadow-sm transition-colors duration-200 text-lg"
+                  >
+                    Commencer le Quiz !
+                  </button>
+                  <ShareQuizButton
+                    quizTitle={`Quiz - ${selectedDocument !== 'all' ? documents.find(d => d.path === selectedDocument)?.name : 'Tous documents'}`}
+                    questions={quiz}
+                  />
+                </div>
               </div>
             )}
           </div>

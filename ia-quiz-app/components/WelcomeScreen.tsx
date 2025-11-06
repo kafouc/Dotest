@@ -34,7 +34,7 @@ const getRandomColors = () => {
 // --- Fin Configuration Animation ---
 
 export default function WelcomeScreen({ supabase, localization }: WelcomeScreenProps) {
-  const [authView, setAuthView] = useState<'welcome' | 'sign_in' | 'sign_up'>('welcome');
+  const [authView, setAuthView] = useState<'welcome' | 'sign_in' | 'sign_up' | 'forgotten_password'>('welcome');
 
   // URL de retour pour OAuth (GitHub/Google)
   const redirectTo =
@@ -137,6 +137,13 @@ export default function WelcomeScreen({ supabase, localization }: WelcomeScreenP
               >
                 &larr; Revenir
               </button>
+
+              {/* Titre différencié selon la vue */}
+              <h2 className="text-2xl font-bold text-brand-purple-dark mb-4 text-center">
+                {authView === 'sign_in' && 'Se connecter'}
+                {authView === 'sign_up' && 'S\'inscrire'}
+                {authView === 'forgotten_password' && 'Réinitialiser le mot de passe'}
+              </h2>
               
               <Auth
                 supabaseClient={supabase}
@@ -146,6 +153,58 @@ export default function WelcomeScreen({ supabase, localization }: WelcomeScreenP
                 redirectTo={redirectTo}
                 localization={localization}
               />
+
+              {/* Lien "Mot de passe oublié" uniquement pour sign_in */}
+              {authView === 'sign_in' && (
+                <div className="mt-4 text-center">
+                  <button
+                    type="button"
+                    onClick={() => setAuthView('forgotten_password')}
+                    className="text-sm text-gray-600 hover:text-brand-purple hover:underline"
+                  >
+                    Mot de passe oublié ?
+                  </button>
+                </div>
+              )}
+
+              {/* Lien de basculement sign_in <-> sign_up */}
+              {authView === 'sign_in' && (
+                <div className="mt-4 text-center text-sm text-gray-600">
+                  Vous n&apos;avez pas de compte ?{' '}
+                  <button
+                    type="button"
+                    onClick={() => setAuthView('sign_up')}
+                    className="text-brand-purple font-medium hover:underline"
+                  >
+                    S&apos;inscrire
+                  </button>
+                </div>
+              )}
+
+              {authView === 'sign_up' && (
+                <div className="mt-4 text-center text-sm text-gray-600">
+                  Vous avez déjà un compte ?{' '}
+                  <button
+                    type="button"
+                    onClick={() => setAuthView('sign_in')}
+                    className="text-brand-purple font-medium hover:underline"
+                  >
+                    Se connecter
+                  </button>
+                </div>
+              )}
+
+              {authView === 'forgotten_password' && (
+                <div className="mt-4 text-center text-sm text-gray-600">
+                  <button
+                    type="button"
+                    onClick={() => setAuthView('sign_in')}
+                    className="text-brand-purple font-medium hover:underline"
+                  >
+                    Retour à la connexion
+                  </button>
+                </div>
+              )}
             </motion.div>
           )}
         </AnimatePresence>
