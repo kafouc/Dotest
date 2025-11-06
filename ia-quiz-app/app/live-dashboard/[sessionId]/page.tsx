@@ -34,6 +34,7 @@ export default function LiveDashboardPage() {
   const [quiz, setQuiz] = useState<SharedQuiz | null>(null);
   const [participants, setParticipants] = useState<SessionParticipant[]>([]);
   const [answers, setAnswers] = useState<LiveAnswer[]>([]);
+  const [selectedParticipantId, setSelectedParticipantId] = useState<string | null>(null);
 
   // Charger les données initiales
   useEffect(() => {
@@ -285,7 +286,8 @@ export default function LiveDashboardPage() {
                 return (
                   <div
                     key={p.id}
-                    className="flex justify-between items-center p-3 bg-gray-50 rounded-md"
+                    className="flex justify-between items-center p-3 bg-gray-50 rounded-md cursor-pointer hover:bg-gray-100"
+                    onClick={() => setSelectedParticipantId(p.id)}
                   >
                     <div>
                       <p className="font-medium text-gray-800">{p.nickname}</p>
@@ -445,6 +447,89 @@ export default function LiveDashboardPage() {
             </div>
           )}
         </div>
+
+        {/* Popup: Détails réponses par élève */}
+        {selectedParticipantId && (
+          <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" role="dialog" aria-modal="true">
+            <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl">
+              <div className="flex items-center justify-between p-4 border-b">
+                <h3 className="text-lg font-bold text-brand-purple-dark">Réponses de l&apos;élève</h3>
+                <button
+                  type="button"
+                  onClick={() => setSelectedParticipantId(null)}
+                  className="p-2 rounded hover:bg-gray-100"
+                  aria-label="Fermer"
+                >
+                  ✕
+                </button>
+              </div>
+              <div className="p-4 max-h-[70vh] overflow-y-auto">
+                {(() => {
+                  const participant = participants.find((pp) => pp.id === selectedParticipantId);
+                  const pa = answers
+                    .filter((a) => a.participant_id === selectedParticipantId)
+                    .sort((a, b) => a.question_index - b.question_index);
+
+                  return (
+                    <div className="space-y-3">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm text-gray-600">Élève:</span>
+                        <span className="font-semibold text-gray-900">{participant?.nickname}</span>
+                      </div>
+
+                      {questions.map((q, idx) => {
+                        const a = pa.find((x) => x.question_index === idx);
+                        const chosen = a?.answer?.toUpperCase();
+                        const correct = (q.reponse_correcte || '').toUpperCase();
+                        // const isCorrect = chosen && chosen === correct; // non utilisé, conservé via couleurs ci-dessous
+                        const letters = ['A','B','C','D'] as const;
+                        const opts = Object.entries(q.options || {});
+                        return (
+                          <div key={idx} className="p-3 bg-gray-50 rounded-lg border">
+                            <p className="font-medium text-gray-900 mb-2">Question {idx + 1}: {q.question}</p>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                              {opts.map(([key, value], i) => {
+                                const letter = letters[i] ?? 'A';
+                                const isChosen = chosen === letter;
+                                const isCorr = letter === correct;
+                                return (
+                                  <div
+                                    key={`${idx}-${key}-${i}`}
+                                    className={`p-2 rounded-md border text-sm ${
+                                      isChosen ? (isCorr ? 'border-green-500 bg-green-50' : 'border-red-500 bg-red-50')
+                                      : isCorr ? 'border-green-300 bg-green-50' : 'border-gray-200 bg-white'
+                                    }`}
+                                  >
+                                    <span className="font-bold text-brand-purple mr-2">{letter}:</span>
+                                    {value}
+                                    {isChosen && (
+                                      <span className={`ml-2 text-xs font-semibold ${isCorr ? 'text-green-700' : 'text-red-700'}`}>
+                                        {isCorr ? 'Correct' : 'Choisie'}
+                                      </span>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                })()}
+              </div>
+              <div className="p-4 border-t flex justify-end">
+                <button
+                  type="button"
+                  onClick={() => setSelectedParticipantId(null)}
+                  className="px-4 py-2 border rounded-md hover:bg-gray-50"
+                >
+                  Fermer
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
