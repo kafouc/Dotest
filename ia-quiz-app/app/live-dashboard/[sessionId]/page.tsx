@@ -39,6 +39,14 @@ export default function LiveDashboardPage() {
   useEffect(() => {
     const loadData = async () => {
       try {
+        // Vérifier que l'utilisateur est connecté (sinon RLS refusera l'accès)
+        const { data: { user }, error: authErr } = await supabase.auth.getUser();
+        if (authErr || !user) {
+          setError('Veuillez vous connecter pour accéder au dashboard.');
+          setLoading(false);
+          return;
+        }
+
         const sessionData = await getSession(supabase, sessionId);
         if (!sessionData) {
           setError('Session introuvable.');
