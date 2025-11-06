@@ -47,7 +47,7 @@ const authLocalization = {
       loading_button_label: 'Chargement...'
     },
     magic_link: {
-      empty_email_address_error: 'Veuillez entrer une adresse email'
+      empty_email_address: 'Veuillez entrer une adresse email'
     }
   }
 };
