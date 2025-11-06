@@ -71,17 +71,14 @@ export async function createQuizSession(
   supabase: SupabaseClient,
   sharedQuizId: string
 ): Promise<QuizSession> {
-  const { data, error } = await supabase
-    .from('quiz_sessions')
-    .insert({
-      shared_quiz_id: sharedQuizId,
-      status: 'waiting',
-    })
-    .select()
-    .single();
+  // Utilise une RPC sécurisée côté DB pour éviter les erreurs RLS/500
+  const { data, error } = await supabase.rpc('create_quiz_session', {
+    p_shared_quiz_id: sharedQuizId,
+  });
 
   if (error) throw error;
-  return data;
+  // La RPC retourne la ligne quiz_sessions
+  return data as unknown as QuizSession;
 }
 
 /**

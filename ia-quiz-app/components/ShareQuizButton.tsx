@@ -64,8 +64,14 @@ export default function ShareQuizButton({ quizTitle, questions }: Props) {
       setQrCodeUrl(qrDataUrl);
       setSessionId(session.id);
     } catch (error) {
-      console.error('Erreur partage quiz:', error);
-      alert('Impossible de partager le quiz.');
+      const anyErr = error as { message?: string; code?: string };
+      console.error('Erreur partage quiz:', anyErr);
+      alert(
+        `Impossible de partager le quiz.\n\n` +
+        (anyErr?.message ? `Message: ${anyErr.message}\n` : '') +
+        (anyErr?.code ? `Code: ${anyErr.code}\n` : '') +
+        'Astuce: exécutez FIX_CREATOR_ID.sql et vérifiez VERIFICATION_SIMPLE.sql si le problème persiste.'
+      );
     } finally {
       setLoading(false);
     }
