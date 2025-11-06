@@ -187,6 +187,8 @@ export default function LiveDashboardPage() {
   };
 
   const questions = (quiz?.questions as QuizQuestion[]) || [];
+  const [showSolutions, setShowSolutions] = useState(true);
+  const letters = ['A', 'B', 'C', 'D'] as const;
 
   // Statistiques par question
   const questionStats = questions.map((q, idx) => {
@@ -352,6 +354,96 @@ export default function LiveDashboardPage() {
               )}
             </div>
           </div>
+        </div>
+
+        {/* Questions + Corrections */}
+        <div className="bg-white rounded-xl shadow-lg p-6 mt-6">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-xl font-bold text-brand-purple-dark">Questions et corrections</h2>
+            <button
+              type="button"
+              onClick={() => setShowSolutions((v) => !v)}
+              className="px-3 py-1 text-sm border rounded-md hover:bg-gray-50"
+            >
+              {showSolutions ? 'Masquer les corrections' : 'Afficher les corrections'}
+            </button>
+          </div>
+
+          {questions.length === 0 ? (
+            <p className="text-gray-500">Aucune question à afficher.</p>
+          ) : (
+            <div className="space-y-4">
+              {questions.map((q, idx) => {
+                const answersForQuestion = answers.filter((a) => a.question_index === idx);
+                const total = answersForQuestion.length;
+                const optionCounts: Record<string, number> = { A: 0, B: 0, C: 0, D: 0 };
+                answersForQuestion.forEach((a) => {
+                  const key = (a.answer || '').toUpperCase();
+                  if (optionCounts[key] !== undefined) optionCounts[key] += 1;
+                });
+
+                // Options: on respecte l'ordre utilisé côté élève (A-D)
+                const opts = Object.entries(q.options || {});
+
+                return (
+                  <div key={idx} className="p-4 bg-gray-50 rounded-lg">
+                    <div className="flex items-start justify-between gap-4">
+                      <div>
+                        <p className="font-semibold text-gray-900">
+                          Question {idx + 1}
+                        </p>
+                        <p className="text-gray-800 mt-1">{q.question}</p>
+                      </div>
+                      {showSolutions && (
+                        <span className="shrink-0 inline-block px-2 py-1 text-xs font-bold rounded-md bg-green-100 text-green-700">
+                          Réponse: {q.reponse_correcte}
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-2">
+                      {opts.map(([key, value], i) => {
+                        const letter = letters[i] ?? 'A';
+                        const count = optionCounts[letter] ?? 0;
+                        const percent = total > 0 ? Math.round((count / total) * 100) : 0;
+                        const isCorrect = letter.toUpperCase() === (q.reponse_correcte || '').toUpperCase();
+                        return (
+                          <div
+                            key={`${idx}-${key}-${i}`}
+                            className={`p-3 rounded-md border ${
+                              isCorrect && showSolutions ? 'border-green-400 bg-green-50' : 'border-gray-200 bg-white'
+                            }`}
+                          >
+                            <div className="flex items-center justify-between">
+                              <p className="font-medium text-gray-900">
+                                <span className="font-bold text-brand-purple mr-2">{letter}:</span>
+                                {value}
+                              </p>
+                              <p className="text-sm text-gray-600">
+                                {count} réponses{total > 0 ? ` • ${percent}%` : ''}
+                              </p>
+                            </div>
+                            <div className="w-full bg-gray-200 rounded-full h-2 mt-2">
+                              <div
+                                className={`${isCorrect && showSolutions ? 'bg-green-500' : 'bg-brand-purple'} h-2 rounded-full`}
+                                style={{ width: `${percent}%` }}
+                              />
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    {showSolutions && q.justification && (
+                      <p className="text-sm text-gray-600 mt-3">
+                        Justification: {q.justification}
+                      </p>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       </div>
     </div>
