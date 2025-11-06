@@ -14,6 +14,7 @@ export default function FlashcardStudy({ documentPath }: Props) {
   const [cards, setCards] = useState<FlashcardWithDue[]>([]);
   const [index, setIndex] = useState(0);
   const [showAnswer, setShowAnswer] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
     const load = async () => {
@@ -25,6 +26,12 @@ export default function FlashcardStudy({ documentPath }: Props) {
         setShowAnswer(false);
       } catch (e) {
         console.error('Load flashcards error:', e);
+        const msg = e instanceof Error ? e.message : 'Erreur inconnue';
+        if (msg === 'FLASHCARDS_TABLE_MISSING') {
+          setLoadError("Les tables 'flashcards' et 'flashcard_reviews' ne semblent pas installées. Exécutez la migration supabase/migrations/20251106_flashcards.sql dans votre projet Supabase.");
+        } else {
+          setLoadError('Erreur lors du chargement des flashcards.');
+        }
       } finally {
         setLoading(false);
       }
@@ -57,6 +64,14 @@ export default function FlashcardStudy({ documentPath }: Props) {
 
   if (loading) {
     return <div className="p-6 bg-white rounded-xl shadow">Chargement des cartes...</div>;
+  }
+
+  if (loadError) {
+    return (
+      <div className="p-6 bg-white rounded-xl shadow border border-red-200">
+        <p className="text-red-700 font-medium">{loadError}</p>
+      </div>
+    );
   }
 
   if (!current) {

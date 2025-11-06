@@ -73,6 +73,17 @@ export async function POST(req: Request) {
   } catch (e: unknown) {
     console.error('Flashcards generate error:', e);
     const msg = e instanceof Error ? e.message : 'Erreur';
+    const lower = (msg || '').toLowerCase();
+    if ((lower.includes('does not exist') || lower.includes('relation')) && lower.includes('flashcards')) {
+      return NextResponse.json({
+        error: "FLASHCARDS_TABLE_MISSING: Les tables 'flashcards' et 'flashcard_reviews' ne sont pas installées. Exécutez la migration supabase/migrations/20251106_flashcards.sql dans votre projet Supabase.",
+      }, { status: 400 });
+    }
+    if ((lower.includes('does not exist') || lower.includes('relation')) && lower.includes('document_sections')) {
+      return NextResponse.json({
+        error: "DOCUMENT_SECTIONS_MISSING: La table 'document_sections' est absente. Veuillez exécuter les migrations initiales (voir INSTALL_STEP_BY_STEP.sql).",
+      }, { status: 400 });
+    }
     return NextResponse.json({ error: msg }, { status: 500 });
   }
 }
