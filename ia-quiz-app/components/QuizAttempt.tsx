@@ -5,6 +5,7 @@ import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 // On importe le client Supabase pour sauvegarder le score
 import { createSupabaseBrowserClient } from '@/lib/supabaseClient';
+import { recordQuizAttempt, type AttemptContext, type AnswerInput } from '@/lib/scores';
 
 // Type pour les questions (reçu de QuizGenerator)
 type QuizQuestion = {
@@ -18,11 +19,13 @@ type QuizQuestion = {
 type QuizAttemptProps = {
   quizQuestions: QuizQuestion[];
   onQuizEnd: () => void; // Fonction pour retourner au générateur
+  context?: AttemptContext;
 };
 
 export default function QuizAttempt({
   quizQuestions,
   onQuizEnd,
+  context,
 }: QuizAttemptProps) {
   // --- États ---
   const [supabase] = useState(() => createSupabaseBrowserClient()); // Client Supabase
@@ -66,8 +69,15 @@ export default function QuizAttempt({
     if (quizFinished) {
       // 1. Calculer le score
       let currentScore = 0;
+      const normalizeLetter = (val: string): string => {
+        const s = (val ?? '').toString().trim().toUpperCase();
+        const m = s.match(/^[\s\(\[]*([ABCD])/);
+        return m ? m[1] : s;
+      };
       quizQuestions.forEach((question, index) => {
-        if (selectedAnswers[index] === question.reponse_correcte) {
+        const user = normalizeLetter(selectedAnswers[index] ?? '');
+        const correct = normalizeLetter(question.reponse_correcte ?? '');
+        if (user && correct && user === correct) {
           currentScore++;
         }
       });
@@ -75,36 +85,37 @@ export default function QuizAttempt({
 
       // 2. Sauvegarder la tentative dans Supabase (fonction asynchrone)
       const saveAttempt = async () => {
-        const {
-          data: { user },
-        } = await supabase.auth.getUser();
-        if (!user) {
-          console.error('Impossible de sauvegarder : utilisateur non trouvé.');
-          return;
-        }
+        try {
+          // Prépare les réponses détaillées
+          const answers: AnswerInput[] = quizQuestions.map((q, idx) => {
+            const userLetter = (selectedAnswers[idx] ?? null) as string | null;
+            const correctLetter = q.reponse_correcte;
+            // Utilise la même fonction de normalisation que pour le calcul du score
+            const user = normalizeLetter(userLetter ?? '');
+            const correct = normalizeLetter(correctLetter ?? '');
+            const isCorrect = !!user && !!correct && user === correct;
+            return {
+              questionIndex: idx,
+              question: q.question,
+              answer: userLetter,
+              correctAnswer: correctLetter,
+              justification: q.justification,
+              isCorrect,
+            };
+          });
 
-        // Prépare la ligne à insérer
-        const attemptData = {
-          user_id: user.id,
-          score: currentScore,
-          total_questions: quizQuestions.length,
-        };
-
-        // Insère dans la table 'quiz_attempts'
-        const { error } = await supabase
-          .from('quiz_attempts')
-          .insert(attemptData);
-
-        if (error) {
-          console.error('Erreur lors de la sauvegarde de la tentative:', error);
-        } else {
-          console.log('Tentative de quiz sauvegardée !');
+          await recordQuizAttempt(supabase, {
+            answers,
+            context: context ?? { num_questions: quizQuestions.length },
+          });
+        } catch (e) {
+          console.error('Erreur lors de la sauvegarde détaillée du quiz:', e);
         }
       };
 
       saveAttempt(); // Appelle la fonction de sauvegarde
     }
-  }, [quizFinished, quizQuestions, selectedAnswers, supabase]); // Dépendances de l'effet
+  }, [quizFinished, quizQuestions, selectedAnswers, supabase, context]); // Dépendances de l'effet
 
   // --- Animations Framer Motion ---
   const questionVariants = {
@@ -143,7 +154,12 @@ export default function QuizAttempt({
           </h3>
           {quizQuestions.map((q, index) => {
             const userAnswer = selectedAnswers[index];
-            const isCorrect = userAnswer === q.reponse_correcte;
+            const normalizeLetter = (val: string): string => {
+              const s = (val ?? '').toString().trim().toUpperCase();
+              const m = s.match(/^[\s\(\[]*([ABCD])/);
+              return m ? m[1] : s;
+            };
+            const isCorrect = !!userAnswer && normalizeLetter(userAnswer) === normalizeLetter(q.reponse_correcte);
             return (
               <div
                 key={index}
@@ -219,36 +235,30 @@ export default function QuizAttempt({
 
             {/* Options de réponse */}
             <div className="space-y-3">
-              {Object.entries(currentQuestion.options).map(([key, value]) => {
-                // Vérifie si une réponse a été sélectionnée pour cette question
-                const isAnswerSelected =
-                  selectedAnswers[currentQuestionIndex] !== undefined;
-                // Vérifie si cette option est celle sélectionnée par l'utilisateur
-                const isThisOptionSelected =
-                  selectedAnswers[currentQuestionIndex] === key;
+              {Object.entries(currentQuestion.options).map(([key, value], idx) => {
+                // On force la lettre A-D selon l'ordre d'affichage pour éviter les clés numériques
+                const letters = ['A', 'B', 'C', 'D'] as const;
+                const letter = letters[idx] ?? 'A';
+
+                const isAnswerSelected = selectedAnswers[currentQuestionIndex] !== undefined;
+                const isThisOptionSelected = selectedAnswers[currentQuestionIndex] === letter;
 
                 return (
                   <motion.button
-                    key={key}
-                    onClick={() => handleSelectAnswer(key)}
-                    disabled={isAnswerSelected} // Désactive les boutons après un choix
-                    // Style de base
+                    key={`${key}-${idx}`}
+                    onClick={() => handleSelectAnswer(letter)}
+                    disabled={isAnswerSelected}
                     className={`w-full p-4 text-left font-medium border rounded-lg
                                 shadow-sm transition-all duration-200
                                 focus:outline-none focus:ring-2 focus:ring-brand-purple-dark
                                 ${isAnswerSelected ? 'cursor-not-allowed' : 'cursor-pointer'}
                                 ${isThisOptionSelected ? 'bg-brand-purple-light border-brand-purple-dark ring-2 ring-brand-purple-dark' : 'border-gray-300'}
                               `}
-                    // Animations Framer Motion
-                    whileHover={
-                      isAnswerSelected
-                        ? {}
-                        : { scale: 1.02, backgroundColor: '#F3E8FF' }
-                    }
+                    whileHover={isAnswerSelected ? {} : { scale: 1.02, backgroundColor: '#F3E8FF' }}
                     whileTap={isAnswerSelected ? {} : { scale: 0.98 }}
                   >
                     <span className="font-bold text-brand-purple mr-2">
-                      {key}:
+                      {letter}:
                     </span>{' '}
                     {value}
                   </motion.button>

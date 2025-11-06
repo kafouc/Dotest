@@ -70,7 +70,71 @@ export default function QuizGenerator({ documents, isLoading }: QuizGeneratorPro
       }
       const data = await response.json();
       if (data.quiz && Array.isArray(data.quiz)) {
-        setQuiz(data.quiz);
+        // Normalise la structure du quiz pour assurer des clés A-D et une réponse correcte en lettre
+        const normalizeLetter = (val: string): string => {
+          const s = (val ?? '').toString().trim().toUpperCase();
+          // Cherche une lettre A-D au début (éventuellement suivie de ponctuation)
+          const m = s.match(/^[\s\(\[]*([ABCD])([\)\.:\-]|\s|$)/);
+          if (m) return m[1];
+          // Si c'est exactement A/B/C/D
+          if (["A","B","C","D"].includes(s)) return s;
+          return s;
+        };
+
+        const toLetter = (index: number) => (['A','B','C','D'][index] ?? 'A');
+
+        type RawQuestion = {
+          question?: unknown;
+          options?: unknown;
+          reponse_correcte?: unknown;
+          justification?: unknown;
+        };
+
+        const normalized: QuizQuestion[] = (data.quiz as RawQuestion[]).map((q) => {
+          // Récupère les options comme tableau de texte
+          let values: string[] = [];
+          if (Array.isArray(q.options)) {
+            values = (q.options as unknown[]).map((v) => (v ?? '').toString());
+          } else if (q.options && typeof q.options === 'object') {
+            // Si les clés sont déjà A-D, les utiliser dans l'ordre A-D
+            const obj = q.options as Record<string, unknown>;
+            const keys = Object.keys(obj);
+            if (keys.some(k => ['A','B','C','D'].includes(k.toUpperCase()))) {
+              values = ['A','B','C','D']
+                .map(k => obj[k] ?? obj[k.toLowerCase()] ?? obj[k.toUpperCase()])
+                .filter((v): v is string => typeof v === 'string');
+            } else {
+              values = Object.values(obj).map((v) => (v ?? '').toString());
+            }
+          }
+          // Coupe à 4 options max, remplit si moins (évite erreurs)
+          values = values.slice(0, 4);
+          while (values.length < 4) values.push('');
+
+          const mappedOptions: Record<string, string> = {
+            A: values[0] ?? '',
+            B: values[1] ?? '',
+            C: values[2] ?? '',
+            D: values[3] ?? '',
+          };
+
+          // Normalise la réponse correcte
+          let rc = normalizeLetter((q.reponse_correcte ?? '') as string);
+          if (!['A','B','C','D'].includes(rc)) {
+            // Si ce n'est pas une lettre, tente de faire correspondre par valeur
+            const idx = values.findIndex(v => v.trim().toUpperCase() === (q.reponse_correcte ?? '').toString().trim().toUpperCase());
+            rc = idx >= 0 ? toLetter(idx) : 'A';
+          }
+
+          return {
+            question: (q.question ?? '') as string,
+            options: mappedOptions,
+            reponse_correcte: rc,
+            justification: (q.justification ?? undefined) as string | undefined,
+          } as QuizQuestion;
+        });
+
+        setQuiz(normalized);
       } else { throw new Error("L'API n'a pas renvoyé de quiz valide."); }
 
     } catch (err: unknown) {
@@ -91,6 +155,11 @@ export default function QuizGenerator({ documents, isLoading }: QuizGeneratorPro
           onQuizEnd={() => {
             setIsAttemptingQuiz(false);
             setQuiz(null); 
+          }}
+          context={{
+            document_path: selectedDocument !== 'all' ? selectedDocument : undefined,
+            user_query: query,
+            num_questions: numQuestions,
           }}
         />
       ) : (

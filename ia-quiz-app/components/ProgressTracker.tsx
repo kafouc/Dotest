@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import type { SupabaseClient } from '@supabase/supabase-js';
+import AttemptDetails from './AttemptDetails';
 
 // Type pour les données d'une tentative de quiz
 type QuizAttempt = {
@@ -20,6 +21,7 @@ export default function ProgressTracker({
   const [attempts, setAttempts] = useState<QuizAttempt[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [detailsAttemptId, setDetailsAttemptId] = useState<number | null>(null);
 
   useEffect(() => {
     const fetchAttempts = async () => {
@@ -47,28 +49,37 @@ export default function ProgressTracker({
 
     fetchAttempts();
 
-    // Écoute les nouveaux inserts dans quiz_attempts
-    const channel = supabase
-      .channel('quiz_attempts_changes')
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'quiz_attempts',
-        },
-        (payload) => {
-          // Ajoute la nouvelle tentative en haut de la liste
-          setAttempts((currentAttempts) =>
-            [payload.new as QuizAttempt, ...currentAttempts].slice(0, 5)
-          );
-        }
-      )
-      .subscribe();
+    // Récupère l'utilisateur pour filtrer le canal Realtime par user_id
+    let isMounted = true;
+    let channel: ReturnType<SupabaseClient['channel']> | null = null;
 
-    // Nettoie l'écouteur
+    (async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!isMounted || !user) return;
+
+      channel = supabase
+        .channel('quiz_attempts_changes')
+        .on(
+          'postgres_changes',
+          {
+            event: 'INSERT',
+            schema: 'public',
+            table: 'quiz_attempts',
+            filter: `user_id=eq.${user.id}`,
+          },
+          (payload) => {
+            setAttempts((currentAttempts) =>
+              [payload.new as QuizAttempt, ...currentAttempts].slice(0, 5)
+            );
+          }
+        )
+        .subscribe();
+    })();
+
+    // Nettoyage
     return () => {
-      supabase.removeChannel(channel);
+      isMounted = false;
+      if (channel) supabase.removeChannel(channel);
     };
   }, [supabase]);
 
@@ -142,13 +153,31 @@ export default function ProgressTracker({
                     })}
                   </span>
                 </div>
-                <span className="text-lg font-bold text-brand-purple-dark">
-                  {percentage.toFixed(0)}%
-                </span>
+                <div className="flex items-center gap-3">
+                  <span className="text-lg font-bold text-brand-purple-dark">
+                    {percentage.toFixed(0)}%
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setDetailsAttemptId(attempt.id)}
+                    className="text-sm px-3 py-1 rounded-md border border-gray-300 hover:bg-gray-50"
+                    aria-label={`Voir le détail de la tentative ${attempt.id}`}
+                  >
+                    Détails
+                  </button>
+                </div>
               </li>
             );
           })}
         </ul>
+      )}
+
+      {detailsAttemptId !== null && (
+        <AttemptDetails
+          supabase={supabase}
+          attemptId={detailsAttemptId}
+          onClose={() => setDetailsAttemptId(null)}
+        />
       )}
     </div>
   );

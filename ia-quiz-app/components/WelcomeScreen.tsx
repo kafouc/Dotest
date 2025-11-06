@@ -5,11 +5,12 @@ import { Auth } from '@supabase/auth-ui-react';
 import { ThemeSupa } from '@supabase/auth-ui-shared';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { SupabaseClient } from '@supabase/supabase-js';
+import type { I18nVariables } from '@supabase/auth-ui-shared';
 
 // Props du composant
 type WelcomeScreenProps = {
   supabase: SupabaseClient;
-  localization: { [key: string]: unknown }; 
+  localization: { variables?: I18nVariables };
 };
 
 // --- Configuration de l'Animation (traduit de votre SCSS) ---
@@ -34,6 +35,10 @@ const getRandomColors = () => {
 
 export default function WelcomeScreen({ supabase, localization }: WelcomeScreenProps) {
   const [authView, setAuthView] = useState<'welcome' | 'sign_in' | 'sign_up'>('welcome');
+
+  // URL de retour pour OAuth (GitHub/Google)
+  const redirectTo =
+    typeof window !== 'undefined' ? `${window.location.origin}/auth/callback` : undefined;
 
   return (
     // --- CORRECTION : Remplacement de <> par <div className="contents"> ---
@@ -99,6 +104,7 @@ export default function WelcomeScreen({ supabase, localization }: WelcomeScreenP
               </p>
               
               <button
+                type="button"
                 onClick={() => setAuthView('sign_in')}
                 className="w-full px-6 py-3 mb-4 cursor-pointer bg-brand-purple hover:bg-brand-purple-dark text-white font-bold rounded-md shadow-sm transition-colors duration-200 text-lg"
               >
@@ -106,10 +112,11 @@ export default function WelcomeScreen({ supabase, localization }: WelcomeScreenP
               </button>
               
               <button
+                type="button"
                 onClick={() => setAuthView('sign_up')}
                 className="w-full px-6 py-3 cursor-pointer bg-brand-pink hover:bg-brand-pink-dark text-white font-bold rounded-md shadow-sm transition-colors duration-200 text-lg"
               >
-                inscrire
+                S&apos;inscrire
               </button>
             </motion.div>
 
@@ -123,6 +130,8 @@ export default function WelcomeScreen({ supabase, localization }: WelcomeScreenP
               transition={{ duration: 0.3 }}
             >
               <button 
+                type="button"
+                aria-label="Revenir à l'écran de bienvenue"
                 onClick={() => setAuthView('welcome')}
                 className="mb-4 text-sm text-brand-purple hover:underline"
               >
@@ -134,7 +143,8 @@ export default function WelcomeScreen({ supabase, localization }: WelcomeScreenP
                 appearance={{ theme: ThemeSupa }}
                 providers={['github', 'google']}
                 view={authView} 
-                localization={localization as { [key: string]: unknown }} // Corrigé (as any)
+                redirectTo={redirectTo}
+                localization={localization}
               />
             </motion.div>
           )}
