@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from 'react';
+import Link from 'next/link';
 // Auth et ThemeSupa ne sont plus nécessaires ici
 import type { Session } from '@supabase/supabase-js'; 
 import { createSupabaseBrowserClient } from '@/lib/supabaseClient'; 
@@ -160,6 +161,14 @@ export default function Home() {
                     onDeleteSuccess={() => fetchDocuments(false)} 
                   />
                   <ProgressTracker supabase={supabase} />
+
+                  {/* Lien vers la révision des flashcards */}
+                  <Link
+                    href="/flashcards"
+                    className="block text-center px-4 py-2 bg-brand-purple text-white font-semibold rounded-md shadow-sm hover:bg-brand-purple-dark transition-colors duration-200"
+                  >
+                    Réviser des flashcards
+                  </Link>
                 </motion.div>
 
                 {/* Colonne de Droite (Contenu) */}

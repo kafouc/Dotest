@@ -2,27 +2,28 @@
 
 import { useEffect, useState } from 'react';
 import FlashcardStudy from '@/components/FlashcardStudy';
-import { useSearchParams, useRouter } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 
 export default function FlashcardsPage() {
-  const searchParams = useSearchParams();
   const router = useRouter();
-  const initialDoc = searchParams.get('document') || '';
-  const [documentPath, setDocumentPath] = useState(initialDoc);
+  const [documentPath, setDocumentPath] = useState('');
   const [generating, setGenerating] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
   useEffect(() => {
-    // keep URL in sync (shallow)
-    const params = new URLSearchParams(Array.from(searchParams.entries()));
-    if (documentPath) {
-      params.set('document', documentPath);
-    } else {
-      params.delete('document');
-    }
-    router.replace(`/flashcards?${params.toString()}`);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [documentPath]);
+    // Hydrate initial value from URL on client
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const d = params.get('document') || '';
+      if (d) setDocumentPath(d);
+    } catch {}
+  }, []);
+
+  useEffect(() => {
+    // Keep URL in sync (shallow)
+    const q = documentPath ? `?document=${encodeURIComponent(documentPath)}` : '';
+    router.replace(`/flashcards${q}`);
+  }, [documentPath, router]);
 
   const onGenerate = async () => {
     if (!documentPath) {
