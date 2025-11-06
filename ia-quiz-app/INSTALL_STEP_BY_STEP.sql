@@ -274,8 +274,22 @@ begin
 end;
 $$;
 
+-- Fonction pour auto-remplir creator_id avec l'utilisateur connecté
+create or replace function public.fn_set_creator_id()
+returns trigger
+language plpgsql
+security definer
+as $$
+begin
+  if new.creator_id is null then
+    new.creator_id := auth.uid();
+  end if;
+  return new;
+end;
+$$;
+
 -- ========================================
--- ÉTAPE 11 : Créer le trigger
+-- ÉTAPE 11 : Créer les triggers
 -- ========================================
 
 drop trigger if exists trg_shared_quizzes_generate_code on public.shared_quizzes;
@@ -283,6 +297,12 @@ drop trigger if exists trg_shared_quizzes_generate_code on public.shared_quizzes
 create trigger trg_shared_quizzes_generate_code
 before insert on public.shared_quizzes
 for each row execute function public.fn_generate_unique_share_code();
+
+drop trigger if exists trg_shared_quizzes_set_creator on public.shared_quizzes;
+
+create trigger trg_shared_quizzes_set_creator
+before insert on public.shared_quizzes
+for each row execute function public.fn_set_creator_id();
 
 -- ========================================
 -- ÉTAPE 12 : Activer Realtime

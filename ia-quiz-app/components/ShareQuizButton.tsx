@@ -28,6 +28,22 @@ export default function ShareQuizButton({ quizTitle, questions }: Props) {
     try {
       setLoading(true);
 
+      // 🔍 VÉRIFICATION: L'utilisateur est-il connecté ?
+      const { data: { user }, error: authError } = await supabase.auth.getUser();
+      
+      if (authError || !user) {
+        alert(
+          '⚠️ Vous devez être connecté pour partager un quiz.\n\n' +
+          'Veuillez vous déconnecter puis vous reconnecter.\n' +
+          'Si le problème persiste, rechargez la page (Ctrl+Shift+R).'
+        );
+        console.error('Erreur auth:', authError || 'Aucun utilisateur');
+        setLoading(false);
+        return;
+      }
+
+      console.log('✅ Utilisateur connecté:', user.id);
+
       // 1. Créer le quiz partagé
       const sharedQuiz = await createSharedQuiz(supabase, {
         title: quizTitle,
