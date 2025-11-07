@@ -1,6 +1,16 @@
 /** @type {import('next').NextConfig} */
 const config = {
   reactStrictMode: true,
+  images: {
+    remotePatterns: [
+      {
+        protocol: 'https',
+        hostname: 's10.aconvert.com',
+        port: '',
+        pathname: '/convert/p3r68-cdx67/**'
+      }
+    ]
+  },
 
   webpack: (config) => {
     config.externals.push(

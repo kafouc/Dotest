@@ -40,6 +40,16 @@ export type LiveAnswer = {
   answered_at: string;
 };
 
+export type ActiveSessionInfo = {
+  session_id: string | null;
+  share_code: string;
+  title: string;
+  status: 'waiting' | 'active' | 'completed';
+  started_at: string | null;
+  expires_at: string | null;
+  questions_count: number;
+};
+
 /**
  * Crée un quiz partagé
  */
@@ -149,6 +159,36 @@ export async function getSharedQuizByCode(
     throw error;
   }
   return data;
+}
+
+/**
+ * Récupérer la session active/en attente pour un code de partage
+ * via la RPC SECURITY DEFINER côté DB (bypass RLS lecture pour les élèves)
+ */
+export async function getActiveSessionByShareCode(
+  supabase: SupabaseClient,
+  shareCode: string
+): Promise<ActiveSessionInfo | null> {
+  const { data, error } = await supabase.rpc('list_active_session', {
+    p_share_code: shareCode.toUpperCase(),
+  });
+
+  if (error) throw error;
+  if (!data) return null;
+
+  // Supabase peut retourner un objet ou un tableau selon la définition; normalisons en objet
+  const row = Array.isArray(data) ? data[0] : data;
+  if (!row) return null;
+
+  return {
+    session_id: row.session_id ?? null,
+    share_code: row.share_code,
+    title: row.title,
+    status: row.status,
+    started_at: row.started_at ?? null,
+    expires_at: row.expires_at ?? null,
+    questions_count: row.questions_count ?? 0,
+  } as ActiveSessionInfo;
 }
 
 /**

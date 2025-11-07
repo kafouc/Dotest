@@ -5,6 +5,7 @@ import { useParams } from 'next/navigation';
 import { createSupabaseBrowserClient } from '@/lib/supabaseClient';
 import {
   getSharedQuizByCode,
+  getActiveSessionByShareCode,
   joinSession,
   submitLiveAnswer,
   type SharedQuiz,
@@ -52,17 +53,18 @@ export default function JoinCodePage() {
         }
         setQuiz(quizData);
 
-        // Récupérer la session active
-        const { data: sessions } = await supabase
-          .from('quiz_sessions')
-          .select('*')
-          .eq('shared_quiz_id', quizData.id)
-          .in('status', ['waiting', 'active'])
-          .order('created_at', { ascending: false })
-          .limit(1);
-
-        if (sessions && sessions.length > 0) {
-          setSession(sessions[0]);
+        // Récupérer la session active via RPC (bypass RLS pour les élèves)
+        const active = await getActiveSessionByShareCode(supabase, code);
+        if (active && active.session_id) {
+          // Construire un objet minimal de session; il sera remplacé par Realtime lors d'un update
+          setSession({
+            id: active.session_id,
+            shared_quiz_id: quizData.id,
+            status: active.status as QuizSession['status'],
+            started_at: active.started_at,
+            completed_at: null,
+            created_at: new Date().toISOString(),
+          });
         } else {
           setError('Aucune session active pour ce quiz.');
         }

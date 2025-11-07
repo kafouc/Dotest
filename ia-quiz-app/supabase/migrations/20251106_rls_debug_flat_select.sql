@@ -1,22 +1,7 @@
--- DEBUG TEMPORAIRE: APLATIR RLS SUR quiz_sessions POUR ISOLER LA RÉCURRENCE
--- OBJECTIF: Vérifier si l'erreur 42P17 persiste sans aucune dépendance
--- À UTILISER SEULEMENT POUR DIAGNOSTIC PUIS SUPPRIMER / REMETTRE LES POLICIES SÉCURISÉES
+-- ARCHIVÉ / NO-OP: ancien script de debug RLS (ne rien faire en prod)
+-- Conservé uniquement pour référence. Exécution sans effet.
 
 do $$
 begin
-  -- Désactiver toutes les policies existantes sur quiz_sessions
-  begin drop policy "Public peut voir sessions pour quiz actif" on public.quiz_sessions; exception when others then null; end;
-  begin drop policy qs_creator_insert on public.quiz_sessions; exception when others then null; end;
-  begin drop policy qs_creator_update on public.quiz_sessions; exception when others then null; end;
-  begin drop policy qs_creator_delete on public.quiz_sessions; exception when others then null; end;
-  begin drop policy qs_creator_all on public.quiz_sessions; exception when others then null; end;
-  begin drop policy qs_participant_read on public.quiz_sessions; exception when others then null; end;
-
-  -- Créer une seule policy SELECT ouverte pour confirmer la disparition de l'erreur
-  create policy qs_debug_public_select
-    on public.quiz_sessions for select
-    using (true);
+  perform 1; -- no-op
 end $$;
-
--- Vérification rapide (affichera une ligne si accessible)
--- select id, shared_quiz_id, status from public.quiz_sessions limit 5;
