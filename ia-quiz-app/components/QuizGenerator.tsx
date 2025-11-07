@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import QuizAttempt from './QuizAttempt'; 
 import ShareQuizButton from './ShareQuizButton';
-import type { DocumentInfo } from '../app/page'; // Importe le type partagé
+import type { DocumentInfo } from '@/lib/types'; // Type partagé
 
 // Types
 type QuizQuestion = {

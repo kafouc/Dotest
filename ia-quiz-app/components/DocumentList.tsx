@@ -2,7 +2,7 @@
 
 import { useState } from 'react'; // <-- LIGNE CORRIGÉE
 import type { SupabaseClient } from '@supabase/supabase-js';
-import type { DocumentInfo } from '../app/page'; // Importe le type partagé
+import type { DocumentInfo } from '@/lib/types'; // Type partagé centralisé
 
 // Props reçues de page.tsx
 type DocumentListProps = {
