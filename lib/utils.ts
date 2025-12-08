@@ -1,4 +1,4 @@
-import type { QuizQuestion, RawQuizQuestion } from './quiz.types';
+import type { QuizQuestion, RawQuizQuestion, QuizMode } from './quiz.types';
 import { QUIZ_CONFIG } from './constants';
 
 export function normalizeLetter(val: string): string {
@@ -13,7 +13,20 @@ export function indexToLetter(index: number): 'A' | 'B' | 'C' | 'D' {
   return QUIZ_CONFIG.OPTION_LETTERS[index] ?? 'A';
 }
 
-export function normalizeQuiz(rawQuiz: RawQuizQuestion[]): QuizQuestion[] {
+export function normalizeQuiz(rawQuiz: RawQuizQuestion[], mode: QuizMode = 'qcu'): QuizQuestion[] {
+  if (mode === 'vf') {
+    return rawQuiz.map((q) => {
+      const correct = ((q.reponse_correcte ?? '') as string).toString().trim().toUpperCase();
+      const rc = correct === 'TRUE' || correct === 'VRAI' ? 'VRAI' : 'FAUX';
+      return {
+        question: (q.question ?? '') as string,
+        options: { VRAI: 'Vrai', FAUX: 'Faux' },
+        reponse_correcte: rc as 'VRAI' | 'FAUX',
+        justification: (q.justification ?? undefined) as string | undefined,
+      } as QuizQuestion;
+    });
+  }
+
   return rawQuiz.map((q) => {
     let values: string[] = [];
     if (Array.isArray(q.options)) {
@@ -39,6 +52,31 @@ export function normalizeQuiz(rawQuiz: RawQuizQuestion[]): QuizQuestion[] {
       D: values[3] ?? '',
     };
 
+    if (mode === 'qcm') {
+      let rcs: string[] = [];
+      if (Array.isArray(q.reponses_correctes)) {
+        rcs = (q.reponses_correctes as unknown[])
+          .map((v) => normalizeLetter((v ?? '') as string))
+          .filter((l) => QUIZ_CONFIG.OPTION_LETTERS.includes(l as 'A' | 'B' | 'C' | 'D'));
+      } else if (typeof q.reponses_correctes === 'string') {
+        rcs = (q.reponses_correctes as string)
+          .split(/[\,\s]+/)
+          .map((s) => normalizeLetter(s))
+          .filter((l) => QUIZ_CONFIG.OPTION_LETTERS.includes(l as 'A' | 'B' | 'C' | 'D'));
+      } else if (q.reponse_correcte) {
+        const l = normalizeLetter((q.reponse_correcte ?? '') as string);
+        rcs = QUIZ_CONFIG.OPTION_LETTERS.includes(l as 'A' | 'B' | 'C' | 'D') ? [l] : [];
+      }
+      if (rcs.length === 0) rcs = ['A'];
+
+      return {
+        question: (q.question ?? '') as string,
+        options: mappedOptions,
+        reponses_correctes: Array.from(new Set(rcs)),
+        justification: (q.justification ?? undefined) as string | undefined,
+      } as QuizQuestion;
+    }
+
     let rc = normalizeLetter((q.reponse_correcte ?? '') as string);
     if (!QUIZ_CONFIG.OPTION_LETTERS.includes(rc as 'A' | 'B' | 'C' | 'D')) {
       const idx = values.findIndex(v => v.trim().toUpperCase() === (q.reponse_correcte ?? '').toString().trim().toUpperCase());
@@ -54,16 +92,31 @@ export function normalizeQuiz(rawQuiz: RawQuizQuestion[]): QuizQuestion[] {
   });
 }
 
-export function isAnswerCorrect(userAnswer: string | null, correctAnswer: string): boolean {
-  return !!userAnswer && normalizeLetter(userAnswer) === normalizeLetter(correctAnswer);
+export function isAnswerCorrect(userAnswer: string | null, correct: string | string[]): boolean {
+  if (!userAnswer) return false;
+  const ua = normalizeLetter(userAnswer);
+  if (Array.isArray(correct)) {
+    return correct.map(normalizeLetter).includes(ua);
+  }
+  return normalizeLetter(correct) === ua;
 }
 
-export function calculateQuizScore(quizQuestions: QuizQuestion[], selectedAnswers: { [key: number]: string }): number {
+export function calculateQuizScore(quizQuestions: QuizQuestion[], selectedAnswers: { [key: number]: string | string[] }): number {
   let score = 0;
   quizQuestions.forEach((question, index) => {
-    const userAnswer = selectedAnswers[index];
-    if (isAnswerCorrect(userAnswer, question.reponse_correcte)) {
-      score++;
+    const userAns = selectedAnswers[index];
+    if (!userAns) return;
+    if ('reponses_correctes' in question) {
+      const ua = Array.isArray(userAns) ? userAns.map(normalizeLetter) : [normalizeLetter(userAns as string)];
+      const correct = question.reponses_correctes.map(normalizeLetter);
+      const same = ua.length === correct.length && ua.every((l) => correct.includes(l));
+      if (same) score++;
+    } else if ('reponse_correcte' in question && (question.reponse_correcte === 'VRAI' || question.reponse_correcte === 'FAUX')) {
+      score += (userAns === question.reponse_correcte) ? 1 : 0;
+    } else {
+      if ('reponse_correcte' in question) {
+        if (isAnswerCorrect((userAns as string) ?? null, question.reponse_correcte)) score++;
+      }
     }
   });
   return score;

@@ -1,6 +1,4 @@
 'use client';
-
-import { useState, useCallback } from 'react';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { DocumentInfo } from '@/lib/types';
 import { DOCUMENT_STATUS } from '@/lib/constants';
@@ -16,70 +14,13 @@ type DocumentListProps = {
   onSelectDocument?: (documentId: string) => void; // Fonction optionnelle pour sélectionner un document
 };
 
-export default function DocumentList({
-  supabase,
-  documents,
-  isLoading,
-  onDeleteSuccess,
-  onSelectDocument,
-}: DocumentListProps) {
-  const [deletingPath, setDeletingPath] = useState<string | null>(null);
-  const [deleteError, setDeleteError] = useState<string | null>(null);
+export default function DocumentList(props: DocumentListProps) {
+  const { documents, isLoading, onSelectDocument } = props;
 
-  // Mémorisation de handleDelete pour éviter les re-créations
-  const handleDelete = useCallback(async (documentPath: string) => {
-    if (
-      !window.confirm(
-        `Êtes-vous sûr de vouloir supprimer ce document et ses données associées ? Cette action est irréversible.`
-      )
-    ) {
-      return;
-    }
-    setDeletingPath(documentPath);
-    setDeleteError(null);
-    try {
-      // 1. Supprimer les sections
-      const { error: deleteSectionsError } = await supabase
-        .from('document_sections')
-        .delete()
-        .eq('document_path', documentPath);
-      if (deleteSectionsError) throw deleteSectionsError;
-
-      // 2. Supprimer la ligne de la table 'documents'
-      const { error: deleteDocError } = await supabase
-        .from('documents')
-        .delete()
-        .eq('file_path', documentPath);
-      if (deleteDocError) throw deleteDocError;
-
-      // 3. Supprimer le fichier PDF du Storage
-      const { error: deleteFileError } = await supabase.storage
-        .from('pdfs')
-        .remove([documentPath]);
-      if (deleteFileError) throw deleteFileError;
-
-      // 4. Appelle la fonction de rafraîchissement du parent
-      onDeleteSuccess();
-    } catch (err: unknown) {
-      // <-- CORRECTION ICI (any -> unknown)
-      console.error('Erreur suppression:', err);
-      const errorMessage =
-        err instanceof Error
-          ? err.message
-          : 'Une erreur inconnue est survenue.';
-      setDeleteError(errorMessage);
-    } finally {
-      setDeletingPath(null);
-    }
-  }, [supabase, onDeleteSuccess]);
+  // Suppression déplacée côté pages; la liste n’appelle plus directement la suppression
 
   return (
     <div>
-      {deleteError && (
-        <p className="p-3 mb-4 bg-red-100 text-red-700 rounded-md text-sm">
-          {deleteError}
-        </p>
-      )}
       {isLoading && (
         <p className="text-gray-600 text-sm">Chargement des documents...</p>
       )}
@@ -99,7 +40,6 @@ export default function DocumentList({
       {!isLoading && documents.length > 0 && (
         <ul className="space-y-1">
           {documents.map((doc) => {
-            const isDeleting = deletingPath === doc.path;
             const docId = doc.path || doc.name;
 
             // Déterminer l'icône selon le statut
@@ -116,8 +56,7 @@ export default function DocumentList({
             return (
               <li
                 key={doc.path}
-                className={`flex items-center gap-2 p-2 rounded-md hover:bg-gray-100 transition-all duration-200 cursor-pointer
-                            ${isDeleting ? 'opacity-50' : 'opacity-100'}`}
+                className={`flex items-center gap-2 p-2 rounded-md hover:bg-gray-100 transition-all duration-200 cursor-pointer`}
                 onClick={() => onSelectDocument && onSelectDocument(docId)}
                 title={doc.status_message || doc.name}
               >

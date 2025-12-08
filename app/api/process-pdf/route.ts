@@ -32,7 +32,7 @@ export async function POST(req: Request) {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
       },
-      body: JSON.stringify({ filePath, documentId }),
+      body: JSON.stringify({ filePath, documentId, mimeType: 'application/pdf' }),
     });
 
     if (!functionResponse.ok) {

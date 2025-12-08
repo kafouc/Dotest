@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Hors ligne - Sheet of Paper</title>
+  <style>
+    :root { color-scheme: light dark; }
+    body { margin: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, sans-serif; background: #f9fafb; color: #0f172a; display: grid; place-items: center; min-height: 100vh; }
+    .card { background: white; border: 1px solid #e5e7eb; border-radius: 12px; padding: 24px; max-width: 520px; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
+    h1 { margin: 0 0 8px; font-size: 20px; }
+    p { margin: 0 0 16px; color: #475569; }
+    .hint { font-size: 14px; color: #64748b; }
+    .row { display: flex; gap: 12px; align-items: center; }
+    .btn { display: inline-flex; align-items: center; gap: 8px; border: 1px solid #e5e7eb; background: #fff; color: #0f172a; padding: 8px 12px; border-radius: 999px; text-decoration: none; }
+    .btn:hover { background: #f8fafc; }
+    .ico { width: 20px; height: 20px; }
+  </style>
+</head>
+<body>
+  <main class="card">
+    <div class="row">
+      <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 12h18M3 6h18M3 18h18"/></svg>
+      <h1>Vous êtes hors ligne</h1>
+    </div>
+    <p>Impossible de charger la page. Vérifiez votre connexion internet et réessayez.</p>
+    <p class="hint">Vous pouvez toujours ouvrir l’application si elle est installée, ou revenir à l’accueil.</p>
+    <div class="row">
+      <a class="btn" href="/app">
+        <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4"/></svg>
+        Accueil
+      </a>
+      <a class="btn" href="/settings">
+        <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35.64-.155 1.143-.658 1.298-1.298.426-1.756 2.924-1.756 3.35 0 .155.64.658 1.143 1.298 1.298z"/></svg>
+        Paramètres
+      </a>
+    </div>
+  </main>
+</body>
+</html>

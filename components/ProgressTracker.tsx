@@ -17,8 +17,10 @@ type QuizAttempt = {
 // Le composant reçoit le client Supabase en prop (créé dans page.tsx)
 export default function ProgressTracker({
   supabase,
+  documentPath,
 }: {
   supabase: SupabaseClient;
+  documentPath?: string;
 }) {
   const [attempts, setAttempts] = useState<QuizAttempt[]>([]);
   const [loading, setLoading] = useState(true);
@@ -26,23 +28,45 @@ export default function ProgressTracker({
   const [detailsAttemptId, setDetailsAttemptId] = useState<number | null>(null);
 
   useEffect(() => {
+    type DBAttempt = {
+      id: number;
+      created_at: string;
+      score: number;
+      total_questions: number;
+      context?: { document_path?: string } | null;
+    };
     const fetchAttempts = async () => {
       setLoading(true);
       setError(null);
 
       // Récupère les tentatives de l'utilisateur (grâce à RLS)
-      const { data, error: fetchError } = await supabase
-        .from('quiz_attempts')
-        .select('id, created_at, score, total_questions') // Sélectionne les colonnes
-        .order('created_at', { ascending: false }) // Trie (plus récent en premier)
-        .limit(5); // Limite aux 5 dernières tentatives
+        let query = supabase
+          .from('quiz_attempts')
+          .select('id, created_at, score, total_questions, context')
+          .order('created_at', { ascending: false })
+          .limit(5);
+
+        // Si un document est précisé, filtrer par ce document via le JSONB context
+        if (documentPath) {
+          query = query.contains('context', { document_path: documentPath });
+        }
+
+        const { data, error: fetchError } = await query as unknown as { data: DBAttempt[] | null; error: unknown };
 
       if (fetchError) {
         console.error('Erreur chargement tentatives:', fetchError);
         setError("Impossible de charger l'historique.");
         setAttempts([]);
       } else if (data) {
-        setAttempts(data);
+          // Normalise et retire le champ context côté UI
+          setAttempts(
+            data.map((a: DBAttempt) => ({
+              id: a.id,
+              created_at: a.created_at,
+              score: a.score,
+              total_questions: a.total_questions,
+            }))
+          );
       } else {
         setAttempts([]);
       }
@@ -70,9 +94,24 @@ export default function ProgressTracker({
             filter: `user_id=eq.${user.id}`,
           },
           (payload) => {
-            setAttempts((currentAttempts) =>
-              [payload.new as QuizAttempt, ...currentAttempts].slice(0, 5)
-            );
+              // Si documentPath est fourni, ignorer les tentatives d'autres documents
+              const ctx = (payload.new as unknown as DBAttempt)?.context;
+              if (documentPath && ctx?.document_path !== documentPath) {
+                return;
+              }
+              const n = payload.new as unknown as DBAttempt;
+              const item: QuizAttempt = {
+                id: n.id,
+                created_at: n.created_at,
+                score: n.score,
+                total_questions: n.total_questions,
+              };
+              setAttempts((currentAttempts) => {
+                // Déduplication: vérifier si l'ID existe déjà
+                const exists = currentAttempts.some(a => a.id === item.id);
+                if (exists) return currentAttempts;
+                return [item, ...currentAttempts].slice(0, 5);
+              });
           }
         )
         .subscribe();
@@ -83,7 +122,7 @@ export default function ProgressTracker({
       isMounted = false;
       if (channel) supabase.removeChannel(channel);
     };
-  }, [supabase]);
+  }, [supabase, documentPath]);
 
   // Mémorisation du score moyen pour éviter le recalcul à chaque render
   const averageScore = useMemo(() => {

@@ -28,8 +28,16 @@ export default function UploadForm({ session, supabase, onUploadSuccess }: Uploa
     }
 
     // Vérification 2: Type
-    if (file.type !== 'application/pdf') {
-      return 'Seuls les fichiers PDF sont acceptés.';
+    const allowedTypes = [
+      'application/pdf',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document', // .docx
+      'application/vnd.openxmlformats-officedocument.presentationml.presentation', // .pptx
+    ];
+    const name = (file.name || '').toLowerCase();
+    const extOk = name.endsWith('.pdf') || name.endsWith('.docx') || name.endsWith('.pptx');
+    const typeOk = allowedTypes.includes(file.type);
+    if (!(typeOk || extOk)) {
+      return 'Types acceptés: PDF, Word (.docx), PowerPoint (.pptx).';
     }
 
     return null;
@@ -79,7 +87,7 @@ export default function UploadForm({ session, supabase, onUploadSuccess }: Uploa
 
   const handleUpload = async () => {
     if (!file) {
-      setError('Veuillez sélectionner un fichier PDF.');
+      setError('Veuillez sélectionner un fichier (PDF, Word, PowerPoint).');
       return;
     }
 
@@ -119,10 +127,10 @@ export default function UploadForm({ session, supabase, onUploadSuccess }: Uploa
       setCurrentStep('Démarrage de l\'analyse...');
 
       // 3: Déclencher la fonction Edge
-      const triggerResponse = await fetch('/api/process-pdf', {
+      const triggerResponse = await fetch('/api/process-file', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ filePath: filePath, documentId: insertData.id }),
+        body: JSON.stringify({ filePath: filePath, documentId: insertData.id, mimeType: file.type }),
       });
       if (!triggerResponse.ok) {
         throw new Error("Erreur lors du déclenchement de l'analyse.");
@@ -151,7 +159,7 @@ export default function UploadForm({ session, supabase, onUploadSuccess }: Uploa
 
   return (
     <div className="p-6 bg-white rounded-lg shadow-md border border-gray-200">
-      <h2 className="text-xl font-heading font-semibold mb-4 text-brand-dark">Téléverser un Cours (PDF)</h2>
+      <h2 className="text-xl font-heading font-semibold mb-4 text-brand-dark">Téléverser un Cours (PDF, Word, PowerPoint)</h2>
       <p className="text-sm text-gray-600 mb-4">
         Limite : {FILE_LIMITS.MAX_SIZE_MB} Mo et {FILE_LIMITS.MAX_PAGES} pages. L&apos;analyse est effectuée en arrière-plan.
       </p>
@@ -169,12 +177,12 @@ export default function UploadForm({ session, supabase, onUploadSuccess }: Uploa
       >
         <input
           type="file"
-          accept="application/pdf"
+          accept=".pdf,.docx,.pptx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.presentationml.presentation"
           onChange={handleFileChange}
           disabled={uploading}
           id="file-upload"
           className="hidden"
-          aria-label="Sélectionner un fichier PDF"
+          aria-label="Sélectionner un fichier PDF/Word/PowerPoint"
         />
         <label
           htmlFor="file-upload"
@@ -195,10 +203,10 @@ export default function UploadForm({ session, supabase, onUploadSuccess }: Uploa
             />
           </svg>
           <span className="text-sm font-medium text-gray-700">
-            {file ? file.name : 'Glissez-déposez un PDF ici ou cliquez pour sélectionner'}
+            {file ? file.name : 'Glissez-déposez un fichier (PDF, .docx, .pptx) ou cliquez pour sélectionner'}
           </span>
           <span className="text-xs text-gray-500">
-            PDF uniquement, max {FILE_LIMITS.MAX_SIZE_MB} Mo
+            Max {FILE_LIMITS.MAX_SIZE_MB} Mo — Types: PDF, Word (.docx), PowerPoint (.pptx)
           </span>
         </label>
       </div>

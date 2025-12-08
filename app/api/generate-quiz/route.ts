@@ -25,11 +25,16 @@ const groq = new Groq({
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { query: userQuery, documentPath, numQuestions = QUIZ_LIMITS.DEFAULT_QUESTIONS } = body;
-    const count = Math.min(
-      Math.max(QUIZ_LIMITS.MIN_QUESTIONS, numQuestions),
-      QUIZ_LIMITS.MAX_QUESTIONS
-    );
+    const { query: userQuery, documentPath, numQuestions = QUIZ_LIMITS.DEFAULT_QUESTIONS, mode = 'qcu', theme } = body as { query: string; documentPath?: string; numQuestions?: number; mode?: 'qcu'|'qcm'|'vf'; theme?: string };
+    const allowedCounts = [5, 7, 10];
+    const nearestAllowed = allowedCounts.reduce((prev, cur) => {
+      const n = typeof numQuestions === 'number' ? numQuestions : QUIZ_LIMITS.DEFAULT_QUESTIONS;
+      return Math.abs(cur - n) < Math.abs(prev - n) ? cur : prev;
+    }, QUIZ_LIMITS.DEFAULT_QUESTIONS);
+    const count = allowedCounts.includes(numQuestions) ? numQuestions : nearestAllowed;
+    if (!['qcu','qcm','vf'].includes(mode)) {
+      return NextResponse.json({ error: 'Mode invalide (qcu|qcm|vf)' }, { status: 400 });
+    }
 
     if (!userQuery) {
       return NextResponse.json(
@@ -110,16 +115,20 @@ export async function POST(req: Request) {
       .join('\n\n---\n\n');
 
     // 6. Prompt pour Groq
+    const formatInstructions =
+      mode === 'vf'
+        ? `Pour chaque question:\n- "question"\n- "options": {"VRAI": "Vrai", "FAUX": "Faux"}\n- "reponse_correcte": "VRAI" ou "FAUX"\n- "justification"`
+        : mode === 'qcm'
+        ? `Pour chaque question:\n- "question"\n- "options": {"A": "...", "B": "...", "C": "...", "D": "..."}\n- "reponses_correctes": ["A","C"] (une ou plusieurs lettres)\n- "justification"`
+        : `Pour chaque question:\n- "question"\n- "options": {"A": "...", "B": "...", "C": "...", "D": "..."}\n- "reponse_correcte": "A" | "B" | "C" | "D"\n- "justification"`;
+
     const prompt = `
       Tu es un assistant pédagogique extrêmement rigoureux.
       CONTEXTE: """ ${context} """
       INSTRUCTIONS:
-      1. Basé exclusivement sur le CONTEXTE, génère ${count} questions QCM.
-      2. Pour chaque question:
-         - Écris la "question".
-         - Propose quatre "options" (A, B, C, D) plausibles.
-         - Indique la "reponse_correcte" (lettre A, B, C ou D).
-         - Ajoute une "justification" (citation courte du contexte).
+      1. Basé exclusivement sur le CONTEXTE, génère ${count} questions ${mode.toUpperCase()}.
+         ${theme ? `Thème ciblé: "${theme.replace(/"/g, '\\"')}".` : ''}
+      2. ${formatInstructions}
       3. Format de réponse: JSON { "quiz": [...] }
       Réponds **uniquement** avec l'objet JSON valide.
     `;

@@ -182,7 +182,7 @@ export default function LiveDashboardPage() {
     }
   };
 
-  const questions = (quiz?.questions as QuizQuestion[]) || [];
+  const questions = useMemo<QuizQuestion[]>(() => (quiz?.questions as QuizQuestion[]) ?? [], [quiz]);
   const [showSolutions, setShowSolutions] = useState(true);
   const letters = QUIZ_CONFIG.OPTION_LETTERS;
 

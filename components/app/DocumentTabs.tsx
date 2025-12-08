@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from 'react';
 import type { DocumentInfo } from '@/lib/types';
 
 type DocumentTabsProps = {

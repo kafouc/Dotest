@@ -10,12 +10,14 @@ import Sidebar from '@/components/app/Sidebar';
 import DocumentTabs from '@/components/app/DocumentTabs';
 import UploadForm from '@/components/UploadForm';
 import QuizGenerator from '@/components/QuizGenerator';
-import DocumentList from '@/components/DocumentList';
 import ProgressTracker from '@/components/ProgressTracker';
+import RevisionSheet from '@/components/RevisionSheet';
+import PWAInstallPrompt from '@/components/PWAInstallPrompt';
 
 import { motion } from 'framer-motion';
 import type { DocumentInfo } from '@/lib/types';
 import { DOCUMENT_STATUS } from '@/lib/constants';
+import { ensureNotificationPermission, registerServiceWorker, subscribePush, sendSubscriptionToServer } from '@/lib/pushManager';
 
 export default function AppHome() {
   const router = useRouter();
@@ -103,6 +105,51 @@ export default function AppHome() {
     return () => subscription.unsubscribe();
   }, [supabase, router]);
 
+  // Auto-activer les notifications au premier chargement
+  useEffect(() => {
+    if (!session) return;
+
+    const autoEnableNotifications = async () => {
+      try {
+        // Vérifier si déjà abonné
+        if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
+        
+        const registration = await navigator.serviceWorker.ready;
+        const existingSubscription = await registration.pushManager.getSubscription();
+        
+        if (existingSubscription) {
+          // Déjà abonné, ne rien faire
+          return;
+        }
+
+        // Tenter d'activer automatiquement
+        const permitted = await ensureNotificationPermission();
+        if (!permitted || permitted === 'denied') return; // Permission refusée, on n'insiste pas
+
+        const reg = await registerServiceWorker('/sw.js');
+        if (!reg) return;
+
+        // Attendre que le SW soit bien prêt
+        await new Promise(resolve => setTimeout(resolve, 500));
+
+        const vapid = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+        if (!vapid) return;
+
+        const sub = await subscribePush(reg, vapid);
+        await sendSubscriptionToServer(sub);
+        
+        console.log('✓ Notifications activées automatiquement');
+      } catch (error) {
+        // En cas d'erreur, on ne fait rien (silencieux)
+        console.log('Notifications non activées automatiquement:', error);
+      }
+    };
+
+    // Attendre 2 secondes après la connexion pour laisser le temps au SW de s'initialiser
+    const timer = setTimeout(autoEnableNotifications, 2000);
+    return () => clearTimeout(timer);
+  }, [session]);
+
   const handleLogout = async () => {
     await supabase.auth.signOut();
     setSession(null);
@@ -118,6 +165,8 @@ export default function AppHome() {
     setShowUploadForm(false);
     // Ajouter le document aux documents ouverts s'il n'y est pas déjà
     setOpenDocumentIds(prev => new Set(prev).add(documentId));
+    // Rafraîchir les données du document et re-rendre la section
+    fetchDocuments(false);
   };
 
   const handleCloseDocument = (documentId: string, e: React.MouseEvent) => {
@@ -138,6 +187,10 @@ export default function AppHome() {
         setActiveDocumentId(null);
         setShowUploadForm(false);
       }
+    }
+    // Rafraîchit toute la page après fermeture pour refléter l'état
+    if (typeof window !== 'undefined') {
+      window.location.reload();
     }
   };
 
@@ -367,18 +420,26 @@ export default function AppHome() {
                         {/* Sidebar gauche avec ProgressTracker */}
                         <div className="lg:col-span-1">
                           <div className="bg-gray-50 rounded-lg border border-gray-200 p-6">
-                            <ProgressTracker supabase={supabase} />
+                            <ProgressTracker 
+                              key={activeDoc.path}
+                              supabase={supabase} 
+                              documentPath={activeDoc.path} 
+                            />
                           </div>
                         </div>
 
                         {/* Zone principale avec Quiz Generator */}
                         <div className="lg:col-span-2">
-                          <div className="bg-gray-50 rounded-lg border border-gray-200 p-6">
+                          <div className="bg-gray-50 rounded-lg border border-gray-200 p-6 mb-6">
                             <QuizGenerator 
+                              key={activeDoc.path}
                               documents={documents} 
                               isLoading={isLoadingDocs}
                               activeDocumentPath={activeDoc.path}
                             />
+                          </div>
+                          <div className="bg-gray-50 rounded-lg border border-gray-200 p-6">
+                            <RevisionSheet documentPath={activeDoc.path} />
                           </div>
                         </div>
                       </div>
@@ -445,6 +506,7 @@ export default function AppHome() {
           </div>
         </main>
       </div>
+      <PWAInstallPrompt />
     </div>
   );
 }

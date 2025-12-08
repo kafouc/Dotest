@@ -15,7 +15,7 @@ import {
 import { motion, AnimatePresence } from 'framer-motion';
 import type { QuizQuestion } from '@/lib/quiz.types';
 import { QUIZ_CONFIG } from '@/lib/constants';
-import { normalizeLetter, isAnswerCorrect, calculateQuizScore } from '@/lib/utils';
+import { isAnswerCorrect, calculateQuizScore } from '@/lib/utils';
 
 export default function JoinCodePage() {
   const params = useParams();

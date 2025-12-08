@@ -6,7 +6,8 @@ import { createSupabaseBrowserClient } from '@/lib/supabaseClient';
 import { recordQuizAttempt, type AttemptContext, type AnswerInput } from '@/lib/scores';
 import type { QuizQuestion } from '@/lib/quiz.types';
 import { QUIZ_CONFIG } from '@/lib/constants';
-import { normalizeLetter, calculateQuizScore, isAnswerCorrect } from '@/lib/utils';
+import { calculateQuizScore, isAnswerCorrect } from '@/lib/utils';
+import { initCardState, scheduleReview, getMetrics } from '@/lib/fsrs';
 
 // Props que le composant reçoit
 type QuizAttemptProps = {
@@ -24,33 +25,50 @@ export default function QuizAttempt({
   const [supabase] = useState(() => createSupabaseBrowserClient()); // Client Supabase
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0); // Index question actuelle
   const [selectedAnswers, setSelectedAnswers] = useState<{
-    [key: number]: string;
-  }>({}); // Réponses utilisateur
+    [key: number]: string | string[];
+  }>({}); // Réponses utilisateur (QCU/VF: string, QCM: string[])
   const [quizFinished, setQuizFinished] = useState(false); // Statut du quiz
   const [score, setScore] = useState(0); // Score final
+  const [documentPathOnStart] = useState(context?.document_path); // Figer le document au démarrage
 
   const currentQuestion = quizQuestions[currentQuestionIndex];
 
+  // Détection du changement de document pendant le quiz
+  useEffect(() => {
+    if (context?.document_path && documentPathOnStart && context.document_path !== documentPathOnStart) {
+      // L'utilisateur a changé de document pendant le quiz, on annule
+      console.warn('Document changé pendant le quiz, annulation de la tentative');
+      onQuizEnd(); // Retour au générateur
+    }
+  }, [context?.document_path, documentPathOnStart, onQuizEnd]);
+
   // --- Logique de gestion des réponses ---
+  const isQCM = 'reponses_correctes' in currentQuestion;
+  const isUnique = 'reponse_correcte' in currentQuestion;
+  const isVF = isUnique && (currentQuestion.reponse_correcte === 'VRAI' || currentQuestion.reponse_correcte === 'FAUX');
+
   const handleSelectAnswer = (optionKey: string) => {
-    // N'autorise pas à changer la réponse si déjà sélectionnée
+    if (isQCM) {
+      const existing = selectedAnswers[currentQuestionIndex];
+      const arr = Array.isArray(existing) ? [...existing] : [];
+      const idx = arr.indexOf(optionKey);
+      if (idx >= 0) {
+        arr.splice(idx, 1);
+      } else {
+        arr.push(optionKey);
+      }
+      setSelectedAnswers({ ...selectedAnswers, [currentQuestionIndex]: arr });
+      return;
+    }
+
+    // QCU / VF: une seule sélection et avance
     if (selectedAnswers[currentQuestionIndex]) return;
-
-    // Enregistre la réponse
-    const newAnswers = {
-      ...selectedAnswers,
-      [currentQuestionIndex]: optionKey,
-    };
+    const newAnswers = { ...selectedAnswers, [currentQuestionIndex]: optionKey };
     setSelectedAnswers(newAnswers);
-
-    // Pause pour feedback (peut être amélioré avec CSS)
     setTimeout(() => {
-      // Vérifie si c'est la dernière question
       if (currentQuestionIndex < quizQuestions.length - 1) {
-        // Passe à la question suivante
         setCurrentQuestionIndex(currentQuestionIndex + 1);
       } else {
-        // Termine le quiz
         setQuizFinished(true);
       }
     }, QUIZ_CONFIG.ANSWER_FEEDBACK_DELAY_MS);
@@ -71,18 +89,43 @@ export default function QuizAttempt({
     const saveAttempt = async () => {
       if (!isMounted) return;
       
+      // Vérification de sécurité: le document n'a pas changé pendant le quiz
+      if (context?.document_path && documentPathOnStart && context.document_path !== documentPathOnStart) {
+        console.warn('Document changé, sauvegarde annulée');
+        return;
+      }
+      
       try {
         // Prépare les réponses détaillées
         const answers: AnswerInput[] = quizQuestions.map((q, idx) => {
-          const userLetter = (selectedAnswers[idx] ?? null) as string | null;
-          const correctLetter = q.reponse_correcte;
+          const userAnswer = (selectedAnswers[idx] ?? null) as string | null;
+          // Utiliser le bon format pour l'évaluation et l'export
+          const correctForEval = 'reponses_correctes' in q ? q.reponses_correctes : q.reponse_correcte;
+          const correctForStore = Array.isArray(correctForEval) ? correctForEval.join(',') : correctForEval;
           return {
             questionIndex: idx,
             question: q.question,
-            answer: userLetter,
-            correctAnswer: correctLetter,
+            answer: userAnswer,
+            correctAnswer: correctForStore,
             justification: q.justification,
-            isCorrect: isAnswerCorrect(userLetter, correctLetter),
+            isCorrect: isAnswerCorrect(userAnswer, correctForEval as string | string[]),
+          };
+        });
+
+        const now = new Date();
+        // Compute FSRS schedule suggestions per question (not persisted yet)
+        const fsrs = quizQuestions.map((q, idx) => {
+          const isCorrect = isAnswerCorrect((selectedAnswers[idx] ?? null) as string | null, ('reponse_correcte' in q ? q.reponse_correcte : ''));
+          const rating = isCorrect ? 3 : 1; // Easy if correct, Hard if wrong (simplified)
+          const state = initCardState(now);
+          const scheduled = scheduleReview(state, rating, now);
+          const metrics = getMetrics(state, now);
+          return {
+            index: idx,
+            nextReviewAt: scheduled.nextReviewAt,
+            nextIntervalDays: scheduled.nextIntervalDays,
+            stability: scheduled.newStability,
+            retrievability: metrics.R,
           };
         });
 
@@ -90,6 +133,9 @@ export default function QuizAttempt({
           answers,
           context: context ?? { num_questions: quizQuestions.length },
         });
+
+        // Optionally: we could store fsrs per item in a dedicated table. For now, log.
+        console.log('FSRS schedule preview:', fsrs);
       } catch (e) {
         if (isMounted) {
           console.error('Erreur lors de la sauvegarde détaillée du quiz:', e);
@@ -102,7 +148,7 @@ export default function QuizAttempt({
     return () => {
       isMounted = false;
     };
-  }, [quizFinished, quizQuestions, selectedAnswers, supabase, context]);
+  }, [quizFinished, quizQuestions, selectedAnswers, supabase, context, documentPathOnStart]);
 
   // --- Animations Framer Motion ---
   const questionVariants = {
@@ -141,7 +187,8 @@ export default function QuizAttempt({
           </h3>
           {quizQuestions.map((q, index) => {
             const userAnswer = selectedAnswers[index];
-            const isCorrect = isAnswerCorrect(userAnswer ?? null, q.reponse_correcte);
+            const correctRef = ('reponses_correctes' in q) ? q.reponses_correctes : q.reponse_correcte;
+            const isCorrect = isAnswerCorrect((Array.isArray(userAnswer) ? userAnswer.join(',') : (userAnswer as string) ?? null), correctRef as string | string[]);
             return (
               <div
                 key={index}
@@ -153,12 +200,12 @@ export default function QuizAttempt({
                 <p
                   className={`text-sm mt-1 font-medium ${isCorrect ? 'text-green-600' : 'text-red-600'}`}
                 >
-                  Votre réponse : {userAnswer || 'Aucune'}
+                  Votre réponse : {Array.isArray(userAnswer) ? (userAnswer.length ? userAnswer.join(', ') : 'Aucune') : (userAnswer || 'Aucune')}
                   {isCorrect ? ' (Correct)' : ' (Incorrect)'}
                 </p>
                 {!isCorrect && (
                   <p className="text-sm text-green-700">
-                    Bonne réponse : {q.reponse_correcte}
+                    Bonne réponse : {Array.isArray(correctRef) ? correctRef.join(', ') : correctRef}
                   </p>
                 )}
                 {q.justification && (
@@ -206,7 +253,7 @@ export default function QuizAttempt({
                 Question {currentQuestionIndex + 1} / {quizQuestions.length}
               </h2>
               <span className="px-3 py-1 bg-brand-teal-light text-brand-teal-dark font-medium rounded-full text-sm">
-                QCM
+                {isQCM ? 'QCM' : isVF ? 'Vrai/Faux' : 'QCU'}
               </span>
             </div>
 
@@ -219,24 +266,25 @@ export default function QuizAttempt({
             <div className="space-y-3">
               {Object.entries(currentQuestion.options).map(([key, value], idx) => {
                 // On force la lettre A-D selon l'ordre d'affichage pour éviter les clés numériques
-                const letter = QUIZ_CONFIG.OPTION_LETTERS[idx] ?? 'A';
+                const letter = (isVF ? (idx === 0 ? 'VRAI' : 'FAUX') : (QUIZ_CONFIG.OPTION_LETTERS[idx] ?? 'A')) as string;
 
-                const isAnswerSelected = selectedAnswers[currentQuestionIndex] !== undefined;
-                const isThisOptionSelected = selectedAnswers[currentQuestionIndex] === letter;
+                const currentSelected = selectedAnswers[currentQuestionIndex];
+                const isAnswerSelected = currentSelected !== undefined && (!Array.isArray(currentSelected) || currentSelected.length > 0);
+                const isThisOptionSelected = Array.isArray(currentSelected) ? currentSelected.includes(letter) : currentSelected === letter;
 
                 return (
                   <motion.button
                     key={`${key}-${idx}`}
                     onClick={() => handleSelectAnswer(letter)}
-                    disabled={isAnswerSelected}
+                    disabled={!isQCM && isAnswerSelected}
                     className={`w-full p-4 text-left font-medium border rounded-lg
                                 shadow-sm transition-all duration-200
                                 focus:outline-none focus:ring-2 focus:ring-brand-yellow
-                                ${isAnswerSelected ? 'cursor-not-allowed' : 'cursor-pointer'}
+                                ${!isQCM && isAnswerSelected ? 'cursor-not-allowed' : 'cursor-pointer'}
                                 ${isThisOptionSelected ? 'bg-brand-yellow-light border-brand-yellow ring-2 ring-brand-yellow' : 'border-gray-300'}
                               `}
-                    whileHover={isAnswerSelected ? {} : { scale: 1.02, backgroundColor: '#F3E8FF' }}
-                    whileTap={isAnswerSelected ? {} : { scale: 0.98 }}
+                    whileHover={!isQCM && isAnswerSelected ? {} : { scale: 1.02, backgroundColor: '#F3E8FF' }}
+                    whileTap={!isQCM && isAnswerSelected ? {} : { scale: 0.98 }}
                   >
                     <span className="font-bold text-brand-yellow mr-2">
                       {letter}:
@@ -245,6 +293,27 @@ export default function QuizAttempt({
                   </motion.button>
                 );
               })}
+
+              {isQCM && (
+                <div className="mt-4 flex justify-end">
+                  <button
+                    onClick={() => {
+                      const currentSelected = selectedAnswers[currentQuestionIndex];
+                      const hasSelection = Array.isArray(currentSelected) && currentSelected.length > 0;
+                      if (!hasSelection) return;
+                      if (currentQuestionIndex < quizQuestions.length - 1) {
+                        setCurrentQuestionIndex(currentQuestionIndex + 1);
+                      } else {
+                        setQuizFinished(true);
+                      }
+                    }}
+                    className="px-4 py-2 bg-brand-teal text-white rounded-md shadow-sm font-semibold disabled:opacity-50"
+                    disabled={!Array.isArray(selectedAnswers[currentQuestionIndex]) || (selectedAnswers[currentQuestionIndex] as string[]).length === 0}
+                  >
+                    Valider et Continuer
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         </motion.div>

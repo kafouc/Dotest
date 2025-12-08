@@ -1,13 +1,12 @@
 "use client";
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import QuizAttempt from './QuizAttempt'; 
 import ShareQuizButton from './ShareQuizButton';
 import LoadingSpinner from './ui/LoadingSpinner';
-import EmptyState from './ui/EmptyState';
 import type { DocumentInfo } from '@/lib/types';
-import type { QuizQuestion } from '@/lib/quiz.types';
+import type { QuizQuestion, QuizMode } from '@/lib/quiz.types';
 import { PROCESSING_LIMITS, QUIZ_LIMITS } from '@/lib/constants';
 import { normalizeQuiz } from '@/lib/utils';
 
@@ -31,6 +30,77 @@ export default function QuizGenerator({ documents, isLoading, activeDocumentPath
   const [quiz, setQuiz] = useState<QuizQuestion[] | null>(null);
   const [numQuestions, setNumQuestions] = useState<number>(QUIZ_LIMITS.DEFAULT_QUESTIONS);
   const [isAttemptingQuiz, setIsAttemptingQuiz] = useState<boolean>(false); 
+  const [mode, setMode] = useState<QuizMode>('qcu');
+  const [themes, setThemes] = useState<string[]>([]);
+  const [themesLoading, setThemesLoading] = useState<boolean>(false);
+  const [selectedTheme, setSelectedTheme] = useState<string | null>(null);
+
+  // Réinitialiser le quiz quand le document actif change
+  useEffect(() => {
+    if (activeDocumentPath) {
+      // Forcer la réinitialisation si un quiz est en cours
+      if (isAttemptingQuiz || quiz) {
+        setIsAttemptingQuiz(false);
+        setQuiz(null);
+        setError(null);
+      }
+    }
+  }, [activeDocumentPath, isAttemptingQuiz, quiz]);
+
+  // Cache des thèmes par document pour éviter les appels API répétés
+  const [themesCache] = useState<Map<string, string[]>>(new Map());
+  
+  // Les thèmes ne sont chargés que sur action utilisateur (bouton)
+  // Chargement automatique de 3 thèmes quand un document "Prêt" (completed) est sélectionné
+  useEffect(() => {
+    const activePath = currentDocument !== 'all' ? currentDocument : null;
+    if (!activePath || isLoading) return;
+    const doc = documents.find(d => d.path === activePath);
+    if (!doc || doc.status !== 'completed') return;
+    
+    // Vérifier le cache d'abord
+    if (themesCache.has(activePath)) {
+      setThemes(themesCache.get(activePath) || []);
+      return;
+    }
+    
+    let cancelled = false;
+    const run = async () => {
+      try {
+        setThemesLoading(true);
+        setSelectedTheme(null);
+        const res = await fetch('/api/generate-themes', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ documentPath: activePath }),
+        });
+        const data = await res.json();
+        if (!cancelled) {
+          if (res.ok && Array.isArray(data.themes)) {
+            setThemes(data.themes);
+            themesCache.set(activePath, data.themes); // Mettre en cache
+          } else if (res.status === 429) {
+            // Rate limit: afficher un message et garder les thèmes vides
+            setError('Service temporairement surchargé. Les thèmes seront disponibles dans quelques instants.');
+            setThemes([]);
+          } else {
+            setThemes([]);
+          }
+        }
+      } catch {
+        if (!cancelled) setThemes([]);
+      } finally {
+        if (!cancelled) setThemesLoading(false);
+      }
+    };
+    
+    // Debounce de 300ms pour éviter les appels multiples rapides
+    const timer = setTimeout(run, 300);
+    return () => { 
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [currentDocument, documents, isLoading, themesCache]);
 
   // --- CONTRAINTE D'ACTIVITÉ ---
   const countProcessing = documents.filter(
@@ -43,7 +113,7 @@ export default function QuizGenerator({ documents, isLoading, activeDocumentPath
   // --- handleSubmit ---
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!query) return;
+    if (!query && !selectedTheme) return;
 
     // --- VÉRIFICATION DE LA LIMITE (si le bouton était disabled, c'est une sécurité) ---
     if (isOverLimit) {
@@ -58,8 +128,9 @@ export default function QuizGenerator({ documents, isLoading, activeDocumentPath
     setIsAttemptingQuiz(false); 
 
     try {
-      const payload: { query: string; documentPath?: string; numQuestions: number; } = {
-        query: query, numQuestions: numQuestions
+      const effectiveQuery = query && query.trim().length > 0 ? query : (selectedTheme || '');
+      const payload: { query: string; documentPath?: string; numQuestions: number; mode: QuizMode; theme?: string } = {
+        query: effectiveQuery, numQuestions: numQuestions, mode, theme: selectedTheme ?? undefined
       };
       if (currentDocument !== 'all') { payload.documentPath = currentDocument; }
 
@@ -74,7 +145,7 @@ export default function QuizGenerator({ documents, isLoading, activeDocumentPath
       const data = await response.json();
       if (data.quiz && Array.isArray(data.quiz)) {
         // Normalise la structure du quiz pour assurer des clés A-D et une réponse correcte en lettre
-        const normalized = normalizeQuiz(data.quiz);
+        const normalized = normalizeQuiz(data.quiz, mode);
         setQuiz(normalized);
       } else { throw new Error("L'API n'a pas renvoyé de quiz valide."); }
 
@@ -180,19 +251,36 @@ export default function QuizGenerator({ documents, isLoading, activeDocumentPath
               />
             </div>
             <div>
-              <label htmlFor="num-questions" className="block text-sm font-medium text-gray-700 mb-1">Nombre:</label>
-              <input
-                type="number"
+              <label htmlFor="quiz-mode" className="block text-sm font-medium text-gray-700 mb-1">Type de quiz:</label>
+              <select
+                id="quiz-mode"
+                value={mode}
+                onChange={(e) => setMode(e.target.value as QuizMode)}
+                disabled={loading}
+                className="p-2 border border-gray-300 rounded-md shadow-sm focus:ring-brand-yellow focus:border-brand-yellow w-full md:w-auto"
+              >
+                <option value="qcu">QCU (Choix unique)</option>
+                <option value="qcm">QCM (Choix multiple)</option>
+                <option value="vf">Vrai / Faux</option>
+              </select>
+            </div>
+            <div>
+              <label htmlFor="num-questions" className="block text-sm font-medium text-gray-700 mb-1">Nombre de questions:</label>
+              <select
                 id="num-questions"
                 value={numQuestions}
-                onChange={(e) => setNumQuestions(Math.max(QUIZ_LIMITS.MIN_QUESTIONS, parseInt(e.target.value) || QUIZ_LIMITS.MIN_QUESTIONS))}
-                min={QUIZ_LIMITS.MIN_QUESTIONS} max={QUIZ_LIMITS.MAX_QUESTIONS} disabled={loading}
-                className="w-20 p-2 border border-gray-300 rounded-md shadow-sm focus:ring-brand-yellow focus:border-brand-yellow text-center"
-              />
+                onChange={(e) => setNumQuestions(parseInt(e.target.value))}
+                disabled={loading}
+                className="p-2 border border-gray-300 rounded-md shadow-sm focus:ring-brand-yellow focus:border-brand-yellow w-full md:w-auto"
+              >
+                <option value={5}>5</option>
+                <option value={7}>7</option>
+                <option value={10}>10</option>
+              </select>
             </div>
             <button
               type="submit"
-              disabled={loading || !query || isOverLimit}
+              disabled={loading || (!query && !selectedTheme) || isOverLimit}
               className="w-full md:w-auto px-4 py-2 cursor-pointer bg-brand-yellow hover:bg-brand-yellow-dark text-brand-dark font-semibold rounded-md shadow-sm transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 min-w-[140px]"
             >
               {loading ? (
@@ -210,6 +298,61 @@ export default function QuizGenerator({ documents, isLoading, activeDocumentPath
               )}
             </button>
           </form>
+
+          {/* Thèmes suggérés */}
+          <div className="mt-4">
+            <div className="flex items-center justify-between mb-2">
+              <label className="block text-sm font-medium text-gray-700">Thèmes suggérés</label>
+              <button
+                type="button"
+                onClick={async () => {
+                  setThemesLoading(true);
+                  setSelectedTheme(null);
+                  try {
+                    const res = await fetch('/api/generate-themes', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ documentPath: currentDocument !== 'all' ? currentDocument : undefined }),
+                    });
+                    const data = await res.json();
+                    if (res.ok) setThemes(Array.isArray(data.themes) ? data.themes : []);
+                  } catch {
+                    // ignore
+                  } finally {
+                    setThemesLoading(false);
+                  }
+                }}
+                className="text-sm text-brand-teal hover:underline disabled:opacity-50"
+                disabled={isLoading || loading}
+              >
+                {themesLoading ? 'Chargement…' : "Voir d'autres thèmes"}
+              </button>
+            </div>
+            {themes.length === 0 && !themesLoading && (
+              <p className="text-sm text-gray-500">Aucun thème suggéré pour le moment.</p>
+            )}
+            {themes.length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                {themes.map((t) => {
+                  const active = selectedTheme === t;
+                  return (
+                    <button
+                      key={t}
+                      type="button"
+                      onClick={() => {
+                        const next = active ? null : t;
+                        setSelectedTheme(next);
+                        if (!query && next) setQuery(next);
+                      }}
+                      className={`px-3 py-1 rounded-full border text-sm transition-colors ${active ? 'bg-brand-teal text-white border-brand-teal' : 'bg-white border-gray-300 hover:border-brand-teal hover:text-brand-teal'}`}
+                    >
+                      {t}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
 
           {/* Zone d'affichage (Erreur ou Bouton Commencer) */}
           <div className="mt-6">
