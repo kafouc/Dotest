@@ -1,0 +1,343 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  @apply min-h-screen;
+  margin: auto;
+  overflow: auto;
+}
+
+.wave {
+  background: rgb(255 255 255 / 25%);
+  border-radius: 1000% 1000% 0 0;
+  position: fixed;
+  width: 200%;
+  height: 12em;
+  animation: wave 10s -3s linear infinite;
+  transform: translate3d(0, 0, 0);
+  opacity: 0.8;
+  bottom: 0;
+  left: 0;
+  z-index: -1;
+}
+.wave:nth-of-type(2) {
+  bottom: -1.25em;
+  animation: wave 18s linear reverse infinite;
+  opacity: 0.8;
+}
+.wave:nth-of-type(3) {
+  bottom: -2.5em;
+  animation: wave 20s -1s reverse infinite;
+  opacity: 0.9;
+}
+@keyframes wave {
+  2% { transform: translateX(1); }
+  25% { transform: translateX(-25%); }
+  50% { transform: translateX(-50%); }
+  75% { transform: translateX(-25%); }
+  100% { transform: translateX(1); }
+}
+
+input,
+select,
+button,
+textarea {
+  color-scheme: light;
+}
+
+* {
+  box-sizing: border-box;
+  padding: 0;
+  margin: 0;
+}
+
+html,
+body {
+  max-width: 100vw;
+  overflow-x: hidden;
+}
+
+/* ... (vos imports @tailwind base/components/utilities) ... */
+/* ... (vos styles body, etc.) ... */
+
+
+/* --- STYLES POUR L'ANIMATION "SISYPHUS BOX" --- */
+
+/* Ce sélecteur est pour le body LORSQUE le loader est actif */
+/* Nous allons le mettre sur le conteneur principal à la place */
+.loader-background {
+  background-color: #404456;
+}
+
+#loader {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  /* margin-top et margin-left sont pour centrer */
+  margin-top: -2.7em;
+  margin-left: -2.7em;
+  width: 5.4em;
+  height: 5.4em;
+  /* La couleur de fond doit correspondre au fond du conteneur */
+  background-color: #404456;
+}
+
+#hill {
+  position: absolute;
+  width: 7.1em;
+  height: 7.1em;
+  top: 1.7em;
+  left: 1.7em;
+  background-color: transparent;
+  border-left: .25em solid whitesmoke;
+  transform: rotate(45deg);
+}
+
+#hill:after {
+  content: '';
+  position: absolute;
+  width: 7.1em;
+  height: 7.1em;
+  left: 0;
+  /* Ce :after masque la partie basse de la bordure, simulant une colline */
+  background-color: #404456;
+}
+
+#box {
+  position: absolute;
+  left: 0;
+  bottom: -.1em;
+  width: 1em;
+  height: 1em;
+  background-color: transparent;
+  border: .25em solid whitesmoke;
+  border-radius: 15%;
+  transform: translate(0, -1em) rotate(-45deg);
+  animation: push 2.5s cubic-bezier(.79, 0, .47, .97) infinite;
+}
+
+@keyframes push {
+  0% {
+    transform: translate(0, -1em) rotate(-45deg);
+  }
+  5% {
+    transform: translate(0, -1em) rotate(-50deg);
+  }
+  20% {
+    transform: translate(1em, -2em) rotate(47deg);
+  }
+  25% {
+    transform: translate(1em, -2em) rotate(45deg);
+  }
+  30% {
+    transform: translate(1em, -2em) rotate(40deg);
+  }
+  45% {
+    transform: translate(2em, -3em) rotate(137deg);
+  }
+  50% {
+    transform: translate(2em, -3em) rotate(135deg);
+  }
+  55% {
+    transform: translate(2em, -3em) rotate(130deg);
+  }
+  70% {
+    transform: translate(3em, -4em) rotate(217deg);
+  }
+  75% {
+    transform: translate(3em, -4em) rotate(220deg);
+  }
+  100% {
+    transform: translate(0, -1em) rotate(-225deg);
+  }
+}
+/* ... (vos imports @tailwind et styles body) ... */
+
+/* --- STYLES POUR L'ÉCRAN DE BIENVENUE (Rainbow) --- */
+
+/* Le conteneur de fond qui couvre tout l'écran */
+.welcome-background {
+  height: 100vh;
+  width: 100vw;
+  overflow: hidden;
+  position: fixed;
+  top: 0;
+  left: 0;
+  background-color: white; /* Fond blanc par défaut */
+  z-index: 1; /* Derrière le contenu */
+}
+
+/* Style de base pour UNE bande (le reste sera en JS) */
+.rainbow {
+  height: 100vh;
+  width: 0;
+  top: 0;
+  position: absolute;
+  transform: rotate(10deg);
+  transform-origin: top right;
+  /* L'animation 'slide' est définie ci-dessous */
+  animation: slide 45s linear infinite;
+  z-index: 1; /* Derrière la vignette et le texte */
+}
+
+/* Les vignettes blanches (effet de fondu sur les bords) */
+.h-vignette {
+  box-shadow: 0 0 50vh 40vh white;
+  width: 100vw;
+  height: 0;
+  bottom: 0;
+  left: 0;
+  position: absolute;
+  z-index: 2; /* Au-dessus de l'animation */
+}
+.v-vignette {
+  box-shadow: 0 0 35vw 25vw white;
+  width: 0;
+  height: 100vh;
+  bottom: 0;
+  left: 0;
+  position: absolute;
+  z-index: 2; /* Au-dessus de l'animation */
+}
+
+/* L'animation de glissement */
+@keyframes slide {
+  from {
+    right: -25vw;
+  }
+  to {
+    right: 125vw;
+  }
+}
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 0 0% 20%; /* #333333 en HSL */
+    --card: 0 0% 100%;
+    --card-foreground: 0 0% 20%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 0 0% 20%;
+    /* Primary = Yellow (#fbbf1d) */
+    --primary: 45 96% 55%; /* #fbbf1d */
+    --primary-foreground: 0 0% 20%;
+    /* Secondary = Teal (#45BF9A) */
+    --secondary: 160 48% 52%; /* #45BF9A */
+    --secondary-foreground: 0 0% 100%;
+    --muted: 0 0% 96.1%;
+    --muted-foreground: 0 0% 45.1%;
+    /* Accent = Teal */
+    --accent: 160 48% 52%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 0 0% 89.8%;
+    --input: 0 0% 89.8%;
+    --ring: 45 96% 55%; /* Yellow pour le focus */
+    --radius: 0.5rem;
+    --chart-1: 45 96% 55%; /* Yellow */
+    --chart-2: 160 48% 52%; /* Teal */
+    --chart-3: 0 0% 20%; /* Dark */
+    --chart-4: 45 96% 65%; /* Light Yellow */
+    --chart-5: 160 48% 62%; /* Light Teal */
+    --radius: 0.5rem;
+  }
+  .dark {
+    --background: 0 0% 3.9%;
+    --foreground: 0 0% 98%;
+    --card: 0 0% 3.9%;
+    --card-foreground: 0 0% 98%;
+    --popover: 0 0% 3.9%;
+    --popover-foreground: 0 0% 98%;
+    --primary: 0 0% 98%;
+    --primary-foreground: 0 0% 9%;
+    --secondary: 0 0% 14.9%;
+    --secondary-foreground: 0 0% 98%;
+    --muted: 0 0% 14.9%;
+    --muted-foreground: 0 0% 63.9%;
+    --accent: 0 0% 14.9%;
+    --accent-foreground: 0 0% 98%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 0 0% 14.9%;
+    --input: 0 0% 14.9%;
+    --ring: 0 0% 83.1%;
+    --chart-1: 220 70% 50%;
+    --chart-2: 160 60% 45%;
+    --chart-3: 30 80% 55%;
+    --chart-4: 280 65% 60%;
+    --chart-5: 340 75% 55%;
+  }
+}
+
+@layer base {
+  * {
+    border-color: hsl(var(--border));
+  }
+  body {
+    background-color: hsl(var(--background));
+    color: hsl(var(--foreground));
+    font-family: var(--font-zalando), sans-serif;
+  }
+  
+  /* Par défaut, tous les paragraphes et textes utilisent Questrial */
+  p, span, a, div, li, td, th, label, input, textarea, select {
+    font-family: var(--font-zalando), sans-serif;
+  }
+  
+  /* Les boutons n'ont pas de background par défaut */
+  button, a[class*="bg-"], Link[class*="bg-"] {
+    font-family: var(--font-zalando), sans-serif;
+  }
+  
+  /* Les titres utilisent Unbounded */
+  h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-unbounded), sans-serif;
+  }
+  
+  /* Force Unbounded pour les éléments avec font-heading */
+  .font-heading {
+    font-family: var(--font-unbounded), sans-serif !important;
+  }
+  
+  /* Force Questrial pour les éléments avec font-body */
+  .font-body {
+    font-family: var(--font-zalando), sans-serif !important;
+  }
+  
+  /* Smooth scroll */
+  html {
+    scroll-behavior: smooth;
+  }
+  
+  /* Landing page animations */
+  @keyframes fadeInUp {
+    from {
+      opacity: 0;
+      transform: translateY(30px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+  
+  .animate-in {
+    animation: fadeInUp 0.5s ease-out;
+  }
+
+  /* Hero background shapes animation */
+  @keyframes float {
+    0%, 100% {
+      transform: translateY(0) rotate(0deg);
+    }
+    50% {
+      transform: translateY(-20px) rotate(180deg);
+    }
+  }
+
+  .hero-shape {
+    animation: float 6s ease-in-out infinite;
+  }
+}
