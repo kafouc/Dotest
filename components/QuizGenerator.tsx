@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import QuizAttempt from './QuizAttempt'; 
 import ShareQuizButton from './ShareQuizButton';
@@ -35,17 +35,17 @@ export default function QuizGenerator({ documents, isLoading, activeDocumentPath
   const [themesLoading, setThemesLoading] = useState<boolean>(false);
   const [selectedTheme, setSelectedTheme] = useState<string | null>(null);
 
-  // Réinitialiser le quiz quand le document actif change
+  // Réinitialiser le quiz quand le document actif change (mais pas en boucle)
+  const previousDocumentPath = React.useRef<string | undefined>(activeDocumentPath);
   useEffect(() => {
-    if (activeDocumentPath) {
-      // Forcer la réinitialisation si un quiz est en cours
-      if (isAttemptingQuiz || quiz) {
-        setIsAttemptingQuiz(false);
-        setQuiz(null);
-        setError(null);
-      }
+    // Ne réinitialiser que si le document a réellement changé
+    if (activeDocumentPath !== previousDocumentPath.current) {
+      previousDocumentPath.current = activeDocumentPath;
+      setIsAttemptingQuiz(false);
+      setQuiz(null);
+      setError(null);
     }
-  }, [activeDocumentPath, isAttemptingQuiz, quiz]);
+  }, [activeDocumentPath]);
 
   // Cache des thèmes par document pour éviter les appels API répétés
   const [themesCache] = useState<Map<string, string[]>>(new Map());
