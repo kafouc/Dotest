@@ -146,7 +146,10 @@ export default function QuizGenerator({ documents, isLoading, activeDocumentPath
       if (data.quiz && Array.isArray(data.quiz)) {
         // Normalise la structure du quiz pour assurer des clés A-D et une réponse correcte en lettre
         const normalized = normalizeQuiz(data.quiz, mode);
+        console.log('[DEBUG] Quiz normalisé:', normalized);
+        console.log('[DEBUG] Nombre de questions:', normalized.length);
         setQuiz(normalized);
+        console.log('[DEBUG] setQuiz appelé, isAttemptingQuiz:', isAttemptingQuiz);
       } else { throw new Error("L'API n'a pas renvoyé de quiz valide."); }
 
     } catch (err: unknown) {
@@ -157,6 +160,7 @@ export default function QuizGenerator({ documents, isLoading, activeDocumentPath
   };
 
   // --- Rendu JSX ---
+  console.log('[DEBUG] Render - quiz:', quiz ? `${quiz.length} questions` : 'null', 'isAttemptingQuiz:', isAttemptingQuiz);
   return (
     <div className="p-4 sm:p-6 bg-white rounded-lg shadow-md border border-gray-200">
       <h2 className="text-lg sm:text-xl font-heading font-semibold mb-4 text-brand-dark">Générer un Quiz</h2>
