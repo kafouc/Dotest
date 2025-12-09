@@ -122,13 +122,7 @@ export default function Hero() {
               >
                 Essayer gratuitement
               </a>
-              <InstallPWAButton className="px-6 md:px-8 py-3 md:py-4 rounded-full text-base md:text-lg flex items-center justify-center" />
-              <a
-                href="#comment-ca-marche"
-                className="px-6 md:px-8 py-3 md:py-4 bg-white hover:bg-gray-50 text-brand-dark font-semibold rounded-full text-base md:text-lg transition-all duration-200 border-2 border-brand-yellow min-h-[44px] flex items-center justify-center"
-              >
-                Découvrir
-              </a>
+              <InstallPWAButton className="px-6 md:px-8 py-3 md:py-4 bg-white hover:bg-gray-50 text-brand-dark font-semibold rounded-full text-base md:text-lg transition-all duration-200 border-2 border-brand-yellow min-h-[44px] flex items-center justify-center" />
             </div>
           </div>
         </div>
