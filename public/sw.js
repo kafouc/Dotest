@@ -1,4 +1,4 @@
-const CACHE_NAME = 'sheet-of-paper-v2';
+const CACHE_NAME = 'sheet-of-paper-v3';
 const urlsToCache = [
   '/',
   '/app',
@@ -41,9 +41,11 @@ self.addEventListener('fetch', (event) => {
       (async () => {
         try {
           const fresh = await fetch(req);
-          // Mémoriser une copie en cache
-          const cache = await caches.open(CACHE_NAME);
-          cache.put(req, fresh.clone());
+          // Mémoriser une copie en cache (seulement GET)
+          if (req.method === 'GET') {
+            const cache = await caches.open(CACHE_NAME);
+            cache.put(req, fresh.clone());
+          }
           return fresh;
         } catch (err) {
           // Offline → essayer le cache, sinon offline.html
@@ -86,9 +88,13 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // 3) Par défaut: Network-first, fallback cache
+  // 3) Par défaut: Network-first, fallback cache (uniquement GET)
   event.respondWith(
     (async () => {
+      // Ne pas mettre en cache les POST/PUT/DELETE
+      if (req.method !== 'GET') {
+        return fetch(req);
+      }
       try {
         const res = await fetch(req);
         const cache = await caches.open(CACHE_NAME);
