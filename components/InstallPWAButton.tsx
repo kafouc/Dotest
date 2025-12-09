@@ -9,35 +9,40 @@ type BeforeInstallPromptEvent = Event & {
 
 export default function InstallPWAButton({ className = '' }: { className?: string }) {
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
-  const [canInstall, setCanInstall] = useState(false);
+  const [isStandalone, setIsStandalone] = useState(false);
 
   useEffect(() => {
     const handler = (e: Event) => {
       e.preventDefault();
       setDeferredPrompt(e as BeforeInstallPromptEvent);
-      setCanInstall(true);
     };
     window.addEventListener('beforeinstallprompt', handler);
 
-    // Si déjà installé, masquer
-    if (window.matchMedia('(display-mode: standalone)').matches) {
-      setCanInstall(false);
-    }
+    // Détecter si déjà installé (standalone)
+    const standalone = window.matchMedia('(display-mode: standalone)').matches;
+    setIsStandalone(standalone);
+    // rien à faire pour canInstall (supprimé)
 
     return () => window.removeEventListener('beforeinstallprompt', handler);
   }, []);
 
   const onClick = async () => {
-    if (!deferredPrompt) return;
-    deferredPrompt.prompt();
-    const { outcome } = await deferredPrompt.userChoice;
-    if (outcome === 'accepted') {
-      setCanInstall(false);
+    if (deferredPrompt) {
+      deferredPrompt.prompt();
+      await deferredPrompt.userChoice;
+      // rien à faire après acceptation (canInstall supprimé)
+      setDeferredPrompt(null);
+      return;
     }
-    setDeferredPrompt(null);
+    // Fallback d'instruction quand beforeinstallprompt n'est pas disponible
+    alert(
+      "Pour installer l’application:\n\n• Android/Chrome: Menu ⋮ > Ajouter à l’écran d’accueil\n• iOS/Safari: Bouton Partager > Ajouter à l’écran d’accueil"
+    );
   };
 
-  if (!canInstall) {
+  // Afficher le bouton même si canInstall est false (fallback d'instruction),
+  // sauf si déjà en mode standalone (app installée).
+  if (isStandalone) {
     return null;
   }
 

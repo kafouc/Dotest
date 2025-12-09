@@ -5,26 +5,33 @@ import Groq from 'groq-sdk';
 import { CohereClient } from 'cohere-ai';
 import { EMBEDDING_CONFIG, AI_MODELS, QUIZ_LIMITS } from '@/lib/constants';
 
-// --- Initialisation Cohere ---
-if (!process.env.COHERE_API_KEY) {
-  throw new Error('La clé API COHERE_API_KEY est manquante');
-}
-const cohere = new CohereClient({
-  token: process.env.COHERE_API_KEY,
-});
-
-// --- Initialisation Groq (pour la génération du quiz) ---
-if (!process.env.GROQ_API_KEY) {
-  throw new Error('La clé API GROQ_API_KEY est manquante');
-}
-const groq = new Groq({
-  apiKey: process.env.GROQ_API_KEY,
-});
+// Initialisation déplacée dans le handler pour gérer proprement l'absence de config
 
 // --- Handler de la route API (POST) ---
 export async function POST(req: Request) {
   try {
     const body = await req.json();
+        // Vérifier la configuration Supabase
+        const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+        const supabaseAnon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+        if (!supabaseUrl || !supabaseAnon) {
+          return NextResponse.json(
+            { error: 'Configuration Supabase manquante (NEXT_PUBLIC_SUPABASE_URL / NEXT_PUBLIC_SUPABASE_ANON_KEY)' },
+            { status: 503 }
+          );
+        }
+
+        // Initialisation clients IA avec vérification des clés
+        const cohereKey = process.env.COHERE_API_KEY;
+        const groqKey = process.env.GROQ_API_KEY;
+        if (!cohereKey || !groqKey) {
+          return NextResponse.json(
+            { error: 'Configuration IA manquante (COHERE_API_KEY / GROQ_API_KEY)' },
+            { status: 503 }
+          );
+        }
+        const cohere = new CohereClient({ token: cohereKey });
+        const groq = new Groq({ apiKey: groqKey });
     const { query: userQuery, documentPath, numQuestions = QUIZ_LIMITS.DEFAULT_QUESTIONS, mode = 'qcu', theme } = body as { query: string; documentPath?: string; numQuestions?: number; mode?: 'qcu'|'qcm'|'vf'; theme?: string };
     const allowedCounts = [5, 7, 10];
     const nearestAllowed = allowedCounts.reduce((prev, cur) => {
@@ -45,8 +52,8 @@ export async function POST(req: Request) {
 
     // 1. Client Supabase
     const supabase = createServerClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      supabaseUrl,
+      supabaseAnon,
       {
         cookies: {
           get(name: string) {

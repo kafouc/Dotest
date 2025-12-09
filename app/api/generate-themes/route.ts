@@ -5,15 +5,7 @@ import { CohereClient } from 'cohere-ai';
 import Groq from 'groq-sdk';
 import { EMBEDDING_CONFIG } from '@/lib/constants';
 
-if (!process.env.COHERE_API_KEY) {
-  throw new Error('La clé API COHERE_API_KEY est manquante');
-}
-const cohere = new CohereClient({ token: process.env.COHERE_API_KEY });
-
-if (!process.env.GROQ_API_KEY) {
-  throw new Error('La clé API GROQ_API_KEY est manquante');
-}
-const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
+// Initialisation déplacée dans le handler pour une gestion propre des erreurs de configuration
 
 // Mini-verrou en mémoire pour éviter les appels concurrents sur le même document
 // Note: in-memory, non partagé entre instances (suffisant pour un mini-verrou local)
@@ -41,9 +33,18 @@ export async function POST(req: Request) {
       inFlightByDoc.set(documentPath, now);
     }
 
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const supabaseAnon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    if (!supabaseUrl || !supabaseAnon) {
+      return NextResponse.json(
+        { error: 'Configuration Supabase manquante (NEXT_PUBLIC_SUPABASE_URL / NEXT_PUBLIC_SUPABASE_ANON_KEY)' },
+        { status: 503 }
+      );
+    }
+
     const supabase = createServerClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      supabaseUrl,
+      supabaseAnon,
       {
         cookies: {
           get(name: string) {
@@ -65,6 +66,17 @@ export async function POST(req: Request) {
     }
 
     // Embedding d'une requête neutre pour récupérer des sections représentatives
+    // Initialiser les clients IA
+    const cohereKey = process.env.COHERE_API_KEY;
+    const groqKey = process.env.GROQ_API_KEY;
+    if (!cohereKey || !groqKey) {
+      return NextResponse.json(
+        { error: 'Configuration IA manquante (COHERE_API_KEY / GROQ_API_KEY)' },
+        { status: 503 }
+      );
+    }
+    const cohere = new CohereClient({ token: cohereKey });
+
     const embedResponse = await cohere.embed({
       texts: [
         'Identifier les thèmes principaux, chapitres, sujets clés et sous-thèmes pertinents du document.'
@@ -116,6 +128,7 @@ ${context}
     
     while (retries <= maxRetries) {
       try {
+        const groq = new Groq({ apiKey: groqKey });
         completion = await groq.chat.completions.create({
           messages: [
             { role: 'system', content: 'Tu réponds uniquement avec un JSON valide.' },
