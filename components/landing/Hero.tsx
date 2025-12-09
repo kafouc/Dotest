@@ -37,7 +37,7 @@ export default function Hero() {
   }, []);
 
   return (
-    <section className="relative min-h-screen flex items-center justify-center pt-20 overflow-hidden">
+    <section className="relative min-h-screen flex items-center justify-center pt-24 md:pt-20 px-4 overflow-hidden">
       {/* Background avec formes géométriques */}
       <div className="absolute inset-0 bg-gray-50">
         {shapes.map((shape, index) => (
@@ -63,15 +63,15 @@ export default function Hero() {
       </div>
 
       <div className="container mx-auto px-4 relative z-10">
-        <div className="flex flex-col items-center justify-center gap-12">
+        <div className="flex flex-col items-center justify-center gap-8 md:gap-12">
           {/* Texte principal */}
           <div className="text-center max-w-5xl mx-auto">
-            <h1 className="text-5xl md:text-6xl lg:text-7xl xl:text-8xl font-heading font-bold text-brand-dark mb-8 leading-tight">
-              <div className="flex items-center justify-center gap-3 md:gap-4 flex-wrap">
+            <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl xl:text-7xl font-heading font-bold text-brand-dark mb-6 md:mb-8 leading-tight">
+              <div className="flex items-center justify-center gap-2 md:gap-3 lg:gap-4 flex-wrap">
                 <span className="block">Etudiez</span>
                 <span className="block">mieux</span>
                 {/* Animation PDF → Card */}
-                <div className="relative w-20 h-20 md:w-24 md:h-24 lg:w-32 lg:h-32 flex-shrink-0">
+                <div className="relative w-12 h-12 sm:w-16 sm:h-16 md:w-20 md:h-20 lg:w-28 lg:h-28 flex-shrink-0">
                   {/* PDF */}
                   <Image
                     src="/images/pdf.png"
@@ -110,20 +110,20 @@ export default function Hero() {
                 </span>
               </div>
             </h1>
-            <p className="text-xl md:text-2xl text-gray-700 mb-8 max-w-2xl mx-auto">
+            <p className="text-base sm:text-lg md:text-xl lg:text-2xl text-gray-700 mb-6 md:mb-8 max-w-2xl mx-auto px-4">
               Transformez vos documents en quiz interactifs et révisez efficacement avec l&apos;intelligence artificielle.
             </p>
-            <div className="flex flex-col sm:flex-row gap-4 justify-center">
+            <div className="flex flex-col sm:flex-row gap-3 md:gap-4 justify-center px-4">
               <a
                 href="/signup"
-                className="px-8 py-4 bg-brand-yellow hover:bg-brand-yellow-dark text-brand-dark font-semibold rounded-full text-lg transition-all duration-200"
+                className="px-6 md:px-8 py-3 md:py-4 bg-brand-yellow hover:bg-brand-yellow-dark text-brand-dark font-semibold rounded-full text-base md:text-lg transition-all duration-200 min-h-[44px] flex items-center justify-center"
                 style={{ backgroundColor: '#fbbf1d' }}
               >
                 Essayer gratuitement
               </a>
               <a
                 href="#comment-ca-marche"
-                className="px-8 py-4 bg-white hover:bg-gray-50 text-brand-dark font-semibold rounded-full text-lg transition-all duration-200 border-2 border-brand-yellow"
+                className="px-6 md:px-8 py-3 md:py-4 bg-white hover:bg-gray-50 text-brand-dark font-semibold rounded-full text-base md:text-lg transition-all duration-200 border-2 border-brand-yellow min-h-[44px] flex items-center justify-center"
               >
                 Découvrir
               </a>

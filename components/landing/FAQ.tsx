@@ -57,13 +57,13 @@ export default function FAQ() {
   };
 
   return (
-    <section id="faq" className="py-20 bg-white">
+    <section id="faq" className="py-12 md:py-20 bg-white">
       <div className="container mx-auto px-4">
-        <div className="text-center mb-16">
-          <h2 className="text-4xl md:text-5xl font-heading font-bold text-brand-dark mb-4">
+        <div className="text-center mb-10 md:mb-16">
+          <h2 className="text-3xl md:text-4xl lg:text-5xl font-heading font-bold text-brand-dark mb-3 md:mb-4">
             Questions fréquentes
           </h2>
-          <p className="text-xl text-gray-600 max-w-2xl mx-auto">
+          <p className="text-base md:text-xl text-gray-600 max-w-2xl mx-auto px-4">
             Tout ce que vous devez savoir sur Sheet of Paper
           </p>
         </div>
@@ -72,19 +72,19 @@ export default function FAQ() {
           {faqs.map((faq, index) => (
             <div
               key={index}
-              className="mb-4 border border-gray-200 rounded-lg overflow-hidden transition-all duration-200 hover:shadow-md"
+              className="mb-3 md:mb-4 border border-gray-200 rounded-lg overflow-hidden transition-all duration-200 hover:shadow-md"
             >
               <button
                 onClick={() => toggleFAQ(index)}
-                className="w-full px-6 py-4 text-left flex items-center justify-between bg-gray-50 hover:bg-gray-100 transition-colors"
+                className="w-full px-4 md:px-6 py-3 md:py-4 text-left flex items-center justify-between bg-gray-50 hover:bg-gray-100 transition-colors min-h-[56px]"
               >
-                <span className="font-semibold text-brand-dark">{faq.question}</span>
-                <span className={`text-2xl transition-transform duration-200 ${openIndex === index ? 'rotate-180' : ''}`}>
+                <span className="font-semibold text-brand-dark text-sm md:text-base pr-4">{faq.question}</span>
+                <span className={`text-xl md:text-2xl transition-transform duration-200 flex-shrink-0 ${openIndex === index ? 'rotate-180' : ''}`}>
                   ▼
                 </span>
               </button>
               {openIndex === index && (
-                <div className="px-6 py-4 bg-white text-gray-700 leading-relaxed animate-in slide-in-from-top-2">
+                <div className="px-4 md:px-6 py-3 md:py-4 bg-white text-gray-700 text-sm md:text-base leading-relaxed animate-in slide-in-from-top-2">
                   {faq.answer}
                 </div>
               )}
