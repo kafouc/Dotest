@@ -140,35 +140,35 @@ export default function SettingsPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <div className="max-w-4xl mx-auto p-6">
+      <div className="max-w-4xl mx-auto p-4 sm:p-6">
         {/* Header */}
-        <div className="mb-8">
+        <div className="mb-6 sm:mb-8">
           <button
             onClick={() => router.push('/app')}
-            className="flex items-center gap-2 text-brand-dark hover:text-brand-teal mb-4 transition-colors"
+            className="flex items-center gap-2 text-brand-dark hover:text-brand-teal mb-3 sm:mb-4 transition-colors min-h-[40px]"
           >
             <FaArrowLeft className="w-4 h-4" />
             <span>Retour</span>
           </button>
           
-          <h1 className="text-3xl font-heading font-bold text-brand-dark">Paramètres</h1>
-          <p className="text-gray-600 mt-2">Gérez vos préférences et notifications</p>
+          <h1 className="text-2xl sm:text-3xl font-heading font-bold text-brand-dark">Paramètres</h1>
+          <p className="text-sm sm:text-base text-gray-600 mt-2">Gérez vos préférences et notifications</p>
         </div>
 
         {/* Notifications Section */}
-        <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-6 mb-6">
-          <div className="flex items-start gap-4">
+        <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-4 sm:p-6 mb-4 sm:mb-6">
+          <div className="flex flex-col sm:flex-row items-start gap-4">
             <div className="p-3 bg-brand-teal/10 rounded-lg">
               {notificationsEnabled ? (
-                <FaBell className="w-6 h-6 text-brand-teal" />
+                <FaBell className="w-5 h-5 sm:w-6 sm:h-6 text-brand-teal" />
               ) : (
-                <FaBellSlash className="w-6 h-6 text-gray-400" />
+                <FaBellSlash className="w-5 h-5 sm:w-6 sm:h-6 text-gray-400" />
               )}
             </div>
             
-            <div className="flex-1">
-              <h2 className="text-xl font-semibold text-brand-dark mb-2">Notifications push</h2>
-              <p className="text-gray-600 mb-4">
+            <div className="flex-1 w-full">
+              <h2 className="text-lg sm:text-xl font-semibold text-brand-dark mb-2">Notifications push</h2>
+              <p className="text-sm sm:text-base text-gray-600 mb-4">
                 Recevez des rappels pour réviser vos documents au moment optimal selon votre courbe d&apos;oubli (algorithme FSRS).
               </p>
 
@@ -204,12 +204,12 @@ export default function SettingsPage() {
               </div>
 
               {/* Actions */}
-              <div className="flex gap-3">
+              <div className="flex flex-col sm:flex-row gap-3">
                 {!notificationsEnabled ? (
                   <button
                     onClick={handleEnableNotifications}
                     disabled={isProcessing || notificationStatus === 'denied'}
-                    className="px-4 py-2 bg-brand-teal hover:bg-brand-teal-dark text-white font-semibold rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                    className="w-full sm:w-auto px-4 py-3 bg-brand-teal hover:bg-brand-teal-dark text-white font-semibold rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 min-h-[44px]"
                   >
                     <FaBell className="w-4 h-4" />
                     {isProcessing ? 'Activation...' : 'Activer les notifications'}
@@ -218,7 +218,7 @@ export default function SettingsPage() {
                   <button
                     onClick={handleDisableNotifications}
                     disabled={isProcessing}
-                    className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white font-semibold rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                    className="w-full sm:w-auto px-4 py-3 bg-red-600 hover:bg-red-700 text-white font-semibold rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 min-h-[44px]"
                   >
                     <FaBellSlash className="w-4 h-4" />
                     {isProcessing ? 'Désactivation...' : 'Désactiver les notifications'}

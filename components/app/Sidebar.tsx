@@ -17,6 +17,8 @@ type SidebarProps = {
   isLoadingDocs: boolean;
   onDeleteSuccess: () => void;
   onSelectDocument: (documentId: string) => void;
+  isMobileMenuOpen?: boolean;
+  onCloseMobile?: () => void;
 };
 
 export default function Sidebar({ 
@@ -30,12 +32,17 @@ export default function Sidebar({
   isLoadingDocs,
   onDeleteSuccess,
   onSelectDocument,
+  isMobileMenuOpen = false,
+  onCloseMobile,
 }: SidebarProps) {
   return (
     <aside
-      className={`bg-white border-r border-gray-200 transition-all duration-300 flex flex-col ${
-        isMinimized ? 'w-16' : 'w-80'
-      }`}
+      className={`
+        bg-white border-r border-gray-200 transition-all duration-300 flex flex-col
+        fixed md:relative inset-y-0 left-0 z-50
+        ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
+        ${isMinimized ? 'w-64 md:w-16' : 'w-64 md:w-80'}
+      `}
     >
       {/* Header avec logo et bouton minimize */}
       <div className="p-4 border-b border-gray-200 flex items-center justify-between">
@@ -62,20 +69,35 @@ export default function Sidebar({
             />
           </div>
         )}
-        <button
-          onClick={onToggleMinimize}
-          className="p-1 hover:bg-gray-100 rounded transition-colors"
-          aria-label={isMinimized ? 'Agrandir la sidebar' : 'Réduire la sidebar'}
-        >
-          <svg
-            className={`w-5 h-5 text-gray-600 transition-transform ${isMinimized ? 'rotate-180' : ''}`}
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
+        <div className="flex items-center gap-2">
+          {/* Bouton fermer sur mobile */}
+          {isMobileMenuOpen && onCloseMobile && (
+            <button
+              onClick={onCloseMobile}
+              className="md:hidden p-1 hover:bg-gray-100 rounded transition-colors"
+              aria-label="Fermer le menu"
+            >
+              <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          )}
+          {/* Bouton minimize desktop */}
+          <button
+            onClick={onToggleMinimize}
+            className="hidden md:block p-1 hover:bg-gray-100 rounded transition-colors"
+            aria-label={isMinimized ? 'Agrandir la sidebar' : 'Réduire la sidebar'}
           >
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-          </svg>
-        </button>
+            <svg
+              className={`w-5 h-5 text-gray-600 transition-transform ${isMinimized ? 'rotate-180' : ''}`}
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+            </svg>
+          </button>
+        </div>
       </div>
 
       {/* Encart utilisateur */}
@@ -102,14 +124,17 @@ export default function Sidebar({
       {/* Bouton créer nouvelle fenêtre */}
       <div className={`p-4 ${isMinimized ? 'px-2' : ''}`}>
         <button
-          onClick={onCreateNew}
+          onClick={() => {
+            onCreateNew();
+            onCloseMobile?.();
+          }}
           className={`w-full flex items-center gap-3 px-4 py-3 bg-brand-yellow hover:bg-brand-yellow-dark text-brand-dark font-semibold rounded-full transition-colors ${
-            isMinimized ? 'justify-center px-3' : ''
+            isMinimized ? 'md:justify-center md:px-3' : ''
           }`}
           style={{ backgroundColor: '#fbbf1d' }}
           aria-label="Créer un nouveau document"
         >
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
           </svg>
           {!isMinimized && <span>Nouveau document</span>}

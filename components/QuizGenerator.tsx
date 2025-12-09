@@ -158,8 +158,8 @@ export default function QuizGenerator({ documents, isLoading, activeDocumentPath
 
   // --- Rendu JSX ---
   return (
-    <div className="p-6 bg-white rounded-lg shadow-md border border-gray-200">
-      <h2 className="text-xl font-heading font-semibold mb-4 text-brand-dark">Générer un Quiz</h2>
+    <div className="p-4 sm:p-6 bg-white rounded-lg shadow-md border border-gray-200">
+      <h2 className="text-lg sm:text-xl font-heading font-semibold mb-4 text-brand-dark">Générer un Quiz</h2>
 
       {isAttemptingQuiz && quiz ? (
         <QuizAttempt
@@ -235,8 +235,8 @@ export default function QuizGenerator({ documents, isLoading, activeDocumentPath
           )}
 
           {/* Formulaire de génération */}
-          <form onSubmit={handleSubmit} className="space-y-4 md:space-y-0 md:flex md:items-end md:space-x-4">
-            <div className="flex-grow">
+          <form onSubmit={handleSubmit} className="space-y-3 sm:space-y-4">
+            <div className="w-full">
               <label htmlFor="quiz-query" className="block text-sm font-medium text-gray-700 mb-1">
                 Votre demande pour l&apos;IA :
               </label>
@@ -247,56 +247,63 @@ export default function QuizGenerator({ documents, isLoading, activeDocumentPath
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder="Ex: Fais 5 QCM sur les concepts clés..."
                 disabled={loading}
-                className="w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-brand-yellow focus:border-brand-yellow"
+                className="w-full p-3 text-base border border-gray-300 rounded-md shadow-sm focus:ring-brand-yellow focus:border-brand-yellow"
               />
             </div>
-            <div>
-              <label htmlFor="quiz-mode" className="block text-sm font-medium text-gray-700 mb-1">Type de quiz:</label>
-              <select
-                id="quiz-mode"
-                value={mode}
-                onChange={(e) => setMode(e.target.value as QuizMode)}
-                disabled={loading}
-                className="p-2 border border-gray-300 rounded-md shadow-sm focus:ring-brand-yellow focus:border-brand-yellow w-full md:w-auto"
-              >
-                <option value="qcu">QCU (Choix unique)</option>
-                <option value="qcm">QCM (Choix multiple)</option>
-                <option value="vf">Vrai / Faux</option>
-              </select>
+            
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div>
+                <label htmlFor="quiz-mode" className="block text-sm font-medium text-gray-700 mb-1">Type de quiz:</label>
+                <select
+                  id="quiz-mode"
+                  value={mode}
+                  onChange={(e) => setMode(e.target.value as QuizMode)}
+                  disabled={loading}
+                  className="w-full p-3 text-base border border-gray-300 rounded-md shadow-sm focus:ring-brand-yellow focus:border-brand-yellow"
+                >
+                  <option value="qcu">QCU (Choix unique)</option>
+                  <option value="qcm">QCM (Choix multiple)</option>
+                  <option value="vf">Vrai / Faux</option>
+                </select>
+              </div>
+              
+              <div>
+                <label htmlFor="num-questions" className="block text-sm font-medium text-gray-700 mb-1">Nombre de questions:</label>
+                <select
+                  id="num-questions"
+                  value={numQuestions}
+                  onChange={(e) => setNumQuestions(parseInt(e.target.value))}
+                  disabled={loading}
+                  className="w-full p-3 text-base border border-gray-300 rounded-md shadow-sm focus:ring-brand-yellow focus:border-brand-yellow"
+                >
+                  <option value={5}>5</option>
+                  <option value={7}>7</option>
+                  <option value={10}>10</option>
+                </select>
+              </div>
+              
+              <div className="sm:flex sm:items-end">
+                <button
+                  type="submit"
+                  disabled={loading || (!query && !selectedTheme) || isOverLimit}
+                  className="w-full px-4 py-3 text-base cursor-pointer bg-brand-yellow hover:bg-brand-yellow-dark text-brand-dark font-semibold rounded-md shadow-sm transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                >
+                  {loading ? (
+                    <>
+                      <LoadingSpinner size="sm" />
+                      <span>Génération...</span>
+                    </>
+                  ) : (
+                    <>
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                      </svg>
+                      <span>Générer</span>
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
-            <div>
-              <label htmlFor="num-questions" className="block text-sm font-medium text-gray-700 mb-1">Nombre de questions:</label>
-              <select
-                id="num-questions"
-                value={numQuestions}
-                onChange={(e) => setNumQuestions(parseInt(e.target.value))}
-                disabled={loading}
-                className="p-2 border border-gray-300 rounded-md shadow-sm focus:ring-brand-yellow focus:border-brand-yellow w-full md:w-auto"
-              >
-                <option value={5}>5</option>
-                <option value={7}>7</option>
-                <option value={10}>10</option>
-              </select>
-            </div>
-            <button
-              type="submit"
-              disabled={loading || (!query && !selectedTheme) || isOverLimit}
-              className="w-full md:w-auto px-4 py-2 cursor-pointer bg-brand-yellow hover:bg-brand-yellow-dark text-brand-dark font-semibold rounded-md shadow-sm transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 min-w-[140px]"
-            >
-              {loading ? (
-                <>
-                  <LoadingSpinner size="sm" />
-                  <span>Génération...</span>
-                </>
-              ) : (
-                <>
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-                  </svg>
-                  <span>Générer</span>
-                </>
-              )}
-            </button>
           </form>
 
           {/* Thèmes suggérés */}

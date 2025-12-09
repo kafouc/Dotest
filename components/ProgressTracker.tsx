@@ -137,15 +137,15 @@ export default function ProgressTracker({
   return (
     // La div parente (dans page.tsx) a déjà les classes 'p-6 bg-brand-yellow-light/50 rounded-lg shadow-inner'
     <div>
-      <div className="flex justify-between items-center mb-4">
-        <h2 className="text-xl font-heading font-semibold text-brand-dark">
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center mb-3 sm:mb-4 gap-2">
+        <h2 className="text-lg sm:text-xl font-heading font-semibold text-brand-dark">
           Historique
         </h2>
         {/* Affiche le score moyen */}
         {attempts.length > 0 && (
-          <div className="text-right">
+          <div className="text-left sm:text-right">
             <span className="text-sm text-gray-600">Moyenne</span>
-            <p className="text-2xl font-heading font-bold text-brand-yellow">
+            <p className="text-xl sm:text-2xl font-heading font-bold text-brand-yellow">
               {averageScore.toFixed(0)}%
             </p>
           </div>
@@ -176,7 +176,7 @@ export default function ProgressTracker({
       )}
 
       {!loading && !error && attempts.length > 0 && (
-        <ul className="space-y-3">
+        <ul className="space-y-2 sm:space-y-3">
           {attempts.map((attempt) => {
             const percentage = (attempt.score / attempt.total_questions) * 100;
             // Couleur de la bordure basée sur le score - mémorisé
@@ -196,10 +196,10 @@ export default function ProgressTracker({
             return (
               <li
                 key={attempt.id}
-                className={`flex justify-between items-center p-3 bg-white rounded-md shadow-sm border-l-4 ${borderColorClass}`}
+                className={`flex flex-col sm:flex-row sm:justify-between sm:items-center p-3 sm:p-4 bg-white rounded-md shadow-sm border-l-4 ${borderColorClass} gap-2`}
               >
                 <div>
-                  <span className="font-semibold text-gray-700">
+                  <span className="font-semibold text-sm sm:text-base text-gray-700">
                     {attempt.score} / {attempt.total_questions}
                   </span>
                   <span className="block text-xs text-gray-500">
@@ -207,13 +207,13 @@ export default function ProgressTracker({
                   </span>
                 </div>
                 <div className="flex items-center gap-3">
-                  <span className="text-lg font-heading font-bold text-brand-dark">
+                  <span className="text-base sm:text-lg font-heading font-bold text-brand-dark">
                     {percentage.toFixed(0)}%
                   </span>
                   <button
                     type="button"
                     onClick={() => setDetailsAttemptId(attempt.id)}
-                    className="text-sm px-3 py-1 rounded-md border border-gray-300 hover:bg-gray-50"
+                    className="text-sm px-3 py-2 rounded-md border border-gray-300 hover:bg-gray-50 min-h-[40px]"
                     aria-label={`Voir le détail de la tentative ${attempt.id}`}
                   >
                     Détails

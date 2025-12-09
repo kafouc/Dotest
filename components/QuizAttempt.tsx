@@ -166,12 +166,12 @@ export default function QuizAttempt({
         key="results"
         initial={{ opacity: 0, scale: 0.8 }}
         animate={{ opacity: 1, scale: 1 }}
-        className="p-6 bg-brand-yellow-light rounded-lg shadow-lg text-center"
+        className="p-4 sm:p-6 bg-brand-yellow-light rounded-lg shadow-lg text-center"
       >
-        <h2 className="text-2xl font-heading font-bold text-brand-dark mb-4">
+        <h2 className="text-xl sm:text-2xl font-heading font-bold text-brand-dark mb-3 sm:mb-4">
           Quiz Terminé !
         </h2>
-        <p className="text-4xl font-bold mb-6">
+        <p className="text-2xl sm:text-4xl font-bold mb-4 sm:mb-6">
           Votre Score :
           <span className="text-brand-teal-dark ml-2">
             {score} / {quizQuestions.length}
@@ -179,10 +179,10 @@ export default function QuizAttempt({
         </p>
 
         {/* Revue des questions */}
-        <div className="text-left my-6 space-y-4 max-h-60 overflow-y-auto pr-2">
+        <div className="text-left my-4 sm:my-6 space-y-3 sm:space-y-4 max-h-60 sm:max-h-80 overflow-y-auto pr-2">
           {' '}
           {/* Ajout de scroll */}
-          <h3 className="text-xl font-heading font-semibold text-brand-dark">
+          <h3 className="text-lg sm:text-xl font-heading font-semibold text-brand-dark">
             Revue des questions :
           </h3>
           {quizQuestions.map((q, index) => {
@@ -192,9 +192,9 @@ export default function QuizAttempt({
             return (
               <div
                 key={index}
-                className="p-3 bg-white rounded shadow-sm border border-brand-yellow"
+                className="p-3 sm:p-4 bg-white rounded shadow-sm border border-brand-yellow"
               >
-                <p className="font-semibold">
+                <p className="font-semibold text-sm sm:text-base">
                   {index + 1}. {q.question}
                 </p>
                 <p
@@ -221,7 +221,7 @@ export default function QuizAttempt({
         {/* Bouton pour recommencer */}
         <button
           onClick={onQuizEnd} // Revient à l'écran de génération
-          className="mt-4 px-6 py-2 cursor-pointer bg-brand-yellow hover:bg-brand-yellow-dark text-brand-dark font-heading font-bold rounded-md shadow-sm transition-colors duration-200 text-lg"
+          className="mt-4 w-full sm:w-auto px-6 py-3 cursor-pointer bg-brand-yellow hover:bg-brand-yellow-dark text-brand-dark font-heading font-bold rounded-md shadow-sm transition-colors duration-200 text-base sm:text-lg min-h-[44px]"
         >
           Refaire un quiz
         </button>
@@ -246,24 +246,24 @@ export default function QuizAttempt({
           transition={{ duration: 0.3, ease: 'easeInOut' }}
           className="w-full"
         >
-          <div className="p-6 bg-white rounded-lg shadow-lg border border-brand-yellow">
+          <div className="p-4 sm:p-6 bg-white rounded-lg shadow-lg border border-brand-yellow">
             {/* Header de la question */}
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-heading font-semibold text-brand-dark">
+            <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center mb-3 sm:mb-4 gap-2">
+              <h2 className="text-lg sm:text-xl font-heading font-semibold text-brand-dark">
                 Question {currentQuestionIndex + 1} / {quizQuestions.length}
               </h2>
-              <span className="px-3 py-1 bg-brand-teal-light text-brand-teal-dark font-medium rounded-full text-sm">
+              <span className="px-3 py-1 bg-brand-teal-light text-brand-teal-dark font-medium rounded-full text-sm w-fit">
                 {isQCM ? 'QCM' : isVF ? 'Vrai/Faux' : 'QCU'}
               </span>
             </div>
 
             {/* Texte de la question */}
-            <p className="text-lg text-gray-800 mb-6 min-h-[60px]">
+            <p className="text-base sm:text-lg text-gray-800 mb-4 sm:mb-6 min-h-[48px] sm:min-h-[60px]">
               {currentQuestion.question}
             </p>
 
             {/* Options de réponse */}
-            <div className="space-y-3">
+            <div className="space-y-2 sm:space-y-3">
               {Object.entries(currentQuestion.options).map(([key, value], idx) => {
                 // On force la lettre A-D selon l'ordre d'affichage pour éviter les clés numériques
                 const letter = (isVF ? (idx === 0 ? 'VRAI' : 'FAUX') : (QUIZ_CONFIG.OPTION_LETTERS[idx] ?? 'A')) as string;
@@ -277,8 +277,8 @@ export default function QuizAttempt({
                     key={`${key}-${idx}`}
                     onClick={() => handleSelectAnswer(letter)}
                     disabled={!isQCM && isAnswerSelected}
-                    className={`w-full p-4 text-left font-medium border rounded-lg
-                                shadow-sm transition-all duration-200
+                    className={`w-full p-3 sm:p-4 text-left text-sm sm:text-base font-medium border rounded-lg
+                                shadow-sm transition-all duration-200 min-h-[44px]
                                 focus:outline-none focus:ring-2 focus:ring-brand-yellow
                                 ${!isQCM && isAnswerSelected ? 'cursor-not-allowed' : 'cursor-pointer'}
                                 ${isThisOptionSelected ? 'bg-brand-yellow-light border-brand-yellow ring-2 ring-brand-yellow' : 'border-gray-300'}
@@ -307,7 +307,7 @@ export default function QuizAttempt({
                         setQuizFinished(true);
                       }
                     }}
-                    className="px-4 py-2 bg-brand-teal text-white rounded-md shadow-sm font-semibold disabled:opacity-50"
+                    className="w-full sm:w-auto px-4 py-3 bg-brand-teal text-white rounded-md shadow-sm font-semibold disabled:opacity-50 min-h-[44px]"
                     disabled={!Array.isArray(selectedAnswers[currentQuestionIndex]) || (selectedAnswers[currentQuestionIndex] as string[]).length === 0}
                   >
                     Valider et Continuer

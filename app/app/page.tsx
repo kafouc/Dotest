@@ -27,6 +27,7 @@ export default function AppHome() {
   const [isLoadingDocs, setIsLoadingDocs] = useState(true);
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
   const [isSidebarMinimized, setIsSidebarMinimized] = useState(false);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [activeDocumentId, setActiveDocumentId] = useState<string | null>(null);
   const [showUploadForm, setShowUploadForm] = useState(false);
   const [openDocumentIds, setOpenDocumentIds] = useState<Set<string>>(new Set());
@@ -286,7 +287,15 @@ export default function AppHome() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 flex">
+    <div className="min-h-screen bg-gray-50 flex flex-col md:flex-row">
+      {/* Overlay mobile */}
+      {isMobileMenuOpen && (
+        <div 
+          className="fixed inset-0 bg-black/50 z-40 md:hidden"
+          onClick={() => setIsMobileMenuOpen(false)}
+        />
+      )}
+
       {/* Sidebar */}
       <Sidebar
         session={session}
@@ -299,10 +308,27 @@ export default function AppHome() {
         isLoadingDocs={isLoadingDocs}
         onDeleteSuccess={() => fetchDocuments(false)}
         onSelectDocument={handleSelectDocument}
+        isMobileMenuOpen={isMobileMenuOpen}
+        onCloseMobile={() => setIsMobileMenuOpen(false)}
       />
 
       {/* Main Content Area */}
-      <div className="flex-1 flex flex-col overflow-hidden">
+      <div className="flex-1 flex flex-col overflow-hidden w-full">
+        {/* Mobile Header avec burger */}
+        <div className="md:hidden bg-white border-b border-gray-200 p-4 flex items-center justify-between sticky top-0 z-30">
+          <button
+            onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+            className="p-2 hover:bg-gray-100 rounded-md"
+            aria-label="Menu"
+          >
+            <svg className="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+            </svg>
+          </button>
+          <span className="text-lg font-heading font-bold text-brand-dark">SheetOfPaper</span>
+          <div className="w-10" /> {/* Spacer pour centrer le titre */}
+        </div>
+
         {/* Document Tabs */}
         <DocumentTabs
           documents={documents}

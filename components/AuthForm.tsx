@@ -37,18 +37,18 @@ export default function AuthForm({ supabase, view, showBackButton = false, backH
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.3 }}
-      className="w-full max-w-md p-8 bg-white/90 backdrop-blur-md rounded-xl shadow-2xl border border-white/50"
+      className="w-full max-w-md p-4 sm:p-6 md:p-8 bg-white/90 backdrop-blur-md rounded-xl shadow-2xl border border-white/50"
     >
       {showBackButton && (
         <Link
           href={backHref}
-          className="mb-4 inline-block text-sm text-brand-yellow hover:underline"
+          className="mb-3 sm:mb-4 inline-block text-sm text-brand-yellow hover:underline min-h-[40px] flex items-center"
         >
           &larr; Revenir
         </Link>
       )}
 
-      <h2 className="text-2xl font-heading font-bold text-brand-dark mb-6 text-center">
+      <h2 className="text-xl sm:text-2xl font-heading font-bold text-brand-dark mb-4 sm:mb-6 text-center">
         {getTitle()}
       </h2>
 
