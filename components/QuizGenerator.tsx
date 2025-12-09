@@ -286,7 +286,8 @@ export default function QuizGenerator({ documents, isLoading, activeDocumentPath
                 <button
                   type="submit"
                   disabled={loading || (!query && !selectedTheme) || isOverLimit}
-                  className="w-full px-4 py-3 text-base cursor-pointer bg-brand-yellow hover:bg-brand-yellow-dark text-brand-dark font-semibold rounded-md shadow-sm transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                  className="w-full px-4 py-3 text-base cursor-pointer bg-brand-yellow hover:bg-brand-yellow-dark text-brand-dark font-semibold rounded-md shadow-sm transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 relative z-10 touch-manipulation"
+                  style={{ WebkitTapHighlightColor: 'transparent' }}
                 >
                   {loading ? (
                     <>
@@ -351,7 +352,8 @@ export default function QuizGenerator({ documents, isLoading, activeDocumentPath
                         setSelectedTheme(next);
                         if (!query && next) setQuery(next);
                       }}
-                      className={`px-3 py-1 rounded-full border text-sm transition-colors ${active ? 'bg-brand-teal text-white border-brand-teal' : 'bg-white border-gray-300 hover:border-brand-teal hover:text-brand-teal'}`}
+                      className={`px-3 py-2 rounded-full border text-sm transition-colors min-h-[40px] touch-manipulation ${active ? 'bg-brand-teal text-white border-brand-teal' : 'bg-white border-gray-300 hover:border-brand-teal hover:text-brand-teal'}`}
+                      style={{ WebkitTapHighlightColor: 'transparent' }}
                     >
                       {t}
                     </button>

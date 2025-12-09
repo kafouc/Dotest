@@ -2,6 +2,7 @@
 
 import Image from 'next/image';
 import { useEffect, useState } from 'react';
+import InstallPWAButton from '@/components/InstallPWAButton';
 
 export default function Hero() {
   const [isTransforming, setIsTransforming] = useState(false);
@@ -113,7 +114,7 @@ export default function Hero() {
             <p className="text-base sm:text-lg md:text-xl lg:text-2xl text-gray-700 mb-6 md:mb-8 max-w-2xl mx-auto px-4">
               Transformez vos documents en quiz interactifs et révisez efficacement avec l&apos;intelligence artificielle.
             </p>
-            <div className="flex flex-col sm:flex-row gap-3 md:gap-4 justify-center px-4">
+            <div className="flex flex-col sm:flex-row gap-3 md:gap-4 justify-center px-4 items-stretch sm:items-center">
               <a
                 href="/signup"
                 className="px-6 md:px-8 py-3 md:py-4 bg-brand-yellow hover:bg-brand-yellow-dark text-brand-dark font-semibold rounded-full text-base md:text-lg transition-all duration-200 min-h-[44px] flex items-center justify-center"
@@ -121,6 +122,7 @@ export default function Hero() {
               >
                 Essayer gratuitement
               </a>
+              <InstallPWAButton className="px-6 md:px-8 py-3 md:py-4 rounded-full text-base md:text-lg flex items-center justify-center" />
               <a
                 href="#comment-ca-marche"
                 className="px-6 md:px-8 py-3 md:py-4 bg-white hover:bg-gray-50 text-brand-dark font-semibold rounded-full text-base md:text-lg transition-all duration-200 border-2 border-brand-yellow min-h-[44px] flex items-center justify-center"

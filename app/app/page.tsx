@@ -13,6 +13,7 @@ import QuizGenerator from '@/components/QuizGenerator';
 import ProgressTracker from '@/components/ProgressTracker';
 import RevisionSheet from '@/components/RevisionSheet';
 import PWAInstallPrompt from '@/components/PWAInstallPrompt';
+import AutoEnablePushNotifications from '@/components/AutoEnablePushNotifications';
 
 import { motion } from 'framer-motion';
 import type { DocumentInfo } from '@/lib/types';
@@ -287,11 +288,11 @@ export default function AppHome() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col md:flex-row">
+    <div className="min-h-screen bg-gray-50 flex flex-col md:flex-row relative">
       {/* Overlay mobile */}
       {isMobileMenuOpen && (
         <div 
-          className="fixed inset-0 bg-black/50 z-40 md:hidden"
+          className="fixed inset-0 bg-black/50 z-40 md:hidden pointer-events-auto"
           onClick={() => setIsMobileMenuOpen(false)}
         />
       )}
@@ -533,6 +534,7 @@ export default function AppHome() {
         </main>
       </div>
       <PWAInstallPrompt />
+      <AutoEnablePushNotifications />
     </div>
   );
 }
