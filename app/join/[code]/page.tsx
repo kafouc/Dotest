@@ -131,7 +131,9 @@ export default function JoinCodePage() {
       setSelectedAnswers(newAnswers);
 
       // Soumettre la réponse
-      const correctAnswer = currentQuestion.reponse_correcte;
+      const correctAnswer = 'reponse_correcte' in currentQuestion 
+        ? currentQuestion.reponse_correcte 
+        : (currentQuestion.reponses_correctes?.[0] ?? 'A');
       const isCorrect = isAnswerCorrect(optionKey, correctAnswer);
 
       try {
@@ -140,7 +142,7 @@ export default function JoinCodePage() {
           participantId: participant.id,
           questionIndex: currentQuestionIndex,
           answer: optionKey,
-          answerText: currentQuestion.options[optionKey] || null,
+          answerText: (currentQuestion.options as Record<string, string>)[optionKey] || null,
           isCorrect,
         });
       } catch (err) {

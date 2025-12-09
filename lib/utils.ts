@@ -1,6 +1,8 @@
 import type { QuizQuestion, RawQuizQuestion, QuizMode } from './quiz.types';
 import { QUIZ_CONFIG } from './constants';
 
+export { cn } from './cn';
+
 export function normalizeLetter(val: string): string {
   const s = (val ?? '').toString().trim().toUpperCase();
   const m = s.match(/^[\s\(\[]*([ABCD])/);

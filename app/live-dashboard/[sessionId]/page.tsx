@@ -395,7 +395,7 @@ export default function LiveDashboardPage() {
                       </div>
                       {showSolutions && (
                         <span className="shrink-0 inline-block px-2 py-1 text-xs font-bold rounded-md bg-green-100 text-green-700">
-                          Réponse: {q.reponse_correcte}
+                          Réponse: {'reponse_correcte' in q ? q.reponse_correcte : q.reponses_correctes.join(', ')}
                         </span>
                       )}
                     </div>
@@ -405,7 +405,8 @@ export default function LiveDashboardPage() {
                         const letter = letters[i] ?? 'A';
                         const count = optionCounts[letter] ?? 0;
                         const percent = total > 0 ? Math.round((count / total) * 100) : 0;
-                        const isCorrect = letter.toUpperCase() === (q.reponse_correcte || '').toUpperCase();
+                        const correctAnswer = 'reponse_correcte' in q ? q.reponse_correcte : (q.reponses_correctes?.[0] ?? '');
+                        const isCorrect = letter.toUpperCase() === (correctAnswer || '').toUpperCase();
                         return (
                           <div
                             key={`${idx}-${key}-${i}`}
@@ -477,7 +478,8 @@ export default function LiveDashboardPage() {
                       {questions.map((q, idx) => {
                         const a = pa.find((x) => x.question_index === idx);
                         const chosen = a?.answer?.toUpperCase();
-                        const correct = (q.reponse_correcte || '').toUpperCase();
+                        const correctAnswer = 'reponse_correcte' in q ? q.reponse_correcte : (q.reponses_correctes?.[0] ?? '');
+                        const correct = (correctAnswer || '').toUpperCase();
                         // const isCorrect = chosen && chosen === correct; // non utilisé, conservé via couleurs ci-dessous
                         const letters = ['A','B','C','D'] as const;
                         const opts = Object.entries(q.options || {});
