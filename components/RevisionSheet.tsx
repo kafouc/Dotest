@@ -86,21 +86,21 @@ export default function RevisionSheet({ documentPath }: { documentPath?: string 
   };
 
   return (
-    <div className="relative p-6 pb-12 bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="text-xl font-heading font-semibold text-brand-dark">Fiche de révision</h2>
-        <div className="flex items-center gap-2">
+    <div className="relative p-4 sm:p-6 pb-12 bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-3 sm:mb-4 gap-2">
+        <h2 className="text-lg sm:text-xl font-heading font-semibold text-brand-dark">Fiche de révision</h2>
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto">
           <button
             onClick={downloadPdf}
             disabled={!data || loading || !documentPath}
-            className="px-3 py-2 bg-brand-yellow hover:bg-brand-yellow-dark text-brand-dark font-semibold rounded-md disabled:opacity-50 disabled:cursor-not-allowed border border-yellow-300 shadow-sm"
+            className="w-full sm:w-auto px-3 py-3 bg-brand-yellow hover:bg-brand-yellow-dark text-brand-dark font-semibold rounded-md disabled:opacity-50 disabled:cursor-not-allowed border border-yellow-300 shadow-sm min-h-[44px]"
           >
             Télécharger en PDF
           </button>
           <button
             onClick={generate}
             disabled={loading || !documentPath}
-            className="px-4 py-2 bg-brand-teal hover:bg-brand-teal-dark text-white font-semibold rounded-md disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full sm:w-auto px-4 py-3 bg-brand-teal hover:bg-brand-teal-dark text-white font-semibold rounded-md disabled:opacity-50 disabled:cursor-not-allowed min-h-[44px]"
           >
             {loading ? 'Génération...' : (data ? 'Régénérer' : 'Générer')}
           </button>
@@ -116,7 +116,7 @@ export default function RevisionSheet({ documentPath }: { documentPath?: string 
       )}
 
       {loading && (
-        <div className="py-6">
+        <div className="py-4 sm:py-6">
           <LoadingSpinner size="md" text="Création de la fiche..." />
         </div>
       )}

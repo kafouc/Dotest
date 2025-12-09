@@ -24,7 +24,7 @@ export default function DocumentTabs({
       {/* Bouton nouveau document */}
       <button
         onClick={onCreateNew}
-        className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 border-r border-gray-200 flex items-center gap-2 whitespace-nowrap"
+        className="px-3 sm:px-4 py-2 sm:py-3 text-sm text-gray-600 hover:bg-gray-100 border-r border-gray-200 flex items-center gap-2 whitespace-nowrap min-h-[40px]"
         title="Nouveau document"
       >
         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -47,7 +47,7 @@ export default function DocumentTabs({
           return (
             <div
               key={docId}
-              className={`group flex items-center gap-2 px-4 py-2 border-r border-gray-200 cursor-pointer transition-colors whitespace-nowrap ${
+              className={`group flex items-center gap-2 px-3 sm:px-4 py-2 sm:py-3 border-r border-gray-200 cursor-pointer transition-colors whitespace-nowrap min-h-[40px] ${
                 isActive
                   ? 'bg-white text-brand-dark border-b-2 border-brand-yellow'
                   : 'bg-gray-50 text-gray-600 hover:bg-gray-100'
@@ -62,7 +62,7 @@ export default function DocumentTabs({
                   d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
                 />
               </svg>
-              <span className="text-sm truncate max-w-[200px]">{doc.name}</span>
+              <span className="text-sm truncate max-w-[160px] sm:max-w-[200px]">{doc.name}</span>
               <button
                 onClick={(e) => onCloseDocument(docId, e)}
                 className="opacity-0 group-hover:opacity-100 p-1 hover:bg-gray-200 rounded transition-opacity"

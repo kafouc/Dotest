@@ -158,9 +158,9 @@ export default function UploadForm({ session, supabase, onUploadSuccess }: Uploa
   };
 
   return (
-    <div className="p-6 bg-white rounded-lg shadow-md border border-gray-200">
-      <h2 className="text-xl font-heading font-semibold mb-4 text-brand-dark">Téléverser un Cours (PDF, Word, PowerPoint)</h2>
-      <p className="text-sm text-gray-600 mb-4">
+    <div className="p-4 sm:p-6 bg-white rounded-lg shadow-md border border-gray-200">
+      <h2 className="text-lg sm:text-xl font-heading font-semibold mb-3 sm:mb-4 text-brand-dark">Téléverser un Cours (PDF, Word, PowerPoint)</h2>
+      <p className="text-xs sm:text-sm text-gray-600 mb-3 sm:mb-4">
         Limite : {FILE_LIMITS.MAX_SIZE_MB} Mo et {FILE_LIMITS.MAX_PAGES} pages. L&apos;analyse est effectuée en arrière-plan.
       </p>
 
@@ -169,7 +169,7 @@ export default function UploadForm({ session, supabase, onUploadSuccess }: Uploa
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
-        className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors mb-4 ${
+        className={`border-2 border-dashed rounded-lg p-6 sm:p-8 text-center transition-colors mb-3 sm:mb-4 ${
           isDragging
             ? 'border-brand-yellow bg-brand-yellow-light'
             : 'border-gray-300 hover:border-brand-yellow/50'
@@ -202,21 +202,21 @@ export default function UploadForm({ session, supabase, onUploadSuccess }: Uploa
               d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"
             />
           </svg>
-          <span className="text-sm font-medium text-gray-700">
+          <span className="text-sm sm:text-base font-medium text-gray-700">
             {file ? file.name : 'Glissez-déposez un fichier (PDF, .docx, .pptx) ou cliquez pour sélectionner'}
           </span>
-          <span className="text-xs text-gray-500">
+          <span className="text-xs sm:text-sm text-gray-500">
             Max {FILE_LIMITS.MAX_SIZE_MB} Mo — Types: PDF, Word (.docx), PowerPoint (.pptx)
           </span>
         </label>
       </div>
 
       {/* Bouton d'upload */}
-      <div className="flex items-center gap-4">
+      <div className="flex flex-col sm:flex-row items-center gap-3 sm:gap-4">
         <button
           onClick={handleUpload}
           disabled={uploading || !file}
-          className="flex-1 px-4 py-2 cursor-pointer bg-brand-teal hover:bg-brand-teal-dark text-white font-semibold rounded-md shadow-sm transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+          className="w-full sm:flex-1 px-4 py-3 cursor-pointer bg-brand-teal hover:bg-brand-teal-dark text-white font-semibold rounded-md shadow-sm transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 min-h-[44px]"
         >
           {uploading ? (
             <>

@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import Image from 'next/image';
 import { useState, useEffect } from 'react';
+import InstallPWAButton from '@/components/InstallPWAButton';
 
 export default function Header() {
   const [isScrolled, setIsScrolled] = useState(false);
@@ -58,8 +59,9 @@ export default function Header() {
           </div>
         </div>
 
-        {/* Boutons login et sign up à droite */}
+        {/* Boutons login, install PWA et sign up à droite */}
         <div className="flex items-center gap-3">
+          <InstallPWAButton className="hidden sm:inline-flex" />
           <a
             href="/login"
             className="px-5 py-2 text-sm font-body text-brand-yellow hover:text-brand-yellow-dark transition-colors"
