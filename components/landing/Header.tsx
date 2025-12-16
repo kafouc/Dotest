@@ -3,7 +3,6 @@
 import Link from 'next/link';
 import Image from 'next/image';
 import { useState, useEffect } from 'react';
-import InstallPWAButton from '@/components/InstallPWAButton';
 
 export default function Header() {
   const [isScrolled, setIsScrolled] = useState(false);
@@ -63,7 +62,6 @@ export default function Header() {
 
           {/* Actions desktop (lg+) */}
           <div className="hidden lg:flex items-center gap-3">
-            <InstallPWAButton className="" />
             <a
               href="/login"
               className="px-5 py-2 text-sm font-body text-brand-yellow hover:text-brand-yellow-dark transition-colors"
@@ -151,7 +149,6 @@ export default function Header() {
           </nav>
 
           <div className="pt-6 border-t border-gray-200 space-y-3">
-            <InstallPWAButton className="w-full justify-center" />
             <a
               href="/login"
               className="block w-full px-5 py-3 text-center text-base font-body text-brand-yellow hover:text-brand-yellow-dark transition-colors border border-brand-yellow rounded-full"

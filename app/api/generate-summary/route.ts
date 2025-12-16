@@ -3,7 +3,23 @@ import { cookies } from 'next/headers';
 import { createServerClient } from '@supabase/ssr';
 import { CohereClient } from 'cohere-ai';
 import Groq from 'groq-sdk';
-import { EMBEDDING_CONFIG } from '@/lib/constants';
+import { EMBEDDING_CONFIG, AI_MODELS } from '@/lib/constants';
+import { recordAiUsage } from '@/lib/metricsLogger';
+import { touchUserStreak } from '@/lib/streaks';
+import { extractCohereTokenUsage, extractGroqUsage, estimateCohereEmbedCost, estimateGroqCost } from '@/lib/aiUsage';
+import { ensureRevisionQuota, QuotaError } from '@/lib/quota';
+import { logExportEvent } from '@/lib/exportEvents';
+
+type PageRange = {
+  start?: number | null;
+  end?: number | null;
+};
+
+type SectionRow = {
+  content: string;
+  page_start?: number | null;
+  page_end?: number | null;
+};
 
 if (!process.env.COHERE_API_KEY) {
   throw new Error('La clé API COHERE_API_KEY est manquante');
@@ -18,10 +34,17 @@ const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { documentPath } = (body || {}) as { documentPath?: string };
+    const { documentPath, pageRange } = (body || {}) as {
+      documentPath?: string;
+      pageRange?: PageRange | null;
+    };
     if (!documentPath) {
       return NextResponse.json({ error: 'documentPath requis' }, { status: 400 });
     }
+
+    const pageStart = pageRange?.start ?? null;
+    const pageEnd = pageRange?.end ?? null;
+
 
     const supabase = createServerClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -44,15 +67,36 @@ export async function POST(req: Request) {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 });
 
+    await ensureRevisionQuota(supabase, user.id);
+
     // 1) Embedding d'une requête neutre pour récupérer des sections représentatives
+    const embedStartedAt = Date.now();
     const embed = await cohere.embed({
       texts: ['Synthétise le document: points clés, définitions, formules, erreurs fréquentes, conseils, 5 questions d’auto-évaluation.'],
-      model: 'embed-multilingual-v3.0',
+      model: AI_MODELS.COHERE_EMBEDDING,
       inputType: 'search_query',
     });
     // @ts-expect-error Cohere types not perfect
     const queryEmbedding = embed.embeddings?.[0];
     if (!queryEmbedding) throw new Error("Cohere n'a pas renvoyé d'embedding.");
+
+    const embedLatencyMs = Date.now() - embedStartedAt;
+    const cohereUsage = extractCohereTokenUsage(embed);
+    await recordAiUsage({
+      provider: 'cohere',
+      model: AI_MODELS.COHERE_EMBEDDING,
+      promptTokens: cohereUsage.inputTokens,
+      completionTokens: cohereUsage.outputTokens,
+      totalTokens: cohereUsage.totalTokens,
+      latencyMs: embedLatencyMs,
+      cost: estimateCohereEmbedCost(cohereUsage.totalTokens),
+      metadata: {
+        route: 'generate-summary',
+        stage: 'embedding',
+        hasPageRange: Boolean(pageRange),
+      },
+      userId: user.id,
+    });
 
     // 2) Récupération sections (RAG)
     const { data: sections, error: matchErr } = await supabase.rpc('match_document_sections', {
@@ -61,14 +105,27 @@ export async function POST(req: Request) {
       match_count: Math.max(EMBEDDING_CONFIG.MATCH_COUNT, 28),
       p_user_id: user.id,
       p_document_path: documentPath,
+      p_page_start: pageStart,
+      p_page_end: pageEnd,
     });
     if (matchErr) throw new Error(matchErr.message);
     if (!sections || sections.length === 0) {
       return NextResponse.json({ error: 'Aucune section pertinente trouvée.' }, { status: 404 });
     }
 
-    const context = (sections as { content: string }[])
-      .map((s) => s.content)
+    const context = (sections as SectionRow[])
+      .map((section) => {
+        const start = section.page_start ?? null;
+        const end = section.page_end ?? null;
+        if (start || end) {
+          const label = start && end && start !== end
+            ? `Pages ${start}-${end}`
+            : `Page ${start ?? end}`;
+          return `${label} :
+${section.content}`;
+        }
+        return section.content;
+      })
       .join('\n\n---\n\n')
       .slice(0, 12000);
 
@@ -93,6 +150,7 @@ ${context}
 """
 `.trim();
 
+    const groqStartedAt = Date.now();
     const completion = await groq.chat.completions.create({
       messages: [
         { role: 'system', content: 'Tu réponds uniquement avec un JSON valide.' },
@@ -101,6 +159,23 @@ ${context}
       model: 'llama-3.1-8b-instant',
       temperature: 0.2,
       response_format: { type: 'json_object' },
+    });
+
+    const groqLatencyMs = Date.now() - groqStartedAt;
+    const groqUsage = extractGroqUsage(completion.usage);
+    await recordAiUsage({
+      provider: 'groq',
+      model: completion.model ?? 'llama-3.1-8b-instant',
+      promptTokens: groqUsage.promptTokens,
+      completionTokens: groqUsage.completionTokens,
+      totalTokens: groqUsage.totalTokens,
+      latencyMs: groqLatencyMs,
+      cost: estimateGroqCost(groqUsage.promptTokens, groqUsage.completionTokens),
+      metadata: {
+        route: 'generate-summary',
+        sections: Array.isArray(sections) ? sections.length : null,
+      },
+      userId: user.id,
     });
 
     const text = completion.choices?.[0]?.message?.content;
@@ -168,8 +243,23 @@ ${context}
       self_test: sanitizeList(parsed?.self_test, 5),
     };
 
+    await touchUserStreak(supabase, user.id);
+    await logExportEvent(supabase, {
+      userId: user.id,
+      kind: 'summary_export',
+      documentPath,
+      context: pageRange ? JSON.stringify({ pageRange }) : null,
+    });
+
     return NextResponse.json(result, { status: 200 });
   } catch (error: unknown) {
+    if (error instanceof QuotaError) {
+      return NextResponse.json({
+        error: error.message,
+        code: error.code,
+        upgrade: true,
+      }, { status: 402 });
+    }
     console.error('Erreur API Generate Summary:', error);
     const msg = error instanceof Error ? error.message : 'Erreur inconnue';
     return NextResponse.json({ error: msg }, { status: 500 });

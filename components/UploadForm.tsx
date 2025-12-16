@@ -22,9 +22,9 @@ export default function UploadForm({ session, supabase, onUploadSuccess }: Uploa
   const [isDragging, setIsDragging] = useState(false);
 
   const validateFile = useCallback((file: File): string | null => {
-    // Vérification 1: Taille (2 Mo)
+    // Vérification 1: Taille (50 Mo pour PDFs de 500 pages max)
     if (file.size > FILE_LIMITS.MAX_SIZE_BYTES) {
-      return `Le fichier est trop volumineux. Limite: ${FILE_LIMITS.MAX_SIZE_MB} Mo.`;
+      return `Le fichier est trop volumineux. Limite: ${FILE_LIMITS.MAX_SIZE_MB} Mo (environ ${FILE_LIMITS.MAX_PAGES} pages).`;
     }
 
     // Vérification 2: Type

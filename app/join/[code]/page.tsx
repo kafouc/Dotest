@@ -4,8 +4,6 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useParams } from 'next/navigation';
 import { createSupabaseBrowserClient } from '@/lib/supabaseClient';
 import {
-  getSharedQuizByCode,
-  getActiveSessionByShareCode,
   joinSession,
   submitLiveAnswer,
   type SharedQuiz,
@@ -19,7 +17,7 @@ import { isAnswerCorrect, calculateQuizScore } from '@/lib/utils';
 
 export default function JoinCodePage() {
   const params = useParams();
-  const code = (params?.code as string) || '';
+  const code = ((params?.code as string) || '').trim();
   
   const [supabase] = useState(() => createSupabaseBrowserClient());
   const [loading, setLoading] = useState(true);
@@ -37,27 +35,67 @@ export default function JoinCodePage() {
   const [quizFinished, setQuizFinished] = useState(false);
   const [score, setScore] = useState(0);
 
-  // Charger le quiz et la session
+  // Charger le quiz et la session via API interne
   useEffect(() => {
+    let isCancelled = false;
+
     const loadQuiz = async () => {
+      if (!code) {
+        setError('Quiz introuvable ou expiré.');
+        setLoading(false);
+        return;
+      }
+
+      setLoading(true);
+      setError(null);
+
       try {
-        const quizData = await getSharedQuizByCode(supabase, code);
-        if (!quizData) {
-          setError('Quiz introuvable ou expiré.');
-          setLoading(false);
+        const response = await fetch(`/api/live-quiz/${encodeURIComponent(code)}`, {
+          cache: 'no-store',
+        });
+
+        if (!response.ok) {
+          let errorMessage = 'Erreur lors du chargement du quiz.';
+
+          try {
+            const payload = (await response.json()) as { error?: string };
+            if (payload?.error) {
+              errorMessage = payload.error;
+            }
+          } catch {
+            // Pas de corps JSON exploitable
+          }
+
+          if (!isCancelled) {
+            setError(errorMessage);
+          }
           return;
         }
-        setQuiz(quizData);
 
-        // Récupérer la session active via RPC (bypass RLS pour les élèves)
-        const active = await getActiveSessionByShareCode(supabase, code);
-        if (active && active.session_id) {
-          // Construire un objet minimal de session; il sera remplacé par Realtime lors d'un update
+        const payload = (await response.json()) as {
+          quiz: SharedQuiz;
+          session: {
+            session_id: string | null;
+            status: QuizSession['status'];
+            started_at: string | null;
+            share_code: string;
+            expires_at: string | null;
+            questions_count: number;
+          } | null;
+        };
+
+        if (isCancelled) {
+          return;
+        }
+
+        setQuiz(payload.quiz);
+
+        if (payload.session?.session_id) {
           setSession({
-            id: active.session_id,
-            shared_quiz_id: quizData.id,
-            status: active.status as QuizSession['status'],
-            started_at: active.started_at,
+            id: payload.session.session_id,
+            shared_quiz_id: payload.quiz.id,
+            status: payload.session.status,
+            started_at: payload.session.started_at,
             completed_at: null,
             created_at: new Date().toISOString(),
           });
@@ -66,14 +104,22 @@ export default function JoinCodePage() {
         }
       } catch (err) {
         console.error(err);
-        setError('Erreur lors du chargement du quiz.');
+        if (!isCancelled) {
+          setError('Erreur lors du chargement du quiz.');
+        }
       } finally {
-        setLoading(false);
+        if (!isCancelled) {
+          setLoading(false);
+        }
       }
     };
 
     loadQuiz();
-  }, [supabase, code]);
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [code]);
 
   // Écoute Realtime du statut de la session
   useEffect(() => {

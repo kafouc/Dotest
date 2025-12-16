@@ -1,5 +1,26 @@
 #!/bin/bash
 
+echo "⚠️  ============================================================"
+echo "⚠️  CE SCRIPT EST OBSOLÈTE"
+echo "⚠️  ============================================================"
+echo ""
+echo "Les Edge Functions Supabase ont été remplacées par Next.js serverless"
+echo "pour supporter les fichiers de 500 pages (50 Mo)."
+echo ""
+echo "Migration effectuée:"
+echo "  - embed-worker → /api/pdf/extract"
+echo "  - process-batch → /api/pdf/embed-batch"
+echo ""
+echo "Ce script n'est plus nécessaire et est conservé pour référence uniquement."
+echo ""
+echo "Pour plus d'informations, consultez: MIGRATION_RAG_NEXTJS.md"
+echo ""
+exit 0
+
+# ============================================================
+# ANCIEN CODE - CONSERVÉ POUR RÉFÉRENCE
+# ============================================================
+
 echo "=== Déploiement de la fonction Edge embed-worker ==="
 echo ""
 

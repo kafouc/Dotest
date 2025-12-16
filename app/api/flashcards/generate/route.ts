@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { createServerClient } from '@supabase/ssr';
+import { touchUserStreak } from '@/lib/streaks';
 
 export async function POST(req: Request) {
   try {
@@ -68,6 +69,8 @@ export async function POST(req: Request) {
       .from('flashcards')
       .insert(rows, { count: 'exact' });
     if (insErr) throw insErr;
+
+    await touchUserStreak(supabase, user.id);
 
     return NextResponse.json({ created: count ?? rows.length }, { status: 200 });
   } catch (e: unknown) {

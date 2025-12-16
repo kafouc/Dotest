@@ -1,6 +1,14 @@
 /** @type {import('next').NextConfig} */
 const config = {
   reactStrictMode: true,
+  
+  // Configuration expérimentale pour Server Actions et fichiers volumineux
+  experimental: {
+    serverActions: {
+      bodySizeLimit: '50mb',
+    },
+  },
+  
   images: {
     remotePatterns: [
       {

@@ -4,6 +4,22 @@ import { createServerClient } from '@supabase/ssr';
 import Groq from 'groq-sdk';
 import { CohereClient } from 'cohere-ai';
 import { EMBEDDING_CONFIG, AI_MODELS, QUIZ_LIMITS } from '@/lib/constants';
+import { recordAiUsage } from '@/lib/metricsLogger';
+import { touchUserStreak } from '@/lib/streaks';
+import { extractCohereTokenUsage, extractGroqUsage, estimateCohereEmbedCost, estimateGroqCost } from '@/lib/aiUsage';
+import { ensureQuizQuota, QuotaError } from '@/lib/quota';
+import { logExportEvent } from '@/lib/exportEvents';
+
+type PageRange = {
+  start?: number | null;
+  end?: number | null;
+};
+
+type SectionRow = {
+  content: string;
+  page_start?: number | null;
+  page_end?: number | null;
+};
 
 // Initialisation déplacée dans le handler pour gérer proprement l'absence de config
 
@@ -32,7 +48,25 @@ export async function POST(req: Request) {
         }
         const cohere = new CohereClient({ token: cohereKey });
         const groq = new Groq({ apiKey: groqKey });
-    const { query: userQuery, documentPath, numQuestions = QUIZ_LIMITS.DEFAULT_QUESTIONS, mode = 'qcu', theme } = body as { query: string; documentPath?: string; numQuestions?: number; mode?: 'qcu'|'qcm'|'vf'; theme?: string };
+    const {
+      query: userQuery,
+      documentPath,
+      numQuestions = QUIZ_LIMITS.DEFAULT_QUESTIONS,
+      mode = 'qcu',
+      theme,
+      pageRange,
+    } = body as {
+      query: string;
+      documentPath?: string;
+      numQuestions?: number;
+      mode?: 'qcu' | 'qcm' | 'vf';
+      theme?: string;
+      pageRange?: PageRange | null;
+    };
+
+    const pageStart = pageRange?.start ?? null;
+    const pageEnd = pageRange?.end ?? null;
+
     const allowedCounts = [5, 7, 10];
     const nearestAllowed = allowedCounts.reduce((prev, cur) => {
       const n = typeof numQuestions === 'number' ? numQuestions : QUIZ_LIMITS.DEFAULT_QUESTIONS;
@@ -77,7 +111,10 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Non autorisé' }, { status: 401 });
     }
 
+    await ensureQuizQuota(supabase, user.id, documentPath ?? null);
+
     // 3. Générer le vecteur de la question avec Cohere
+    const embedStartedAt = Date.now();
     const embedResponse = await cohere.embed({
       texts: [userQuery],
       model: AI_MODELS.COHERE_EMBEDDING,
@@ -91,6 +128,24 @@ export async function POST(req: Request) {
     // @ts-expect-error (Corrige l'erreur ESLint)
     const queryEmbedding = embedResponse.embeddings[0];
 
+    const embedLatencyMs = Date.now() - embedStartedAt;
+    const cohereUsage = extractCohereTokenUsage(embedResponse);
+    await recordAiUsage({
+      provider: 'cohere',
+      model: AI_MODELS.COHERE_EMBEDDING,
+      promptTokens: cohereUsage.inputTokens,
+      completionTokens: cohereUsage.outputTokens,
+      totalTokens: cohereUsage.totalTokens,
+      latencyMs: embedLatencyMs,
+      cost: estimateCohereEmbedCost(cohereUsage.totalTokens),
+      metadata: {
+        route: 'generate-quiz',
+        stage: 'embedding',
+        hasDocument: Boolean(documentPath),
+      },
+      userId: user.id,
+    });
+
     // 4. Appel de la fonction SQL (RAG)
     const { data: sections, error: matchError } = await supabase.rpc(
       'match_document_sections',
@@ -100,6 +155,8 @@ export async function POST(req: Request) {
         match_count: EMBEDDING_CONFIG.MATCH_COUNT,
         p_user_id: user.id,
         p_document_path: documentPath,
+        p_page_start: pageStart,
+        p_page_end: pageEnd,
       }
     );
 
@@ -117,8 +174,18 @@ export async function POST(req: Request) {
     }
 
     // 5. Contexte (Type 'any' corrigé en 'unknown' puis vérifié)
-    const context = (sections as { content: string }[])
-      .map((s) => s.content)
+    const context = (sections as SectionRow[])
+      .map((section) => {
+        const start = section.page_start ?? null;
+        const end = section.page_end ?? null;
+        if (start || end) {
+          const label = start && end && start !== end
+            ? `Pages ${start}-${end}`
+            : `Page ${start ?? end}`;
+          return `${label} :\n${section.content}`;
+        }
+        return section.content;
+      })
       .join('\n\n---\n\n');
 
     // 6. Prompt pour Groq
@@ -141,6 +208,7 @@ export async function POST(req: Request) {
     `;
 
     // 7. Appel Groq
+    const groqStartedAt = Date.now();
     const chatCompletion = await groq.chat.completions.create({
       messages: [
         {
@@ -158,6 +226,24 @@ export async function POST(req: Request) {
     if (!text) {
       throw new Error("L'IA n'a pas renvoyé de réponse.");
     }
+
+    const groqLatencyMs = Date.now() - groqStartedAt;
+    const groqUsage = extractGroqUsage(chatCompletion.usage);
+    await recordAiUsage({
+      provider: 'groq',
+      model: chatCompletion.model ?? AI_MODELS.GROQ_QUIZ_GENERATION,
+      promptTokens: groqUsage.promptTokens,
+      completionTokens: groqUsage.completionTokens,
+      totalTokens: groqUsage.totalTokens,
+      latencyMs: groqLatencyMs,
+      cost: estimateGroqCost(groqUsage.promptTokens, groqUsage.completionTokens),
+      metadata: {
+        route: 'generate-quiz',
+        mode,
+        questionCount: count,
+      },
+      userId: user.id,
+    });
 
     // 8. Parser la réponse
     let quizData;
@@ -182,10 +268,29 @@ export async function POST(req: Request) {
       );
     }
 
-    // 9. Renvoyer le quiz
+    // 9. Enregistrer la progression utilisateur (flamme)
+    await touchUserStreak(supabase, user.id);
+    await logExportEvent(supabase, {
+      userId: user.id,
+      kind: 'quiz_export',
+      documentPath: documentPath ?? null,
+      context: JSON.stringify({
+        questionCount: count,
+        mode,
+        theme: theme ?? null,
+      }),
+    });
+
+    // 10. Renvoyer le quiz
     return NextResponse.json({ quiz: quizData.quiz }, { status: 200 });
   } catch (error: unknown) {
-    // 'any' corrigé en 'unknown'
+    if (error instanceof QuotaError) {
+      return NextResponse.json({
+        error: error.message,
+        code: error.code,
+        upgrade: true,
+      }, { status: 402 });
+    }
     console.error('Erreur API Generate Quiz:', error);
     const errorMessage =
       error instanceof Error ? error.message : 'Erreur inconnue';

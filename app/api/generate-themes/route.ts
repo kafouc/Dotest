@@ -3,7 +3,39 @@ import { cookies } from 'next/headers';
 import { createServerClient } from '@supabase/ssr';
 import { CohereClient } from 'cohere-ai';
 import Groq from 'groq-sdk';
-import { EMBEDDING_CONFIG } from '@/lib/constants';
+import { AI_MODELS, BATCH_CONFIG, EMBEDDING_CONFIG } from '@/lib/constants';
+import { recordAiUsage } from '@/lib/metricsLogger';
+import { extractCohereTokenUsage, extractGroqUsage, estimateCohereEmbedCost, estimateGroqCost } from '@/lib/aiUsage';
+
+type PageRange = {
+  start?: number | null;
+  end?: number | null;
+};
+
+type SectionRow = {
+  content: string;
+  page_start?: number | null;
+  page_end?: number | null;
+};
+
+const EMBED_SLOT_KEY = '__cohere_next_available__';
+
+const waitForEmbedSlot = async () => {
+  const interval = BATCH_CONFIG.MIN_EMBED_INTERVAL_MS ?? 0;
+  if (!interval) {
+    return;
+  }
+
+  const now = Date.now();
+  const nextAvailable = (globalThis as Record<string, number>)[EMBED_SLOT_KEY] ?? now;
+  const waitMs = Math.max(0, nextAvailable - now);
+
+  if (waitMs > 0) {
+    await new Promise((resolve) => setTimeout(resolve, waitMs));
+  }
+
+  (globalThis as Record<string, number>)[EMBED_SLOT_KEY] = Date.now() + interval;
+};
 
 // Initialisation déplacée dans le handler pour une gestion propre des erreurs de configuration
 
@@ -16,9 +48,16 @@ export async function POST(req: Request) {
   let docKey: string | undefined;
   try {
     const body = await req.json();
-    const { documentPath } = (body || {}) as { documentPath?: string };
+    const { documentPath, pageRange } = (body || {}) as {
+      documentPath?: string;
+      pageRange?: PageRange | null;
+    };
+
+    const pageStart = pageRange?.start ?? null;
+    const pageEnd = pageRange?.end ?? null;
 
     // Verrouillage par documentPath (si fourni)
+
     if (documentPath) {
       docKey = documentPath;
       const now = Date.now();
@@ -77,17 +116,67 @@ export async function POST(req: Request) {
     }
     const cohere = new CohereClient({ token: cohereKey });
 
-    const embedResponse = await cohere.embed({
-      texts: [
-        'Identifier les thèmes principaux, chapitres, sujets clés et sous-thèmes pertinents du document.'
-      ],
-      model: 'embed-multilingual-v3.0',
-      inputType: 'search_query',
-    });
-    // @ts-expect-error cohere types
-    const queryEmbedding = embedResponse.embeddings?.[0];
+    const embedPrompt = 'Identifier les thèmes principaux, chapitres, sujets clés et sous-thèmes pertinents du document.';
+    const embedMaxRetries = 1 + (BATCH_CONFIG.MAX_RETRIES ?? 3);
+    const embedBaseDelay = BATCH_CONFIG.RETRY_BASE_DELAY_MS ?? 1500;
+    const embedRateDelay = BATCH_CONFIG.RATE_LIMIT_DELAY_MS ?? 4000;
+
+    let queryEmbedding: number[] | null = null;
+    for (let attempt = 0; attempt < embedMaxRetries; attempt++) {
+      try {
+        await waitForEmbedSlot();
+
+        const embedStartedAt = Date.now();
+        const embedResponse = await cohere.embed({
+          texts: [embedPrompt],
+          model: AI_MODELS.COHERE_EMBEDDING,
+          inputType: 'search_query',
+        });
+        // @ts-expect-error cohere types
+        queryEmbedding = embedResponse.embeddings?.[0] ?? null;
+        if (!queryEmbedding) {
+          throw new Error("Cohere n'a pas retourné d'embedding pour la requête thèmes.");
+        }
+        const embedLatencyMs = Date.now() - embedStartedAt;
+        const cohereUsage = extractCohereTokenUsage(embedResponse);
+        await recordAiUsage({
+          provider: 'cohere',
+          model: AI_MODELS.COHERE_EMBEDDING,
+          promptTokens: cohereUsage.inputTokens,
+          completionTokens: cohereUsage.outputTokens,
+          totalTokens: cohereUsage.totalTokens,
+          latencyMs: embedLatencyMs,
+          cost: estimateCohereEmbedCost(cohereUsage.totalTokens),
+          metadata: {
+            route: 'generate-themes',
+            hasDocument: Boolean(documentPath),
+            attempt,
+          },
+          userId: user.id,
+        });
+        break;
+      } catch (err: unknown) {
+        const statusCode = typeof err === 'object' && err && 'statusCode' in err
+          ? (err as { statusCode?: number }).statusCode
+          : undefined;
+        if (statusCode === 429 && attempt < embedMaxRetries - 1) {
+          const waitMs = embedRateDelay * (attempt + 1);
+          console.warn(`[GenerateThemes] Rate limit Cohere, retry ${attempt + 1}/${embedMaxRetries - 1} dans ${waitMs}ms`);
+          await new Promise((resolve) => setTimeout(resolve, waitMs));
+          continue;
+        }
+        if (attempt < embedMaxRetries - 1) {
+          const waitMs = embedBaseDelay * (attempt + 1);
+          console.warn(`[GenerateThemes] Erreur Cohere, retry ${attempt + 1}/${embedMaxRetries - 1} dans ${waitMs}ms`, err);
+          await new Promise((resolve) => setTimeout(resolve, waitMs));
+          continue;
+        }
+        throw err;
+      }
+    }
+
     if (!queryEmbedding) {
-      throw new Error("Cohere n'a pas retourné d'embedding pour la requête thèmes.");
+      throw new Error("Impossible de récupérer l'embedding de la requête thèmes.");
     }
 
     const { data: sections, error: matchError } = await supabase.rpc('match_document_sections', {
@@ -96,6 +185,8 @@ export async function POST(req: Request) {
       match_count: Math.max(EMBEDDING_CONFIG.MATCH_COUNT, 20),
       p_user_id: user.id,
       p_document_path: documentPath,
+      p_page_start: pageStart,
+      p_page_end: pageEnd,
     });
 
     if (matchError) throw new Error(matchError.message);
@@ -103,8 +194,19 @@ export async function POST(req: Request) {
       return NextResponse.json({ themes: [] }, { status: 200 });
     }
 
-    const context = (sections as { content: string }[])
-      .map((s) => s.content)
+    const context = (sections as SectionRow[])
+      .map((section) => {
+        const start = section.page_start ?? null;
+        const end = section.page_end ?? null;
+        if (start || end) {
+          const label = start && end && start !== end
+            ? `Pages ${start}-${end}`
+            : `Page ${start ?? end}`;
+          return `${label} :
+${section.content}`;
+        }
+        return section.content;
+      })
       .join('\n\n---\n\n')
       .slice(0, 12000); // limite le contexte
 
@@ -129,7 +231,8 @@ ${context}
     while (retries <= maxRetries) {
       try {
         const groq = new Groq({ apiKey: groqKey });
-        completion = await groq.chat.completions.create({
+        const groqStartedAt = Date.now();
+        const localCompletion = await groq.chat.completions.create({
           messages: [
             { role: 'system', content: 'Tu réponds uniquement avec un JSON valide.' },
             { role: 'user', content: prompt },
@@ -137,6 +240,25 @@ ${context}
           model: 'llama-3.1-8b-instant',
           temperature: 0.2,
           response_format: { type: 'json_object' },
+        });
+        completion = localCompletion;
+
+        const groqLatencyMs = Date.now() - groqStartedAt;
+        const groqUsage = extractGroqUsage(localCompletion.usage);
+        await recordAiUsage({
+          provider: 'groq',
+          model: localCompletion.model ?? 'llama-3.1-8b-instant',
+          promptTokens: groqUsage.promptTokens,
+          completionTokens: groqUsage.completionTokens,
+          totalTokens: groqUsage.totalTokens,
+          latencyMs: groqLatencyMs,
+          cost: estimateGroqCost(groqUsage.promptTokens, groqUsage.completionTokens),
+          metadata: {
+            route: 'generate-themes',
+            sections: Array.isArray(sections) ? sections.length : null,
+            attempt: retries,
+          },
+          userId: user.id,
         });
         break; // Succès, sortir de la boucle
       } catch (err: unknown) {

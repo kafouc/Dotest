@@ -6,12 +6,15 @@ import Link from 'next/link';
 import { useEffect } from 'react';
 import gsap from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
+import { trackPageView } from '@/lib/trackPageView';
 
 // metadata retiré car incompatible avec 'use client'. Créer un fichier server `app/vitrine/metadata.ts` si nécessaire.
 
 // Page vitrine utilisant layout "cards" GSAP
 export default function VitrinePage() {
   useEffect(() => {
+    trackPageView('/vitrine');
+
     if (typeof window === 'undefined') return;
     gsap.registerPlugin(ScrollTrigger);
 

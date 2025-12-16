@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { createServerClient, type CookieOptions } from '@supabase/ssr';
+import { touchUserStreak } from '@/lib/streaks';
 
 type Body = {
   flashcardId: string;
@@ -82,6 +83,8 @@ export async function POST(req: Request) {
         due_at: dueAt.toISOString(),
       });
     if (insErr) throw insErr;
+
+    await touchUserStreak(supabase, user.id);
 
     return NextResponse.json({ ok: true, next: dueAt.toISOString() });
   } catch (e: unknown) {

@@ -8,9 +8,10 @@ import EmptyState from './ui/EmptyState';
 
 type Props = {
   documentPath?: string;
+  onActivity?: () => void;
 };
 
-export default function FlashcardStudy({ documentPath }: Props) {
+export default function FlashcardStudy({ documentPath, onActivity }: Props) {
   const [supabase] = useState(() => createSupabaseBrowserClient());
   const [loading, setLoading] = useState(true);
   const [cards, setCards] = useState<FlashcardWithDue[]>([]);
@@ -50,6 +51,7 @@ export default function FlashcardStudy({ documentPath }: Props) {
     
     try {
       await reviewFlashcard(current.id, grade);
+      onActivity?.();
     } catch (e) {
       console.error('Review error:', e);
       return; // Ne continue pas si l'erreur survient
@@ -71,7 +73,7 @@ export default function FlashcardStudy({ documentPath }: Props) {
         // En cas d'erreur, on reste sur la dernière carte
       }
     }
-  }, [current, index, total, supabase, documentPath]);
+  }, [current, index, total, supabase, documentPath, onActivity]);
 
   if (loading) {
     return (

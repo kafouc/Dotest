@@ -1,19 +1,17 @@
-import { NextResponse } from 'next/server';
+// app/api/process-file/route.ts
+// Route mise à jour pour utiliser la nouvelle architecture Next.js serverless
+// Remplace l'appel aux Edge Functions Supabase par les API routes Next.js
 
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-const FUNCTION_NAME = 'embed-worker';
+import { NextResponse } from 'next/server';
 
 export async function POST(req: Request) {
   try {
-    if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
-      throw new Error(
-        "Les clés Supabase sont manquantes dans les variables d'environnement."
-      );
-    }
-
     const body = await req.json();
-    const { filePath, documentId, mimeType } = body as { filePath?: string; documentId?: number; mimeType?: string };
+    const { filePath, documentId, mimeType } = body as { 
+      filePath?: string; 
+      documentId?: number; 
+      mimeType?: string; 
+    };
 
     if (!filePath || !documentId) {
       return NextResponse.json(
@@ -22,7 +20,7 @@ export async function POST(req: Request) {
       );
     }
 
-    // Vérifie le type et détermine la stratégie de traitement
+    // Vérifier le type de fichier supporté
     const type = (mimeType || '').toLowerCase();
     const lowerPath = (filePath || '').toLowerCase();
     const supported = [
@@ -30,49 +28,69 @@ export async function POST(req: Request) {
       'application/vnd.openxmlformats-officedocument.wordprocessingml.document', // .docx
       'application/vnd.openxmlformats-officedocument.presentationml.presentation', // .pptx
     ];
-    if (!supported.includes(type)) {
-      // Fallback par extension si le type MIME est manquant côté navigateur
-      if (lowerPath.endsWith('.pdf')) {
-        // ok
-      } else if (lowerPath.endsWith('.docx')) {
-        // ok
-      } else if (lowerPath.endsWith('.pptx')) {
-        // ok
-      } else {
+    
+    const isSupported = supported.includes(type) || 
+                       lowerPath.endsWith('.pdf') || 
+                       lowerPath.endsWith('.docx') || 
+                       lowerPath.endsWith('.pptx');
+
+    if (!isSupported) {
       return NextResponse.json(
         { error: 'Type de fichier non pris en charge (PDF, DOCX, PPTX).' },
         { status: 415 }
       );
-      }
     }
 
-    // Pour .docx et .pptx, la fonction `embed-worker` doit extraire le texte
-    const edgeFunctionUrl = `${SUPABASE_URL}/functions/v1/${FUNCTION_NAME}`;
+    // Déterminer l'origine pour l'appel interne (dev -> localhost, prod -> domaine Vercel)
+    const defaultDevPort = process.env.PORT ?? '3000';
+    const devOrigin = `http://127.0.0.1:${defaultDevPort}`;
+    const vercelOrigin = process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null;
+    const configuredOrigin = process.env.NEXT_PUBLIC_SITE_URL;
 
-    const functionResponse = await fetch(edgeFunctionUrl, {
+    const origin = configuredOrigin || vercelOrigin || devOrigin;
+    const extractUrl = `${origin}/api/pdf/extract`;
+    
+    const headers: HeadersInit = {
+      'Content-Type': 'application/json',
+    };
+
+    const cookieHeader = req.headers.get('cookie');
+    if (cookieHeader) {
+      headers['Cookie'] = cookieHeader;
+    }
+
+    const extractResponse = await fetch(extractUrl, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
-      },
-      body: JSON.stringify({ filePath, documentId, mimeType: type }),
+      headers,
+      body: JSON.stringify({ 
+        filePath, 
+        documentId, 
+        mimeType: type 
+      }),
     });
 
-    if (!functionResponse.ok) {
-      const errorText = await functionResponse.text();
-      console.error('Erreur Edge Function:', errorText);
+    if (!extractResponse.ok) {
+      const errorData = await extractResponse.json();
       throw new Error(
-        `Échec du démarrage de l'Edge Function. Statut: ${functionResponse.status}`
+        errorData.error || `Échec de l'extraction. Statut: ${extractResponse.status}`
       );
     }
 
+    const result = await extractResponse.json();
+
     return NextResponse.json(
-      { success: true, message: 'Analyse démarrée en arrière-plan' },
+      { 
+        success: true, 
+        message: 'Analyse démarrée en arrière-plan',
+        chunks: result.chunks 
+      },
       { status: 200 }
     );
   } catch (error: unknown) {
     console.error('Erreur API Process File:', error);
-    const errorMessage = error instanceof Error ? error.message : 'Erreur interne lors du déclenchement de l\'analyse.';
+    const errorMessage = error instanceof Error 
+      ? error.message 
+      : 'Erreur interne lors du déclenchement de l\'analyse.';
     return NextResponse.json({ error: errorMessage }, { status: 500 });
   }
 }

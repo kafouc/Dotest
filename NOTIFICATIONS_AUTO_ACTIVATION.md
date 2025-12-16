@@ -167,6 +167,55 @@ useEffect(() => {
 - [ ] Aller dans Paramètres
 - [ ] Vérifier le message d'avertissement pour les permissions bloquées
 
+## 🔥 Rappels automatiques de la flamme (cron Supabase)
+
+Un Edge Function `streak-reminder` envoie désormais jusqu'à **trois notifications quotidiennes** (matin, midi, soir) aux utilisateurs qui n'ont pas encore maintenu leur flamme.
+
+### Déploiement
+
+1. Déployer la fonction :
+   ```bash
+   supabase functions deploy streak-reminder --project-ref <project-ref>
+   ```
+2. Définir les variables d'environnement côté Supabase :
+   - `NEXT_PUBLIC_VAPID_PUBLIC_KEY`
+   - `VAPID_PRIVATE_KEY`
+   - `STREAK_REMINDER_SECRET` (token utilisé par le cron)
+3. (Optionnel mais recommandé) Lancer un test manuel :
+   ```bash
+   curl -X POST \
+     -H "Authorization: Bearer $STREAK_REMINDER_SECRET" \
+     "https://<project-ref>.functions.supabase.co/streak-reminder?window=morning"
+   ```
+
+### Planification via cron Supabase
+
+`supabase/config.toml` contient trois entrées `functions.schedules` (7h, 13h, 19h). Après `supabase start` / `supabase db reset`, elles sont créées automatiquement en local. Pour l'environnement cloud, exécuter :
+
+```bash
+supabase functions schedule patch streak-reminder-morning \
+  --cron "0 7 * * *" \
+  --url "/streak-reminder?window=morning" \
+  --headers "Authorization=Bearer $STREAK_REMINDER_SECRET"
+
+supabase functions schedule patch streak-reminder-midday \
+  --cron "0 13 * * *" \
+  --url "/streak-reminder?window=midday" \
+  --headers "Authorization=Bearer $STREAK_REMINDER_SECRET"
+
+supabase functions schedule patch streak-reminder-evening \
+  --cron "0 19 * * *" \
+  --url "/streak-reminder?window=evening" \
+  --headers "Authorization=Bearer $STREAK_REMINDER_SECRET"
+```
+
+### Ce que fait la fonction
+
+- ignore les utilisateurs qui ont déjà révisé aujourd'hui (`last_active_date`)
+- évite les doublons : une fenêtre par jour, maximum 3 rappels
+- supprime les `push_subscriptions` expirées (HTTP 410)
+- journalise un résumé JSON (`sent`, `skipped`, `errors`)
+
 ## 🚀 Prochaines étapes suggérées
 
 ### Court terme :

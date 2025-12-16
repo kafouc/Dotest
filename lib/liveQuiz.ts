@@ -1,4 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { fetchUserPlan } from './subscriptions';
+import { PLAN_LIMITS } from './constants';
+import type { SubscriptionPlan } from './subscriptions';
 
 export type SharedQuiz = {
   id: string;
@@ -60,11 +63,16 @@ export async function createSharedQuiz(
     questions: unknown[];
   }
 ): Promise<SharedQuiz> {
+  const planRow = await fetchUserPlan(supabase);
+  const plan = (planRow?.plan as SubscriptionPlan | null) ?? 'freemium';
+  const limits = PLAN_LIMITS[plan] ?? PLAN_LIMITS.freemium;
+
   const { data, error } = await supabase
     .from('shared_quizzes')
     .insert({
       title: params.title,
       questions: params.questions,
+      max_participants: limits.liveParticipants,
       is_active: true,
     })
     .select()

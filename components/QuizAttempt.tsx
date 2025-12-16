@@ -9,17 +9,29 @@ import { QUIZ_CONFIG } from '@/lib/constants';
 import { calculateQuizScore, isAnswerCorrect } from '@/lib/utils';
 import { initCardState, scheduleReview, getMetrics } from '@/lib/fsrs';
 
+type GateResultsOptions = {
+  requireAuth: boolean;
+  signupRedirect: string;
+  headline?: string;
+  message?: string;
+  ctaLabel?: string;
+};
+
 // Props que le composant reçoit
 type QuizAttemptProps = {
   quizQuestions: QuizQuestion[];
   onQuizEnd: () => void; // Fonction pour retourner au générateur
   context?: AttemptContext;
+  gateResults?: GateResultsOptions;
+  enableShareChallenge?: boolean;
 };
 
 export default function QuizAttempt({
   quizQuestions,
   onQuizEnd,
   context,
+  gateResults,
+  enableShareChallenge = true,
 }: QuizAttemptProps) {
   // --- États ---
   const [supabase] = useState(() => createSupabaseBrowserClient()); // Client Supabase
@@ -30,6 +42,15 @@ export default function QuizAttempt({
   const [quizFinished, setQuizFinished] = useState(false); // Statut du quiz
   const [score, setScore] = useState(0); // Score final
   const [documentPathOnStart] = useState(context?.document_path); // Figer le document au démarrage
+  const gateRequiresAuth = gateResults?.requireAuth ?? false;
+  const [authStatus, setAuthStatus] = useState<'unknown' | 'authenticated' | 'unauthenticated' | 'error'>('unknown');
+  const [shareState, setShareState] = useState<{
+    status: 'idle' | 'loading' | 'success' | 'error';
+    link: string | null;
+    message: string | null;
+    error: string | null;
+  }>({ status: 'idle', link: null, message: null, error: null });
+  const [shareCopied, setShareCopied] = useState(false);
 
   const currentQuestion = quizQuestions[currentQuestionIndex];
 
@@ -74,81 +95,181 @@ export default function QuizAttempt({
     }, QUIZ_CONFIG.ANSWER_FEEDBACK_DELAY_MS);
   };
 
-  // --- Effet de fin de quiz (Calcul + Sauvegarde) ---
+    // --- Effet de fin de quiz (Calcul + Sauvegarde) ---
+    useEffect(() => {
+      if (!quizFinished) return;
+
+      let isMounted = true;
+      const finishedAt = new Date().toISOString();
+
+      const currentScore = calculateQuizScore(quizQuestions, selectedAnswers);
+      setScore(currentScore);
+
+      const answersForStorage: AnswerInput[] = quizQuestions.map((question, index) => {
+        const userAnswerRaw = selectedAnswers[index];
+        const normalizedAnswer = Array.isArray(userAnswerRaw)
+          ? userAnswerRaw.join(',')
+          : (userAnswerRaw as string | undefined) ?? null;
+        const correctRaw = 'reponses_correctes' in question ? question.reponses_correctes ?? [] : question.reponse_correcte ?? '';
+        const normalizedCorrect = Array.isArray(correctRaw) ? correctRaw.join(',') : correctRaw;
+        const isCorrect = isAnswerCorrect(
+          Array.isArray(userAnswerRaw) ? userAnswerRaw.join(',') : (userAnswerRaw as string) ?? null,
+          correctRaw as string | string[]
+        );
+
+        return {
+          questionIndex: index,
+          question: question.question,
+          answer: normalizedAnswer,
+          correctAnswer: normalizedCorrect,
+          justification: question.justification,
+          isCorrect,
+        };
+      });
+
+      const persistAttempt = async () => {
+        if (!isMounted) return;
+
+        if (context?.document_path && documentPathOnStart && context.document_path !== documentPathOnStart) {
+          console.warn('Document changé, sauvegarde annulée');
+          return;
+        }
+
+        try {
+          await recordQuizAttempt(supabase, {
+            answers: answersForStorage,
+            context: context ?? { num_questions: quizQuestions.length },
+            completedAt: finishedAt,
+          });
+        } catch (error) {
+          console.error('Erreur lors de la sauvegarde détaillée du quiz:', error);
+        }
+
+        try {
+          const now = new Date();
+          const fsrsPreview = answersForStorage.map((answer) => {
+            const baseState = initCardState();
+            const rating = answer.isCorrect ? 4 : 1;
+            const scheduled = scheduleReview(baseState, rating, now);
+            const metrics = getMetrics(baseState, now);
+            return {
+              index: answer.questionIndex,
+              nextReviewAt: scheduled.nextReviewAt,
+              nextIntervalDays: scheduled.nextIntervalDays,
+              stability: scheduled.newStability,
+              retrievability: metrics.R,
+            };
+          });
+          console.log('FSRS schedule preview:', fsrsPreview);
+        } catch (error) {
+          console.error('Erreur lors du calcul FSRS:', error);
+        }
+      };
+
+      persistAttempt();
+
+      return () => {
+        isMounted = false;
+      };
+    }, [
+      quizFinished,
+      quizQuestions,
+      selectedAnswers,
+      supabase,
+      context,
+      documentPathOnStart,
+    ]);
+
   useEffect(() => {
-    // Ne s'exécute que lorsque le quiz vient de se terminer
-    if (!quizFinished) return;
+    if (!quizFinished || !gateRequiresAuth) return;
 
-    let isMounted = true;
+    let active = true;
 
-    // 1. Calculer le score
-    const currentScore = calculateQuizScore(quizQuestions, selectedAnswers);
-    setScore(currentScore);
-
-    // 2. Sauvegarder la tentative dans Supabase (fonction asynchrone)
-    const saveAttempt = async () => {
-      if (!isMounted) return;
-      
-      // Vérification de sécurité: le document n'a pas changé pendant le quiz
-      if (context?.document_path && documentPathOnStart && context.document_path !== documentPathOnStart) {
-        console.warn('Document changé, sauvegarde annulée');
-        return;
-      }
-      
+    const run = async () => {
       try {
-        // Prépare les réponses détaillées
-        const answers: AnswerInput[] = quizQuestions.map((q, idx) => {
-          const userAnswer = (selectedAnswers[idx] ?? null) as string | null;
-          // Utiliser le bon format pour l'évaluation et l'export
-          const correctForEval = 'reponses_correctes' in q ? q.reponses_correctes : q.reponse_correcte;
-          const correctForStore = Array.isArray(correctForEval) ? correctForEval.join(',') : correctForEval;
-          return {
-            questionIndex: idx,
-            question: q.question,
-            answer: userAnswer,
-            correctAnswer: correctForStore,
-            justification: q.justification,
-            isCorrect: isAnswerCorrect(userAnswer, correctForEval as string | string[]),
-          };
-        });
+        const session = await supabase.auth.getSession();
+        if (!active) return;
+        setAuthStatus(session.data.session?.user ? 'authenticated' : 'unauthenticated');
+      } catch {
+        if (!active) return;
+        setAuthStatus('error');
+      }
+    };
 
-        const now = new Date();
-        // Compute FSRS schedule suggestions per question (not persisted yet)
-        const fsrs = quizQuestions.map((q, idx) => {
-          const isCorrect = isAnswerCorrect((selectedAnswers[idx] ?? null) as string | null, ('reponse_correcte' in q ? q.reponse_correcte : ''));
-          const rating = isCorrect ? 3 : 1; // Easy if correct, Hard if wrong (simplified)
-          const state = initCardState(now);
-          const scheduled = scheduleReview(state, rating, now);
-          const metrics = getMetrics(state, now);
-          return {
-            index: idx,
-            nextReviewAt: scheduled.nextReviewAt,
-            nextIntervalDays: scheduled.nextIntervalDays,
-            stability: scheduled.newStability,
-            retrievability: metrics.R,
-          };
-        });
+    run();
+    return () => {
+      active = false;
+    };
+  }, [quizFinished, gateRequiresAuth, supabase]);
 
-        await recordQuizAttempt(supabase, {
-          answers,
-          context: context ?? { num_questions: quizQuestions.length },
-        });
+  const handleShareChallenge = async () => {
+    if (!enableShareChallenge || shareState.status === 'loading') return;
 
-        // Optionally: we could store fsrs per item in a dedicated table. For now, log.
-        console.log('FSRS schedule preview:', fsrs);
-      } catch (e) {
-        if (isMounted) {
-          console.error('Erreur lors de la sauvegarde détaillée du quiz:', e);
+    const promptLabel = 'Ton prénom ou pseudo pour le défi ? (optionnel)';
+    const authorNameRaw = typeof window !== 'undefined' ? window.prompt(promptLabel, '') : '';
+
+    if (authorNameRaw === null) {
+      return;
+    }
+
+    setShareState({ status: 'loading', link: null, message: null, error: null });
+    setShareCopied(false);
+
+    try {
+      const finalScore = resolvedScore;
+      const response = await fetch('/api/challenge', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          quiz: quizQuestions,
+          score: finalScore,
+          total: quizQuestions.length,
+          authorName: authorNameRaw?.trim() || null,
+        }),
+      });
+
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({ error: 'Erreur inattendue.' }));
+        throw new Error(err?.error || 'Impossible de créer le défi.');
+      }
+
+      const data = (await response.json()) as { shareCode: string };
+      const origin = typeof window !== 'undefined' ? window.location.origin : '';
+      const link = `${origin}/challenge/${data.shareCode}`;
+      const baseMessage = authorNameRaw && authorNameRaw.trim().length > 0
+        ? `${authorNameRaw.trim()} a fait ${finalScore}/${quizQuestions.length} sur ce quiz. Viens me défier !`
+        : `J'ai fait ${finalScore}/${quizQuestions.length} sur ce quiz. Viens me défier !`;
+      const fullMessage = `${baseMessage} ${link}`.trim();
+
+      setShareState({ status: 'success', link, message: fullMessage, error: null });
+
+      if (typeof navigator !== 'undefined' && typeof navigator.share === 'function') {
+        try {
+          await navigator.share({ text: fullMessage, url: link });
+        } catch {
+          // Ignorer, l'utilisateur peut simplement annuler le partage natif
         }
       }
-    };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Impossible de créer le défi.';
+      setShareState({ status: 'error', link: null, message: null, error: message });
+    }
+  };
 
-    saveAttempt(); // Appelle la fonction de sauvegarde
-
-    return () => {
-      isMounted = false;
-    };
-  }, [quizFinished, quizQuestions, selectedAnswers, supabase, context, documentPathOnStart]);
+  const handleCopyShare = async () => {
+    const text = shareState.message ?? shareState.link;
+    if (!text || typeof navigator === 'undefined' || !navigator.clipboard) {
+      setShareState((prev) => ({ ...prev, error: prev.error ?? 'Copiez le lien manuellement.' }));
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(text);
+      setShareCopied(true);
+      setTimeout(() => setShareCopied(false), 2000);
+    } catch {
+      setShareState((prev) => ({ ...prev, error: prev.error ?? 'Copie impossible, utilisez le copier-coller.' }));
+    }
+  };
 
   // --- Animations Framer Motion ---
   const questionVariants = {
@@ -157,10 +278,65 @@ export default function QuizAttempt({
     exit: { opacity: 0, x: -100 }, // Disparaît à gauche
   };
 
+  const resolvedScore = quizFinished
+    ? (score || calculateQuizScore(quizQuestions, selectedAnswers))
+    : score;
+
   // --- Rendu JSX ---
 
   // Affichage 1 : Écran des Résultats
   if (quizFinished) {
+    if (gateRequiresAuth) {
+      if (authStatus === 'unknown') {
+        return (
+          <div className="p-6 bg-white rounded-lg shadow-lg text-center">
+            <p className="text-gray-600 text-sm">Chargement des résultats...</p>
+          </div>
+        );
+      }
+
+      if (authStatus !== 'authenticated') {
+        const headline = gateResults?.headline ?? 'Crée un compte pour voir ton score';
+        const defaultMessage = gateResults?.message ?? 'Connecte-toi ou inscris-toi pour découvrir ton résultat et débloquer la suite.';
+        const message = authStatus === 'error'
+          ? 'Une erreur est survenue. Connecte-toi pour continuer.'
+          : defaultMessage;
+        const ctaLabel = gateResults?.ctaLabel ?? "Je m'inscris";
+        const signupTarget = gateResults?.signupRedirect ?? '/signup';
+
+        return (
+          <div className="p-6 sm:p-8 bg-white rounded-xl shadow-xl text-center">
+            <h2 className="text-xl sm:text-2xl font-heading font-bold text-brand-dark mb-3">
+              {headline}
+            </h2>
+            <p className="text-sm sm:text-base text-gray-600 mb-6">
+              {message}
+            </p>
+            <div className="flex flex-col sm:flex-row sm:justify-center gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  if (typeof window !== 'undefined') {
+                    window.location.href = signupTarget;
+                  }
+                }}
+                className="w-full sm:w-auto px-6 py-3 bg-brand-yellow text-brand-dark font-heading font-bold rounded-md shadow-sm hover:bg-brand-yellow-dark transition-colors"
+              >
+                {ctaLabel}
+              </button>
+              <button
+                type="button"
+                onClick={onQuizEnd}
+                className="w-full sm:w-auto px-6 py-3 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
+              >
+                Retour
+              </button>
+            </div>
+          </div>
+        );
+      }
+    }
+
     return (
       <motion.div
         key="results"
@@ -174,7 +350,7 @@ export default function QuizAttempt({
         <p className="text-2xl sm:text-4xl font-bold mb-4 sm:mb-6">
           Votre Score :
           <span className="text-brand-teal-dark ml-2">
-            {score} / {quizQuestions.length}
+            {resolvedScore} / {quizQuestions.length}
           </span>
         </p>
 
@@ -217,6 +393,49 @@ export default function QuizAttempt({
             );
           })}
         </div>
+
+        {enableShareChallenge && (
+          <div className="text-left mt-4 sm:mt-6 bg-white/80 border border-brand-yellow rounded-lg p-4">
+            <h3 className="text-base font-heading font-semibold text-brand-dark mb-2">
+              Défie un ami
+            </h3>
+            <p className="text-sm text-gray-600 mb-3">
+              Partage ton score et invite un ami à essayer de faire mieux.
+            </p>
+            <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+              <button
+                type="button"
+                onClick={handleShareChallenge}
+                disabled={shareState.status === 'loading'}
+                className="w-full sm:w-auto px-4 py-2 bg-brand-teal text-white rounded-md font-semibold shadow-sm hover:bg-brand-teal-dark disabled:opacity-50"
+              >
+                {shareState.status === 'loading' ? 'Création...' : 'Générer un lien'}
+              </button>
+              {shareState.status === 'success' && (
+                <button
+                  type="button"
+                  onClick={handleCopyShare}
+                  className="w-full sm:w-auto px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-50"
+                >
+                  {shareCopied ? 'Lien copié !' : 'Copier le message'}
+                </button>
+              )}
+            </div>
+            {shareState.status === 'success' && (
+              <div className="mt-3">
+                <textarea
+                  className="w-full p-3 border border-gray-300 rounded-md text-sm text-gray-700"
+                  rows={3}
+                  value={shareState.message ?? ''}
+                  readOnly
+                />
+              </div>
+            )}
+            {shareState.status === 'error' && shareState.error && (
+              <p className="mt-3 text-sm text-red-600">{shareState.error}</p>
+            )}
+          </div>
+        )}
 
         {/* Bouton pour recommencer */}
         <button

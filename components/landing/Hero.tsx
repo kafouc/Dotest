@@ -1,129 +1,139 @@
-'use client';
+"use client";
 
-import Image from 'next/image';
-import { useEffect, useState } from 'react';
-import InstallPWAButton from '@/components/InstallPWAButton';
+import Image from "next/image";
+import { useEffect, useMemo, useState } from "react";
+
+type Shape = {
+  x: number;
+  y: number;
+  size: number;
+  duration: number;
+  delay: number;
+  hue: number;
+};
+
+const SHAPE_COUNT = 32;
 
 export default function Hero() {
   const [isTransforming, setIsTransforming] = useState(false);
-  const [shapes, setShapes] = useState<Array<{ type: 'square' | 'circle' | 'triangle'; x: number; y: number; size: number; delay: number }>>([]);
+  const shapesPalette = useMemo<Shape[]>(() => {
+    return Array.from({ length: SHAPE_COUNT }, () => ({
+      x: Math.random() * 100,
+      y: Math.random() * 100,
+      size: Math.random() * 16 + 12,
+      duration: Math.random() * 12 + 16,
+      delay: Math.random() * 4,
+      hue: 40 + Math.random() * 120,
+    }));
+  }, []);
 
   useEffect(() => {
-    // Générer des formes géométriques aléatoires pour le background
-    const generateShapes = () => {
-      const newShapes: Array<{ type: 'square' | 'circle' | 'triangle'; x: number; y: number; size: number; delay: number }> = [];
-      const types: ('square' | 'circle' | 'triangle')[] = ['square', 'circle', 'triangle'];
-      
-      for (let i = 0; i < 50; i++) {
-        newShapes.push({
-          type: types[Math.floor(Math.random() * types.length)],
-          x: Math.random() * 100,
-          y: Math.random() * 100,
-          size: Math.random() * 8 + 4, // Entre 4px et 12px
-          delay: Math.random() * 2,
-        });
-      }
-      setShapes(newShapes);
-    };
+    setIsTransforming(true);
+    let animationTimeout: ReturnType<typeof setTimeout> | undefined = setTimeout(
+      () => setIsTransforming(false),
+      2600,
+    );
 
-    generateShapes();
-
-    // Animation de transformation PDF → Card
-    const interval = setInterval(() => {
+    const intervalId = setInterval(() => {
       setIsTransforming(true);
-      setTimeout(() => setIsTransforming(false), 3000);
-    }, 5000);
+      if (animationTimeout) {
+        clearTimeout(animationTimeout);
+      }
+      animationTimeout = setTimeout(() => setIsTransforming(false), 2600);
+    }, 5200);
 
-    return () => clearInterval(interval);
+    return () => {
+      clearInterval(intervalId);
+      if (animationTimeout) {
+        clearTimeout(animationTimeout);
+      }
+    };
   }, []);
 
   return (
-    <section className="relative min-h-screen flex items-center justify-center pt-24 md:pt-20 px-4 overflow-hidden">
-      {/* Background avec formes géométriques */}
-      <div className="absolute inset-0 bg-gray-50">
-        {shapes.map((shape, index) => (
+    <section className="relative flex min-h-screen items-center justify-center overflow-hidden px-4 pt-28 md:pt-24">
+      <div className="absolute inset-0 overflow-hidden">
+        <div className="absolute -top-24 left-1/2 h-[420px] w-[420px] -translate-x-1/2 rounded-full bg-gradient-to-br from-brand-yellow/50 via-white/20 to-brand-teal/40 blur-3xl opacity-80 animate-[spin_60s_linear_infinite]" />
+        <div className="absolute bottom-[-160px] right-[-120px] h-[380px] w-[380px] rounded-full bg-gradient-to-br from-white/10 via-brand-teal/30 to-brand-yellow/40 blur-3xl opacity-70 animate-[spin_48s_linear_reverse_infinite]" />
+        <div className="absolute top-1/3 left-[-120px] h-[320px] w-[320px] rounded-full bg-gradient-to-tr from-brand-teal/30 via-white/10 to-brand-yellow/20 blur-3xl opacity-60 animate-[pulse_16s_ease-in-out_infinite]" />
+        {shapesPalette.map((shape, index) => (
           <div
-            key={index}
-            className={`absolute hero-shape ${
-              shape.type === 'square' 
-                ? 'bg-brand-dark' 
-                : shape.type === 'circle' 
-                ? 'bg-brand-dark rounded-full' 
-                : 'bg-brand-dark'
-            } opacity-10`}
+            key={`${shape.x}-${index}`}
+            className="pointer-events-none absolute rounded-full bg-white/10 backdrop-blur-3xl"
             style={{
               left: `${shape.x}%`,
               top: `${shape.y}%`,
               width: `${shape.size}px`,
               height: `${shape.size}px`,
-              animationDelay: `${shape.delay}s`,
-              clipPath: shape.type === 'triangle' ? 'polygon(50% 0%, 0% 100%, 100% 100%)' : 'none',
+              animation: `float-bubble ${shape.duration}s ease-in-out ${shape.delay}s infinite`,
+              background: `linear-gradient(135deg, hsla(${shape.hue}, 80%, 70%, 0.35), hsla(${shape.hue + 20}, 85%, 60%, 0.2))`,
+              boxShadow: "0 10px 40px rgba(69, 191, 154, 0.15)",
             }}
           />
         ))}
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.6),_transparent_65%)]" />
       </div>
 
-      <div className="container mx-auto px-4 relative z-10">
-        <div className="flex flex-col items-center justify-center gap-8 md:gap-12">
-          {/* Texte principal */}
-          <div className="text-center max-w-5xl mx-auto">
-            <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl xl:text-7xl font-heading font-bold text-brand-dark mb-6 md:mb-8 leading-tight">
-              <div className="flex items-center justify-center gap-2 md:gap-3 lg:gap-4 flex-wrap">
-                <span className="block">Etudiez</span>
-                <span className="block">mieux</span>
-                {/* Animation PDF → Card */}
-                <div className="relative w-12 h-12 sm:w-16 sm:h-16 md:w-20 md:h-20 lg:w-28 lg:h-28 flex-shrink-0">
-                  {/* PDF */}
+      <div className="container relative z-20 mx-auto flex max-w-6xl flex-col items-center gap-12 px-4">
+        <div className="w-full max-w-4xl rounded-[40px] border border-white/40 bg-white/25 p-8 shadow-[0_25px_120px_-40px_rgba(51,51,51,0.55)] backdrop-blur-[28px] transition duration-500 hover:border-white/60 hover:bg-white/30 md:p-12">
+          <div className="flex flex-col items-center gap-8 text-center md:gap-10">
+            <div className="space-y-4">
+              <div className="flex flex-wrap items-center justify-center gap-3 text-brand-dark">
+                <span className="text-3xl font-heading font-semibold sm:text-4xl md:text-5xl lg:text-6xl xl:text-7xl">Etudiez</span>
+                <span className="relative inline-flex items-center justify-center">
+                  <span className="absolute inset-0 rounded-full bg-brand-yellow/70 blur-3xl opacity-70" />
+                  <span className="relative text-3xl font-heading font-semibold sm:text-4xl md:text-5xl lg:text-6xl xl:text-7xl">mieux</span>
+                </span>
+                <div className="relative h-14 w-14 flex-shrink-0 sm:h-16 sm:w-16 md:h-20 md:w-20 lg:h-24 lg:w-24">
                   <Image
                     src="/images/pdf.png"
                     alt="PDF"
                     width={120}
                     height={120}
-                    className={`absolute inset-0 w-full h-full object-contain transition-all duration-2500 ease-in-out ${
-                      isTransforming 
-                        ? 'opacity-0 scale-75 rotate-12 translate-x-4' 
-                        : 'opacity-100 scale-100 rotate-0 translate-x-0'
+                    className={`absolute inset-0 h-full w-full object-contain transition-all duration-[2500ms] ease-in-out ${
+                      isTransforming ? "scale-75 opacity-0 blur-sm" : "scale-100 opacity-100"
                     }`}
                     priority
                     unoptimized
                   />
-                  {/* Quiz Card */}
                   <Image
                     src="/images/quiz.png"
                     alt="Quiz"
                     width={120}
                     height={120}
-                    className={`absolute inset-0 w-full h-full object-contain transition-all duration-2500 ease-in-out ${
-                      isTransforming 
-                        ? 'opacity-100 scale-100 rotate-0 translate-x-0' 
-                        : 'opacity-0 scale-75 -rotate-12 -translate-x-4'
+                    className={`absolute inset-0 h-full w-full object-contain transition-all duration-[2500ms] ease-in-out ${
+                      isTransforming ? "scale-100 opacity-100" : "-translate-y-4 scale-75 opacity-0"
                     }`}
                     priority
                     unoptimized
                   />
                 </div>
-                <span className="block">avec</span>
+                <span className="text-3xl font-heading font-semibold sm:text-4xl md:text-5xl lg:text-6xl xl:text-7xl">avec</span>
               </div>
-              <div className="flex items-center justify-center gap-2 mt-2">
-                <span className="block relative">
-                  l&apos;ia
-                  <span className="absolute -bottom-1 left-0 right-0 h-0.5 md:h-1 bg-brand-yellow transform -skew-x-12"></span>
+              <div className="flex items-center justify-center gap-2 text-brand-dark">
+                <span className="relative inline-flex text-3xl font-heading uppercase tracking-[0.4em] sm:text-4xl md:text-5xl">
+                  l&apos;IA
+                  <span className="absolute -bottom-3 left-0 right-0 h-2 rounded-full bg-gradient-to-r from-brand-yellow/80 via-white/50 to-brand-teal/70 blur" />
                 </span>
               </div>
-            </h1>
-            <p className="text-base sm:text-lg md:text-xl lg:text-2xl text-gray-700 mb-6 md:mb-8 max-w-2xl mx-auto px-4">
+            </div>
+
+            <p className="max-w-2xl text-base text-brand-dark-lighter sm:text-lg md:text-xl lg:text-2xl">
               Transformez vos documents en quiz interactifs et révisez efficacement avec l&apos;intelligence artificielle.
             </p>
-            <div className="flex flex-col sm:flex-row gap-3 md:gap-4 justify-center px-4 items-stretch sm:items-center">
+
+            <div className="flex w-full flex-col items-center justify-center">
               <a
                 href="/signup"
-                className="px-6 md:px-8 py-3 md:py-4 bg-brand-yellow hover:bg-brand-yellow-dark text-brand-dark font-semibold rounded-full text-base md:text-lg transition-all duration-200 min-h-[44px] flex items-center justify-center"
-                style={{ backgroundColor: '#fbbf1d' }}
+                className="group flex min-h-[48px] items-center justify-center rounded-full bg-gradient-to-r from-brand-yellow via-brand-yellow-dark to-brand-teal px-10 py-3 text-base font-semibold text-brand-dark shadow-[0_20px_40px_-20px_rgba(251,191,29,0.65)] transition duration-300 hover:scale-[1.02] hover:shadow-[0_30px_60px_-24px_rgba(45,143,111,0.55)] md:min-h-[56px] md:px-12 md:text-lg"
               >
-                Essayer gratuitement
+                Commencer
               </a>
-              <InstallPWAButton className="px-6 md:px-8 py-3 md:py-4 bg-white hover:bg-gray-50 text-brand-dark font-semibold rounded-full text-base md:text-lg transition-all duration-200 border-2 border-brand-yellow min-h-[44px] flex items-center justify-center" />
             </div>
+
+            <p className="text-xs uppercase tracking-[0.3em] text-brand-dark-lighter md:text-sm">
+              Sans carte bancaire • Accès immédiat
+            </p>
           </div>
         </div>
       </div>

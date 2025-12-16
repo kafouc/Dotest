@@ -4,6 +4,8 @@ import { createServerClient } from '@supabase/ssr';
 import { CohereClient } from 'cohere-ai';
 import { extractText } from 'unpdf';
 import { EMBEDDING_CONFIG, AI_MODELS } from '@/lib/constants';
+import { recordAiUsage } from '@/lib/metricsLogger';
+import { extractCohereTokenUsage, estimateCohereEmbedCost } from '@/lib/aiUsage';
 
 // --- Initialisation du client Cohere ---
 if (!process.env.COHERE_API_KEY) {
@@ -95,6 +97,7 @@ export async function POST(req: Request) {
     );
 
     // 6. Génère les embeddings (vecteurs)
+    const embedStartedAt = Date.now();
     const embedResponse = await cohere.embed({
       texts: textsToEmbed,
       model: AI_MODELS.COHERE_EMBEDDING,
@@ -105,6 +108,24 @@ export async function POST(req: Request) {
     if (!embedResponse.embeddings || embedResponse.embeddings.length === 0) {
       throw new Error("Cohere n'a pas retourné d'embeddings.");
     }
+
+    const embedLatencyMs = Date.now() - embedStartedAt;
+    const cohereUsage = extractCohereTokenUsage(embedResponse);
+    await recordAiUsage({
+      provider: 'cohere',
+      model: AI_MODELS.COHERE_EMBEDDING,
+      promptTokens: cohereUsage.inputTokens,
+      completionTokens: cohereUsage.outputTokens,
+      totalTokens: cohereUsage.totalTokens,
+      latencyMs: embedLatencyMs,
+      cost: estimateCohereEmbedCost(cohereUsage.totalTokens),
+      metadata: {
+        route: 'embed',
+        chunks: textsToEmbed.length,
+        documentPath: filePath,
+      },
+      userId: user.id,
+    });
 
     // 7. Prépare les données
     const sections = textsToEmbed.map((content, index) => {

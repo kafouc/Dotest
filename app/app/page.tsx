@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import type { Session } from '@supabase/supabase-js';
 import { createSupabaseBrowserClient } from '@/lib/supabaseClient';
@@ -19,11 +19,14 @@ import { motion } from 'framer-motion';
 import type { DocumentInfo } from '@/lib/types';
 import { DOCUMENT_STATUS } from '@/lib/constants';
 import { ensureNotificationPermission, registerServiceWorker, subscribePush, sendSubscriptionToServer } from '@/lib/pushManager';
+import { trackPageView } from '@/lib/trackPageView';
+import { fetchUserStreak, type UserStreak } from '@/lib/streaks';
 
 export default function AppHome() {
   const router = useRouter();
   const [supabase] = useState(() => createSupabaseBrowserClient());
   const [session, setSession] = useState<Session | null>(null);
+  const [streak, setStreak] = useState<UserStreak | null>(null);
   const [documents, setDocuments] = useState<DocumentInfo[]>([]);
   const [isLoadingDocs, setIsLoadingDocs] = useState(true);
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
@@ -33,6 +36,36 @@ export default function AppHome() {
   const [showUploadForm, setShowUploadForm] = useState(false);
   const [openDocumentIds, setOpenDocumentIds] = useState<Set<string>>(new Set());
   const [deletingPath, setDeletingPath] = useState<string | null>(null);
+  const userId = session?.user?.id ?? null;
+  const [, startDocumentTransition] = useTransition();
+
+  useEffect(() => {
+    trackPageView('/app');
+  }, []);
+
+  const refreshStreak = useCallback(async () => {
+    if (!userId) {
+      setStreak(null);
+      return;
+    }
+    const data = await fetchUserStreak(supabase, userId);
+    setStreak(data);
+  }, [supabase, userId]);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!userId) {
+      setStreak(null);
+      return;
+    }
+    (async () => {
+      const data = await fetchUserStreak(supabase, userId);
+      if (!cancelled) setStreak(data);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [supabase, userId]);
 
   // Mémorisation de fetchDocuments - supabase ne change jamais donc pas besoin de dépendance
   const fetchDocuments = useCallback(async (isInitialLoad = false) => {
@@ -155,6 +188,7 @@ export default function AppHome() {
   const handleLogout = async () => {
     await supabase.auth.signOut();
     setSession(null);
+    setStreak(null);
   };
 
   const handleCreateNew = () => {
@@ -163,12 +197,14 @@ export default function AppHome() {
   };
 
   const handleSelectDocument = (documentId: string) => {
-    setActiveDocumentId(documentId);
-    setShowUploadForm(false);
-    // Ajouter le document aux documents ouverts s'il n'y est pas déjà
-    setOpenDocumentIds(prev => new Set(prev).add(documentId));
+    startDocumentTransition(() => {
+      setActiveDocumentId(documentId);
+      setShowUploadForm(false);
+      // Ajouter le document aux documents ouverts s'il n'y est pas déjà
+      setOpenDocumentIds((prev) => new Set(prev).add(documentId));
+    });
     // Rafraîchir les données du document et re-rendre la section
-    fetchDocuments(false);
+    void fetchDocuments(false);
   };
 
   const handleCloseDocument = (documentId: string, e: React.MouseEvent) => {
@@ -311,6 +347,7 @@ export default function AppHome() {
         onSelectDocument={handleSelectDocument}
         isMobileMenuOpen={isMobileMenuOpen}
         onCloseMobile={() => setIsMobileMenuOpen(false)}
+        streak={streak}
       />
 
       {/* Main Content Area */}
@@ -463,10 +500,14 @@ export default function AppHome() {
                               documents={documents} 
                               isLoading={isLoadingDocs}
                               activeDocumentPath={activeDoc.path}
+                              onActivity={refreshStreak}
                             />
                           </div>
                           <div className="bg-gray-50 rounded-lg border border-gray-200 p-6">
-                            <RevisionSheet documentPath={activeDoc.path} />
+                            <RevisionSheet
+                              documentPath={activeDoc.path}
+                              onActivity={refreshStreak}
+                            />
                           </div>
                         </div>
                       </div>

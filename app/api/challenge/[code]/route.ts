@@ -1,0 +1,82 @@
+import { NextResponse } from 'next/server';
+import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+
+let cachedClient: SupabaseClient | null = null;
+let initAttempted = false;
+
+function getAdminClient(): SupabaseClient | null {
+  if (typeof window !== 'undefined') {
+    return null;
+  }
+  if (cachedClient) {
+    return cachedClient;
+  }
+  if (initAttempted) {
+    return null;
+  }
+  initAttempted = true;
+
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  if (!supabaseUrl || !serviceKey) {
+    console.warn('[challenge] Missing Supabase credentials (NEXT_PUBLIC_SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY).');
+    return null;
+  }
+
+  cachedClient = createClient(supabaseUrl, serviceKey, {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+    },
+    global: {
+      headers: {
+        'X-Client-Info': 'challenge-api',
+      },
+    },
+  });
+
+  return cachedClient;
+}
+
+export async function GET(
+  _request: Request,
+  { params }: { params: { code: string } }
+) {
+  const client = getAdminClient();
+  if (!client) {
+    return NextResponse.json({ error: 'Supabase non configuré' }, { status: 500 });
+  }
+
+  const shareCode = (params.code ?? '').trim().toUpperCase();
+  if (!shareCode) {
+    return NextResponse.json({ error: 'Code manquant' }, { status: 400 });
+  }
+
+  try {
+    const { data, error } = await client
+      .from('quiz_challenges')
+      .select('quiz, score, total, author_name, created_at')
+      .eq('share_code', shareCode)
+      .single();
+
+    if (error) {
+      if (error.code === 'PGRST116') {
+        return NextResponse.json({ error: 'Défi introuvable.' }, { status: 404 });
+      }
+      throw error;
+    }
+
+    return NextResponse.json({
+      quiz: data.quiz,
+      score: data.score,
+      total: data.total,
+      authorName: data.author_name,
+      createdAt: data.created_at,
+      shareCode,
+    });
+  } catch (err) {
+    console.error('[challenge] Erreur récupération défi:', err);
+    return NextResponse.json({ error: 'Erreur lors du chargement du défi.' }, { status: 500 });
+  }
+}

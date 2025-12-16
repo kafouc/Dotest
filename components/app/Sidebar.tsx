@@ -2,8 +2,10 @@
 
 import Image from 'next/image';
 import Link from 'next/link';
+import { Flame } from 'lucide-react';
 import type { Session, SupabaseClient } from '@supabase/supabase-js';
 import type { DocumentInfo } from '@/lib/types';
+import type { UserStreak } from '@/lib/streaks';
 import DocumentList from '@/components/DocumentList';
 
 type SidebarProps = {
@@ -12,13 +14,14 @@ type SidebarProps = {
   onToggleMinimize: () => void;
   onCreateNew: () => void;
   onLogout: () => void;
-  supabase: SupabaseClient;
+  supabase: SupabaseClient<any, 'public', any>;
   documents: DocumentInfo[];
   isLoadingDocs: boolean;
   onDeleteSuccess: () => void;
   onSelectDocument: (documentId: string) => void;
   isMobileMenuOpen?: boolean;
   onCloseMobile?: () => void;
+  streak?: UserStreak | null;
 };
 
 export default function Sidebar({ 
@@ -34,7 +37,11 @@ export default function Sidebar({
   onSelectDocument,
   isMobileMenuOpen = false,
   onCloseMobile,
+  streak,
 }: SidebarProps) {
+  const currentStreak = streak?.current_streak ?? 0;
+  const streakLabel = currentStreak > 0 ? `${currentStreak} jour${currentStreak > 1 ? 's' : ''}` : '0 jour';
+
   return (
     <aside
       className={`
@@ -104,8 +111,15 @@ export default function Sidebar({
       <div className={`p-4 border-b border-gray-200 ${isMinimized ? 'px-2' : ''}`}>
         {isMinimized ? (
           <div className="flex justify-center">
-            <div className="w-8 h-8 rounded-full bg-brand-yellow flex items-center justify-center text-brand-dark font-semibold text-sm">
-              {session.user.email?.[0]?.toUpperCase() || 'U'}
+            <div className="relative flex items-center justify-center">
+              <div className="w-8 h-8 rounded-full bg-brand-yellow flex items-center justify-center text-brand-dark font-semibold text-sm">
+                {session.user.email?.[0]?.toUpperCase() || 'U'}
+              </div>
+              {currentStreak > 0 && (
+                <div className="absolute -bottom-1 -right-1 flex items-center justify-center rounded-full bg-orange-500 px-1.5 py-0.5 text-[10px] font-semibold text-white shadow-sm">
+                  {currentStreak > 99 ? '99+' : currentStreak}
+                </div>
+              )}
             </div>
           </div>
         ) : (
@@ -115,7 +129,13 @@ export default function Sidebar({
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-sm font-semibold text-brand-dark truncate">{session.user.email}</p>
-              <p className="text-xs text-gray-500">Utilisateur</p>
+              <div className="mt-1 flex items-center gap-1 text-xs text-orange-600">
+                <Flame className="h-4 w-4" aria-hidden="true" />
+                <span className="font-semibold leading-none">{streakLabel}</span>
+                {streak?.last_active_date && (
+                  <span className="text-[10px] text-gray-500">(dernière activité le {new Date(streak.last_active_date).toLocaleDateString('fr-FR')})</span>
+                )}
+              </div>
             </div>
           </div>
         )}

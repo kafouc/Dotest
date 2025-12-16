@@ -4,109 +4,124 @@ import Link from 'next/link';
 
 const plans = [
   {
-    name: 'Gratuit',
+    name: 'Découverte',
     price: '0€',
-    period: '/mois',
-    description: 'Parfait pour essayer la plateforme',
+    period: '',
+    description: 'Idéal pour tester SheetOfPaper en autonomie.',
     features: [
-      'Jusqu\'à 5 documents par mois',
-      'Quiz illimités',
-      'Jusqu\'à 20 participants par session',
-      'Flashcards basiques',
-      'Support communautaire',
+      'Notifications push FSRS incluses',
+      '2 documents / semaine · 100 pages max/document',
+      'Fiches de révision : 1 document/semaine',
+      'Quiz générés : 3/semaine/document',
+      'Sessions live : 10 participants max (sans co-animateur)',
+      'Accès au centre d’aide',
     ],
     cta: 'Commencer gratuitement',
     popular: false,
   },
   {
-    name: 'Pro',
-    price: '19€',
-    period: '/mois',
-    description: 'Pour les enseignants et formateurs actifs',
+    name: 'Pass Partiel',
+    price: '2,99€',
+    period: '/7 jours',
+    description: 'Pour les périodes d’examen ou les ateliers intensifs.',
     features: [
-      'Documents illimités',
-      'Quiz illimités',
-      'Participants illimités',
-      'Flashcards avancées',
-      'Révision espacée (SM-2)',
-      'Support prioritaire',
-      'Statistiques détaillées',
+      '10 documents / semaine · 100 pages max/document',
+      'Notifications push FSRS incluses',
+      'Fiches de révision : 10 documents/semaine',
+      'Quiz générés : 10/semaine/document',
+      'Sessions live : 15 participants max (sans co-animateur)',
+      'Délimitation de pages assistée',
+      'Analytics essentiels',
+      'Accès aux modèles IA intermédiaires',
     ],
-    cta: 'Essayer Pro',
+    cta: 'Activer le Pass Partiel',
     popular: true,
   },
   {
-    name: 'Établissement',
-    price: 'Sur mesure',
-    period: '',
-    description: 'Pour les écoles et organisations',
+    name: 'Passe Sérénité',
+    price: '4,99€',
+    period: '/mois',
+    description: 'Accès complet, conçu pour les formateurs exigeants.',
     features: [
-      'Tout de Pro',
-      'Gestion multi-utilisateurs',
-      'API personnalisée',
-      'Formation dédiée',
-      'Support dédié',
-      'Personnalisation de marque',
+      'Documents illimités · 100 pages max/document',
+      'Notifications push FSRS incluses',
+      'Fiches de révision illimitées (cap 50/mois)',
+      'Quiz générés illimités (cap 50/mois)',
+      'Sessions live illimitées (jusqu\'à 300 participants, sans co-animateur)',
+      'Délimitation de pages avancée',
+      'Analytics complets + exports',
+      'Modèles IA Pro (GPT & associés)',
+      'Support prioritaire 24h',
     ],
-    cta: 'Nous contacter',
+    cta: 'Choisir Sérénité',
     popular: false,
   },
 ];
 
 export default function Pricing() {
   return (
-    <section id="pricing" className="py-12 md:py-20 bg-gradient-to-br from-gray-50 to-brand-teal-light">
+    <section id="pricing" className="relative py-16 md:py-24">
       <div className="container mx-auto px-4">
-        <div className="text-center mb-10 md:mb-16">
-          <h2 className="text-3xl md:text-4xl lg:text-5xl font-heading font-bold text-brand-dark mb-3 md:mb-4">
-            Tarifs simples et transparents
+        <div className="mx-auto mb-12 max-w-4xl text-center md:mb-16">
+          <h2 className="text-3xl md:text-4xl lg:text-5xl font-heading font-bold text-brand-dark mb-4 md:mb-6">
+            Une offre freemium claire pour chaque situation
           </h2>
-          <p className="text-base md:text-xl text-gray-600 max-w-2xl mx-auto px-4">
-            Choisissez le plan qui correspond à vos besoins
+          <p className="text-base md:text-xl text-brand-dark-lighter">
+            Passez du test à l’usage quotidien sans surprise budgétaire. Chaque plan respecte la limite de 100 pages par document.
           </p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 md:gap-8 max-w-6xl mx-auto">
+        <div className="mx-auto grid max-w-6xl grid-cols-1 gap-6 md:grid-cols-3 md:gap-8">
           {plans.map((plan, index) => (
             <div
               key={index}
-              className={`relative p-6 md:p-8 rounded-2xl shadow-lg transition-all duration-300 transform hover:-translate-y-2 ${
+              className={`relative overflow-hidden rounded-3xl border p-6 shadow-[0_25px_80px_-30px_rgba(51,51,51,0.55)] backdrop-blur-3xl transition-all duration-300 hover:-translate-y-2 ${
                 plan.popular
-                  ? 'bg-white border-4 border-brand-yellow md:scale-105'
-                  : 'bg-white border-2 border-gray-200'
+                  ? 'border-white/70 bg-white/45 hover:border-white/80 hover:bg-white/55 md:scale-[1.03]'
+                  : 'border-white/45 bg-white/30 hover:border-white/60 hover:bg-white/40'
               }`}
             >
               {plan.popular && (
-                <div className="absolute -top-3 left-1/2 transform -translate-x-1/2 bg-brand-yellow text-brand-dark px-4 py-1 rounded-full text-sm font-semibold">
-                  Populaire
+                <div className="absolute -top-4 left-1/2 flex -translate-x-1/2 items-center gap-2 rounded-full bg-white/90 px-5 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-brand-dark shadow-[0_18px_48px_-26px_rgba(251,191,29,0.85)]">
+                  Recommandé
                 </div>
               )}
-              <div className="text-center mb-5 md:mb-6">
-                <h3 className="text-xl md:text-2xl font-bold text-brand-dark mb-2">{plan.name}</h3>
-                <div className="flex items-baseline justify-center gap-1">
-                  <span className="text-3xl md:text-4xl font-bold text-brand-dark">{plan.price}</span>
-                  {plan.period && <span className="text-gray-600 text-sm md:text-base">{plan.period}</span>}
+              <div className="text-center md:mb-8">
+                <h3 className="mb-3 text-xl font-bold text-brand-dark md:text-2xl">{plan.name}</h3>
+                <div className="flex items-baseline justify-center gap-2">
+                  <span className="text-3xl font-bold text-brand-dark md:text-4xl">{plan.price}</span>
+                  {plan.period && <span className="text-sm text-brand-dark-lighter md:text-base">{plan.period}</span>}
                 </div>
-                <p className="text-sm md:text-base text-gray-600 mt-2">{plan.description}</p>
+                <p className="mt-3 text-sm text-brand-dark-lighter md:text-base">{plan.description}</p>
               </div>
-              <ul className="space-y-2 md:space-y-3 mb-6 md:mb-8">
+              <ul className="mb-8 space-y-3 text-left">
                 {plan.features.map((feature, idx) => (
-                  <li key={idx} className="flex items-start gap-2">
-                    <span className="text-brand-teal text-lg md:text-xl flex-shrink-0">✓</span>
-                    <span className="text-sm md:text-base text-gray-700">{feature}</span>
+                  <li key={idx} className="flex items-start gap-3 text-sm text-brand-dark-lighter md:text-base">
+                    <span className="mt-1 inline-flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-brand-teal/80 to-brand-yellow/80 text-xs font-bold text-white shadow-[0_10px_25px_-18px_rgba(69,191,154,0.9)]">
+                      ✓
+                    </span>
+                    <span>{feature}</span>
                   </li>
                 ))}
               </ul>
               <Link
-                href={plan.name === 'Établissement' ? 'mailto:kafoumathieu.coulibaly@gmail.com' : '/app'}
-                className="block w-full text-center py-3 rounded-full font-semibold transition-all duration-200 bg-brand-yellow hover:bg-brand-yellow-dark text-brand-dark text-sm md:text-base min-h-[44px] flex items-center justify-center"
-                style={{ backgroundColor: '#fbbf1d' }}
+                href={
+                  plan.name === 'Pass Partiel'
+                    ? '/signup?plan=partial'
+                    : plan.name === 'Passe Sérénité'
+                    ? '/signup?plan=serenite'
+                    : '/signup'
+                }
+                className="group flex min-h-[48px] w-full items-center justify-center rounded-full bg-gradient-to-r from-brand-yellow via-brand-yellow-dark to-brand-teal px-6 py-3 text-sm font-semibold text-brand-dark shadow-[0_20px_42px_-20px_rgba(251,191,29,0.75)] transition duration-300 hover:scale-[1.02] hover:shadow-[0_30px_60px_-24px_rgba(45,143,111,0.55)] md:min-h-[56px] md:text-base"
               >
                 {plan.cta}
               </Link>
             </div>
           ))}
         </div>
+        <p className="mt-10 text-center text-xs uppercase tracking-[0.25em] text-brand-dark-lighter md:mt-14 md:text-sm">
+          Quotas remis à zéro chaque semaine • Changement de plan à la demande
+        </p>
       </div>
     </section>
   );

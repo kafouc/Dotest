@@ -11,6 +11,7 @@ import {
   subscribePush,
   sendSubscriptionToServer,
 } from '@/lib/pushManager';
+import { fetchUserPlan, type SubscriptionPlan } from '@/lib/subscriptions';
 
 export default function SettingsPage() {
   const router = useRouter();
@@ -20,6 +21,10 @@ export default function SettingsPage() {
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [notificationStatus, setNotificationStatus] = useState<'default' | 'granted' | 'denied'>('default');
+  const [plan, setPlan] = useState<SubscriptionPlan>('freemium');
+  const [isPlanLoading, setIsPlanLoading] = useState(true);
+  const [billingError, setBillingError] = useState<string | null>(null);
+  const [billingAction, setBillingAction] = useState<'partial' | 'pro' | 'portal' | null>(null);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -39,6 +44,36 @@ export default function SettingsPage() {
 
     return () => subscription.unsubscribe();
   }, [supabase, router]);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!session) {
+      setPlan('freemium');
+      setIsPlanLoading(false);
+      return;
+    }
+
+    (async () => {
+      setIsPlanLoading(true);
+      setBillingError(null);
+      try {
+        const result = await fetchUserPlan(supabase);
+        if (cancelled) return;
+        setPlan(result?.plan ?? 'freemium');
+      } catch (error) {
+        console.error('Erreur chargement abonnement:', error);
+        if (!cancelled) {
+          setBillingError('Impossible de récupérer votre abonnement. Veuillez réessayer.');
+        }
+      } finally {
+        if (!cancelled) setIsPlanLoading(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [session, supabase]);
 
   // Vérifier l'état des notifications au chargement
   useEffect(() => {
@@ -138,6 +173,60 @@ export default function SettingsPage() {
     return null;
   }
 
+  const planLabels: Record<SubscriptionPlan, string> = {
+    freemium: 'Plan Gratuit',
+    partial: 'Pass Partiel',
+    pro: 'Passe Sérénité',
+  };
+
+  const planNotes: Record<SubscriptionPlan, string> = {
+    freemium: '1 fiche de révision par semaine et 3 quiz par document (50/mois).',
+    partial: 'Générations illimitées par document et quotidiens confortables.',
+    pro: 'Limites étendues, sessions live jusqu’à 300 participants et priorisation.',
+  };
+
+  const startCheckout = async (targetPlan: 'partial' | 'pro') => {
+    setBillingError(null);
+    setBillingAction(targetPlan);
+    try {
+      const response = await fetch('/api/billing/create-checkout-session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ plan: targetPlan }),
+      });
+      const data = await response.json().catch(() => null);
+      if (!response.ok || !data?.url) {
+        throw new Error(data?.error || 'Impossible de lancer le paiement.');
+      }
+      window.location.href = data.url as string;
+    } catch (error) {
+      console.error('Erreur checkout Stripe:', error);
+      setBillingError(error instanceof Error ? error.message : 'Erreur inconnue');
+    } finally {
+      setBillingAction(null);
+    }
+  };
+
+  const openBillingPortal = async () => {
+    setBillingError(null);
+    setBillingAction('portal');
+    try {
+      const response = await fetch('/api/billing/create-portal-session', {
+        method: 'POST',
+      });
+      const data = await response.json().catch(() => null);
+      if (!response.ok || !data?.url) {
+        throw new Error(data?.error || 'Portail de gestion indisponible.');
+      }
+      window.location.href = data.url as string;
+    } catch (error) {
+      console.error('Erreur portail Stripe:', error);
+      setBillingError(error instanceof Error ? error.message : 'Erreur inconnue');
+    } finally {
+      setBillingAction(null);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-4xl mx-auto p-4 sm:p-6">
@@ -233,6 +322,80 @@ export default function SettingsPage() {
                     Pour les activer, vous devez modifier les paramètres de votre navigateur.
                   </p>
                 </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Subscription Section */}
+        <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-4 sm:p-6 mb-4 sm:mb-6">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <div className="flex-1">
+              <h2 className="text-lg sm:text-xl font-semibold text-brand-dark mb-2">Abonnement</h2>
+              {isPlanLoading ? (
+                <p className="text-sm text-gray-500">Chargement de votre plan...</p>
+              ) : (
+                <>
+                  <p className="text-sm text-gray-700">
+                    Plan actuel : <span className="font-semibold text-brand-dark">{planLabels[plan]}</span>
+                  </p>
+                  <p className="mt-2 text-xs text-gray-500">{planNotes[plan]}</p>
+                </>
+              )}
+              {billingError && (
+                <p className="mt-3 rounded-md bg-red-50 border border-red-200 px-3 py-2 text-xs text-red-600">{billingError}</p>
+              )}
+            </div>
+            <div className="flex w-full flex-col gap-2 sm:w-auto min-w-[220px]">
+              {plan === 'freemium' && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => startCheckout('partial')}
+                    disabled={billingAction !== null}
+                    className="w-full rounded-md bg-brand-yellow px-4 py-2 text-sm font-semibold text-brand-dark shadow hover:bg-brand-yellow-dark disabled:opacity-50"
+                  >
+                    {billingAction === 'partial' ? 'Redirection...' : 'Passer au Pass Partiel'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => startCheckout('pro')}
+                    disabled={billingAction !== null}
+                    className="w-full rounded-md border border-brand-teal px-4 py-2 text-sm font-semibold text-brand-teal hover:bg-brand-teal/10 disabled:opacity-50"
+                  >
+                    {billingAction === 'pro' ? 'Redirection...' : 'Passer au Passe Sérénité'}
+                  </button>
+                </>
+              )}
+              {plan === 'partial' && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => startCheckout('pro')}
+                    disabled={billingAction !== null}
+                    className="w-full rounded-md bg-brand-yellow px-4 py-2 text-sm font-semibold text-brand-dark shadow hover:bg-brand-yellow-dark disabled:opacity-50"
+                  >
+                    {billingAction === 'pro' ? 'Redirection...' : 'Passer au plan Pro'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={openBillingPortal}
+                    disabled={billingAction !== null}
+                    className="w-full rounded-md border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-100 disabled:opacity-50"
+                  >
+                    {billingAction === 'portal' ? 'Ouverture...' : 'Gérer mon abonnement'}
+                  </button>
+                </>
+              )}
+              {plan === 'pro' && (
+                <button
+                  type="button"
+                  onClick={openBillingPortal}
+                  disabled={billingAction !== null}
+                  className="w-full rounded-md bg-brand-teal px-4 py-2 text-sm font-semibold text-white hover:bg-brand-teal-dark disabled:opacity-50"
+                >
+                  {billingAction === 'portal' ? 'Ouverture...' : 'Gérer mon abonnement'}
+                </button>
               )}
             </div>
           </div>
