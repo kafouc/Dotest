@@ -19,7 +19,6 @@ type SectionRow = {
 };
 
 const EMBED_SLOT_KEY = '__cohere_next_available__';
-const SLOT_STATE_GLOBAL_KEY = '__cohere_embed_slots__';
 
 type GlobalWithSlotState = typeof globalThis & {
   __cohere_embed_slots__?: Record<string, number>;

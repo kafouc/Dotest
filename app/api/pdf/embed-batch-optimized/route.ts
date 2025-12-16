@@ -11,7 +11,6 @@ import { extractCohereTokenUsage, estimateCohereEmbedCost } from '@/lib/aiUsage'
 import type { ChunkPayload } from '@/app/api/pdf/extract/route';
 
 const EMBED_SLOT_KEY = '__cohere_next_available__';
-const SLOT_STATE_GLOBAL_KEY = '__cohere_embed_slots__';
 
 type GlobalWithSlotState = typeof globalThis & {
   __cohere_embed_slots__?: Record<string, number>;
@@ -92,13 +91,12 @@ export async function POST(req: Request) {
     // 2. Initialiser les clients
     const cohere = new CohereClient({ token: cohereKey });
     
-    const adminClient = createClient(supabaseUrl, supabaseServiceRole, {
+    supabaseAdmin = createClient(supabaseUrl, supabaseServiceRole, {
       auth: {
         persistSession: false,
         autoRefreshToken: false,
       },
     });
-    supabaseAdmin = adminClient;
     
     // 3. Parser le payload
     const body: BatchPayload = await req.json();
@@ -123,15 +121,18 @@ export async function POST(req: Request) {
       if (documentId == null) {
         throw new Error('Identifiant document manquant');
       }
+      if (!supabaseAdmin) {
+        throw new Error('Client Supabase non initialisé');
+      }
 
-      await adminClient
+      await supabaseAdmin
         .from('documents')
         .update({ status, status_message: message ?? null })
         .eq('id', documentId);
     };
     
     // 5. Récupérer les infos du document
-    const { data: docData, error: fetchDocError } = await adminClient
+    const { data: docData, error: fetchDocError } = await supabaseAdmin
       .from('documents')
       .select('user_id, file_path')
       .eq('id', documentId)
@@ -144,7 +145,7 @@ export async function POST(req: Request) {
     const { user_id, file_path } = docData;
     
     // 6. Télécharger le fichier JSON contenant tous les chunks
-    const { data: chunkFileData, error: downloadError } = await adminClient.storage
+    const { data: chunkFileData, error: downloadError } = await supabaseAdmin.storage
       .from('chunks')
       .download(chunkFilePath);
       
@@ -245,7 +246,10 @@ export async function POST(req: Request) {
           }));
           
           // Insérer dans la base de données
-          const { error: insertError } = await adminClient
+          if (!supabaseAdmin) {
+            throw new Error('Client Supabase non initialisé');
+          }
+          const { error: insertError } = await supabaseAdmin
             .from('document_sections')
             .insert(sections);
             
@@ -326,7 +330,7 @@ export async function POST(req: Request) {
     await updateDocumentStatus('completed', `Analyse terminée: ${processedCount} segments indexés en ${totalTime}s`);
     
     // Supprimer le fichier temporaire
-    await adminClient.storage
+    await supabaseAdmin.storage
       .from('chunks')
       .remove([chunkFilePath]);
     
