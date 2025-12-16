@@ -17,9 +17,28 @@ type AdminUserRow = {
   summary_exports: number;
   live_recap_exports: number;
   excel_exports: number;
-  created_at: string;
+  created_at: string | null;
   current_streak: number;
   longest_streak: number;
+  last_active_date: string | null;
+};
+
+type AdminUserOverviewRow = {
+  user_id: string;
+  email: string | null;
+  display_name: string | null;
+  documents_count: number | null;
+  quizzes_generated: number | null;
+  revisions_generated: number | null;
+  plan: string | null;
+  challenges_shared: number | null;
+  quiz_exports: number | null;
+  summary_exports: number | null;
+  live_recap_exports: number | null;
+  excel_exports: number | null;
+  created_at: string | null;
+  current_streak: number | null;
+  longest_streak: number | null;
   last_active_date: string | null;
 };
 
@@ -49,9 +68,13 @@ export default async function AdminUsersPage() {
     throw overviewError;
   }
 
-  const rows: AdminUserRow[] = (overview ?? []).map((row) => ({
+  const rawRows: AdminUserOverviewRow[] = Array.isArray(overview)
+    ? (overview as AdminUserOverviewRow[])
+    : [];
+
+  const rows: AdminUserRow[] = rawRows.map((row) => ({
     user_id: row.user_id,
-    email: row.email,
+    email: row.email ?? '',
     display_name: row.display_name,
     documents_count: Number(row.documents_count ?? 0),
     quizzes_generated: Number(row.quizzes_generated ?? 0),
@@ -62,7 +85,7 @@ export default async function AdminUsersPage() {
     summary_exports: Number(row.summary_exports ?? 0),
     live_recap_exports: Number(row.live_recap_exports ?? 0),
     excel_exports: Number(row.excel_exports ?? 0),
-    created_at: row.created_at,
+    created_at: row.created_at ?? null,
     current_streak: Number(row.current_streak ?? 0),
     longest_streak: Number(row.longest_streak ?? 0),
     last_active_date: row.last_active_date ?? null,
@@ -187,7 +210,9 @@ export default async function AdminUsersPage() {
                       <td className="px-6 py-3 text-right font-semibold text-brand-dark">{numberFormatter.format(row.summary_exports)}</td>
                       <td className="px-6 py-3 text-right font-semibold text-brand-dark">{numberFormatter.format(row.live_recap_exports)}</td>
                       <td className="px-6 py-3 text-right font-semibold text-brand-dark">{numberFormatter.format(row.excel_exports)}</td>
-                      <td className="px-6 py-3 text-brand-dark-lighter">{dateFormatter.format(new Date(row.created_at))}</td>
+                      <td className="px-6 py-3 text-brand-dark-lighter">
+                        {row.created_at ? dateFormatter.format(new Date(row.created_at)) : '—'}
+                      </td>
                     </tr>
                   ))}
                   {rows.length === 0 && (
