@@ -10,7 +10,7 @@ type RpcArgs = {
  * Les erreurs sont journalisées mais n'interrompent pas le flux principal.
  */
 export async function touchUserStreak(
-  supabase: SupabaseClient<any, 'public', any>,
+  supabase: SupabaseClient,
   userId: string,
   activityAt: Date | string = new Date()
 ): Promise<void> {
@@ -42,7 +42,7 @@ export type UserStreak = {
  * Récupère la flamme de l'utilisateur authentifié (via RPC). Retourne null si aucune donnée.
  */
 export async function fetchUserStreak(
-  supabase: SupabaseClient<any, 'public', any>,
+  supabase: SupabaseClient,
   userId: string
 ): Promise<UserStreak | null> {
   if (!userId) return null;

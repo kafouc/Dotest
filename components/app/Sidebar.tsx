@@ -14,7 +14,7 @@ type SidebarProps = {
   onToggleMinimize: () => void;
   onCreateNew: () => void;
   onLogout: () => void;
-  supabase: SupabaseClient<any, 'public', any>;
+  supabase: SupabaseClient;
   documents: DocumentInfo[];
   isLoadingDocs: boolean;
   onDeleteSuccess: () => void;
