@@ -41,7 +41,7 @@ export async function POST(request: Request) {
     const origin = resolveOrigin(request);
     const session = await createBillingPortalSession({
       userId: user.id,
-      email: user.email,
+      email: user.email ?? null,
       returnUrl: `${origin}/app`,
     });
 

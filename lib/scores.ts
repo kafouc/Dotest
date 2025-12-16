@@ -4,6 +4,8 @@ export type AttemptContext = {
   document_path?: string;
   user_query?: string;
   num_questions: number;
+  page_start?: number | null;
+  page_end?: number | null;
 };
 
 export type AnswerInput = {

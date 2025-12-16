@@ -3,7 +3,7 @@
 // Traite les embeddings par lot tout en respectant les limites de Cohere
 
 import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { CohereClient } from 'cohere-ai';
 import { AI_MODELS, BATCH_CONFIG } from '@/lib/constants';
 import { recordAiUsage } from '@/lib/metricsLogger';
@@ -11,6 +11,19 @@ import { extractCohereTokenUsage, estimateCohereEmbedCost } from '@/lib/aiUsage'
 import type { ChunkPayload } from '@/app/api/pdf/extract/route';
 
 const EMBED_SLOT_KEY = '__cohere_next_available__';
+const SLOT_STATE_GLOBAL_KEY = '__cohere_embed_slots__';
+
+type GlobalWithSlotState = typeof globalThis & {
+  __cohere_embed_slots__?: Record<string, number>;
+};
+
+function getSlotState(): Record<string, number> {
+  const globalRef = globalThis as GlobalWithSlotState;
+  if (!globalRef.__cohere_embed_slots__) {
+    globalRef.__cohere_embed_slots__ = {};
+  }
+  return globalRef.__cohere_embed_slots__;
+}
 
 const waitForEmbedSlot = async () => {
   const interval = BATCH_CONFIG.MIN_EMBED_INTERVAL_MS ?? 0;
@@ -19,14 +32,15 @@ const waitForEmbedSlot = async () => {
   }
 
   const now = Date.now();
-  const nextAvailable = (globalThis as Record<string, number>)[EMBED_SLOT_KEY] ?? now;
+  const slots = getSlotState();
+  const nextAvailable = slots[EMBED_SLOT_KEY] ?? now;
   const waitMs = Math.max(0, nextAvailable - now);
 
   if (waitMs > 0) {
     await new Promise((resolve) => setTimeout(resolve, waitMs));
   }
 
-  (globalThis as Record<string, number>)[EMBED_SLOT_KEY] = Date.now() + interval;
+  slots[EMBED_SLOT_KEY] = Date.now() + interval;
 };
 
 // Configuration pour gérer les gros traitements
@@ -44,7 +58,7 @@ interface BatchPayload {
 // Handler principal
 export async function POST(req: Request) {
   let documentId: number | null = null;
-  let supabaseAdmin = null as ReturnType<typeof createClient> | null;
+  let supabaseAdmin: SupabaseClient | null = null;
   const startTime = Date.now();
   
   try {
@@ -78,12 +92,13 @@ export async function POST(req: Request) {
     // 2. Initialiser les clients
     const cohere = new CohereClient({ token: cohereKey });
     
-    supabaseAdmin = createClient(supabaseUrl, supabaseServiceRole, {
+    const adminClient = createClient(supabaseUrl, supabaseServiceRole, {
       auth: {
         persistSession: false,
         autoRefreshToken: false,
       },
     });
+    supabaseAdmin = adminClient;
     
     // 3. Parser le payload
     const body: BatchPayload = await req.json();
@@ -105,14 +120,18 @@ export async function POST(req: Request) {
       status: 'processing' | 'completed' | 'failed',
       message?: string
     ) => {
-      await supabaseAdmin
+      if (documentId == null) {
+        throw new Error('Identifiant document manquant');
+      }
+
+      await adminClient
         .from('documents')
-        .update({ status, status_message: message || null })
+        .update({ status, status_message: message ?? null })
         .eq('id', documentId);
     };
     
     // 5. Récupérer les infos du document
-    const { data: docData, error: fetchDocError } = await supabaseAdmin
+    const { data: docData, error: fetchDocError } = await adminClient
       .from('documents')
       .select('user_id, file_path')
       .eq('id', documentId)
@@ -125,7 +144,7 @@ export async function POST(req: Request) {
     const { user_id, file_path } = docData;
     
     // 6. Télécharger le fichier JSON contenant tous les chunks
-    const { data: chunkFileData, error: downloadError } = await supabaseAdmin.storage
+    const { data: chunkFileData, error: downloadError } = await adminClient.storage
       .from('chunks')
       .download(chunkFilePath);
       
@@ -187,13 +206,13 @@ export async function POST(req: Request) {
             inputType: 'search_document',
           });
           
-          // @ts-expect-error - Cohere types
-          if (!embedResponse.embeddings) {
+          const embeddingsPayload = embedResponse as unknown as {
+            embeddings?: number[][];
+          };
+          const embeddings = embeddingsPayload.embeddings;
+          if (!embeddings) {
             throw new Error("Cohere n'a pas retourné d'embeddings");
           }
-          
-          // @ts-expect-error - Cohere types
-          const embeddings = embedResponse.embeddings;
 
           const embedLatencyMs = Date.now() - embedStartedAt;
           const cohereUsage = extractCohereTokenUsage(embedResponse);
@@ -219,14 +238,14 @@ export async function POST(req: Request) {
           const sections = batchChunks.map((chunk, index) => ({
             user_id,
             content: chunk.content,
-            embedding: embeddings[index],
+            embedding: embeddings[index] ?? [],
             document_path: file_path,
             page_start: chunk.pageStart,
             page_end: chunk.pageEnd,
           }));
           
           // Insérer dans la base de données
-          const { error: insertError } = await supabaseAdmin
+          const { error: insertError } = await adminClient
             .from('document_sections')
             .insert(sections);
             
@@ -307,7 +326,7 @@ export async function POST(req: Request) {
     await updateDocumentStatus('completed', `Analyse terminée: ${processedCount} segments indexés en ${totalTime}s`);
     
     // Supprimer le fichier temporaire
-    await supabaseAdmin.storage
+    await adminClient.storage
       .from('chunks')
       .remove([chunkFilePath]);
     

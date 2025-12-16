@@ -19,6 +19,19 @@ type SectionRow = {
 };
 
 const EMBED_SLOT_KEY = '__cohere_next_available__';
+const SLOT_STATE_GLOBAL_KEY = '__cohere_embed_slots__';
+
+type GlobalWithSlotState = typeof globalThis & {
+  __cohere_embed_slots__?: Record<string, number>;
+};
+
+function getSlotState(): Record<string, number> {
+  const globalRef = globalThis as GlobalWithSlotState;
+  if (!globalRef.__cohere_embed_slots__) {
+    globalRef.__cohere_embed_slots__ = {};
+  }
+  return globalRef.__cohere_embed_slots__;
+}
 
 const waitForEmbedSlot = async () => {
   const interval = BATCH_CONFIG.MIN_EMBED_INTERVAL_MS ?? 0;
@@ -27,14 +40,15 @@ const waitForEmbedSlot = async () => {
   }
 
   const now = Date.now();
-  const nextAvailable = (globalThis as Record<string, number>)[EMBED_SLOT_KEY] ?? now;
+  const slots = getSlotState();
+  const nextAvailable = slots[EMBED_SLOT_KEY] ?? now;
   const waitMs = Math.max(0, nextAvailable - now);
 
   if (waitMs > 0) {
     await new Promise((resolve) => setTimeout(resolve, waitMs));
   }
 
-  (globalThis as Record<string, number>)[EMBED_SLOT_KEY] = Date.now() + interval;
+  slots[EMBED_SLOT_KEY] = Date.now() + interval;
 };
 
 // Initialisation déplacée dans le handler pour une gestion propre des erreurs de configuration

@@ -182,13 +182,13 @@ export async function POST(req: Request) {
       inputType: 'search_document',
     });
     
-    // @ts-expect-error - Cohere types
-    if (!embedResponse.embeddings) {
+    const embeddingsPayload = embedResponse as unknown as {
+      embeddings?: number[][];
+    };
+    const embeddings = embeddingsPayload.embeddings;
+    if (!embeddings) {
       throw new Error("Cohere n'a pas retourné d'embeddings");
     }
-    
-    // @ts-expect-error - Cohere types
-    const embeddings = embedResponse.embeddings;
 
     const embedLatencyMs = Date.now() - embedStartedAt;
     const cohereUsage = extractCohereTokenUsage(embedResponse);
@@ -213,7 +213,7 @@ export async function POST(req: Request) {
     const sections = batchChunks.map((chunk, index) => ({
       user_id,
       content: chunk.content,
-      embedding: embeddings[index],
+      embedding: embeddings[index] ?? [],
       document_path: file_path,
       page_start: chunk.pageStart,
       page_end: chunk.pageEnd,

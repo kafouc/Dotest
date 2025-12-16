@@ -9,7 +9,8 @@ describe('normalizeQuiz + calculateQuizScore', () => {
       { question: '2+2=?', options: ['3', '4', '5', '6'], reponse_correcte: 'B' },
     ];
     const quiz = normalizeQuiz(raw, 'qcu');
-    expect(quiz[0].options.A).toBe('Paris');
+    const firstOptions = quiz[0].options as Record<string, string>;
+    expect(firstOptions.A).toBe('Paris');
     expect((quiz[0] as any).reponse_correcte).toBe('A');
     const score = calculateQuizScore(quiz, { 0: 'A', 1: 'B' });
     expect(score).toBe(2);

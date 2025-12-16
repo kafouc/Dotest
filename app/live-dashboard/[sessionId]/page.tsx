@@ -58,7 +58,8 @@ function formatCorrectAnswer(question: QuizQuestion): string {
   if ('reponses_correctes' in question) {
     return (question.reponses_correctes ?? []).map((choice) => {
       const key = choice.toString().toUpperCase();
-      const text = (question.options ?? {})[key] ?? (question.options ?? {})[key.toLowerCase()];
+      const options = question.options as Record<string, string>;
+      const text = options[key] ?? options[key.toLowerCase()];
       return text ? `${key} – ${text}` : key;
     }).join(', ');
   }
@@ -66,11 +67,13 @@ function formatCorrectAnswer(question: QuizQuestion): string {
   if ('reponse_correcte' in question) {
     if (question.reponse_correcte === 'VRAI' || question.reponse_correcte === 'FAUX') {
       const label = question.reponse_correcte === 'VRAI' ? 'Vrai' : 'Faux';
-      const text = (question.options ?? {})[question.reponse_correcte];
+      const options = question.options as Record<string, string>;
+      const text = options[question.reponse_correcte];
       return text ? text : label;
     }
     const key = question.reponse_correcte?.toString().toUpperCase() ?? '';
-    const text = (question.options ?? {})[key] ?? (question.options ?? {})[key.toLowerCase()];
+    const options = question.options as Record<string, string>;
+    const text = options[key] ?? options[key.toLowerCase()];
     return text ? `${key} – ${text}` : key;
   }
 

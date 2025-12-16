@@ -52,7 +52,7 @@ export async function POST(request: Request) {
     const session = await createCheckoutSession({
       userId: user.id,
       plan,
-      email: user.email,
+      email: user.email ?? null,
       successUrl,
       cancelUrl,
     });
