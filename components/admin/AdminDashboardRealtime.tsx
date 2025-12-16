@@ -282,7 +282,7 @@ export default function AdminDashboardRealtime({ since, daysWindow, initialData 
                 <span>Dernière mise à jour&nbsp;: {lastUpdatedLabel}</span>
                 {loading && (
                   <span className="inline-flex items-center gap-1 text-brand-teal">
-                    <LoadingSpinner size="xs" /> Rafraîchissement…
+                    <LoadingSpinner size="sm" /> Rafraîchissement…
                   </span>
                 )}
               </div>
