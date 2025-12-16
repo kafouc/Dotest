@@ -1,4 +1,6 @@
 import type { Metadata, Viewport } from 'next';
+import { Analytics } from '@vercel/analytics/next';
+import { SpeedInsights } from '@vercel/speed-insights/next';
 import { Unbounded, Questrial } from 'next/font/google';
 import './globals.css';
 
@@ -84,6 +86,8 @@ export default function RootLayout({
                        min-h-screen text-brand-dark`}
       >
         {children}
+        <Analytics />
+        <SpeedInsights />
       </body>
     </html>
   );

@@ -13,6 +13,19 @@ type UploadFormProps = {
   onUploadSuccess: () => void; // Fonction pour rafraîchir la liste parente
 };
 
+function sanitizeFileName(name: string): string {
+  const normalized = name.normalize('NFKD').replace(/[\u0300-\u036f]/g, '');
+  const safe = normalized.replace(/[^a-zA-Z0-9._-]+/g, '-');
+  const collapsed = safe.replace(/-+/g, '-').replace(/^-|-$/g, '');
+  if (collapsed.length > 0) {
+    return collapsed;
+  }
+
+  const lastDot = name.lastIndexOf('.');
+  const extension = lastDot >= 0 ? name.slice(lastDot) : '';
+  return `document${extension || '.pdf'}`;
+}
+
 export default function UploadForm({ session, supabase, onUploadSuccess }: UploadFormProps) {
   const [file, setFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
@@ -98,7 +111,8 @@ export default function UploadForm({ session, supabase, onUploadSuccess }: Uploa
 
     try {
       const userId = session.user.id;
-      const filePath = `${userId}/${Date.now()}-${file.name}`;
+      const sanitized = sanitizeFileName(file.name);
+      const filePath = `${userId}/${Date.now()}-${sanitized}`;
 
       // 1: Upload vers Storage
       setUploadProgress(30);
