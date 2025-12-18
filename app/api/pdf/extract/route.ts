@@ -411,6 +411,19 @@ export async function POST(req: Request) {
         console.error('Erreur déclenchement batch optimisé:', err);
       });
     
+    // Logger l'activité pour le dashboard admin
+    const { logActivity } = await import('@/lib/metricsLogger');
+    await logActivity({
+      eventType: 'document_processed',
+      userId: docData.user_id ?? null,
+      eventData: {
+        documentId,
+        filePath: storageFilePath,
+        mimeType: mime,
+        chunkCount: chunks.length,
+      },
+    });
+    
     return NextResponse.json({
       success: true,
       message: `Extraction réussie: ${chunks.length} segments créés`,

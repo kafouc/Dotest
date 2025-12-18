@@ -162,6 +162,25 @@ export default function UploadForm({ session, supabase, onUploadSuccess }: Uploa
         throw new Error("Erreur lors du déclenchement de l'analyse.");
       }
 
+      // 4: Logger l'activité pour le dashboard admin
+      try {
+        await fetch('/api/analytics/activity', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            eventType: 'document_uploaded',
+            eventData: {
+              documentId: insertData.id,
+              fileName: file.name,
+              fileSize: file.size,
+              mimeType: file.type,
+            },
+          }),
+        });
+      } catch (activityError) {
+        console.warn('Erreur lors du log d\'activité:', activityError);
+      }
+
       setUploadProgress(100);
       setCurrentStep('Succès !');
       setFile(null);

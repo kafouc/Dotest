@@ -72,6 +72,17 @@ export async function POST(req: Request) {
 
     await touchUserStreak(supabase, user.id);
 
+    // Logger l'activité pour le dashboard admin
+    const { logActivity } = await import('@/lib/metricsLogger');
+    await logActivity({
+      eventType: 'flashcards_generated',
+      userId: user.id,
+      eventData: {
+        documentPath,
+        cardCount: count ?? rows.length,
+      },
+    });
+
     return NextResponse.json({ created: count ?? rows.length }, { status: 200 });
   } catch (e: unknown) {
     console.error('Flashcards generate error:', e);

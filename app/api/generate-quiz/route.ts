@@ -282,6 +282,19 @@ export async function POST(req: Request) {
       }),
     });
 
+    // Logger l'activité pour le dashboard admin
+    const { logActivity } = await import('@/lib/metricsLogger');
+    await logActivity({
+      eventType: 'quiz_generated',
+      userId: user.id,
+      eventData: {
+        documentPath: documentPath ?? null,
+        questionCount: count,
+        mode,
+        theme: theme ?? null,
+      },
+    });
+
     // 10. Renvoyer le quiz
     return NextResponse.json({ quiz: quizData.quiz }, { status: 200 });
   } catch (error: unknown) {

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import AdminSidebar from '@/components/admin/AdminSidebar';
 import LoadingSpinner from '@/components/ui/LoadingSpinner';
+import RecentActivitiesFeed from '@/components/admin/RecentActivitiesFeed';
 import { createSupabaseBrowserClient } from '@/lib/supabaseClient';
 
 type UsageRow = {
@@ -382,6 +383,8 @@ export default function AdminDashboardRealtime({ since, daysWindow, initialData 
           </section>
 
           <section className="grid gap-6 lg:grid-cols-2">
+            <RecentActivitiesFeed />
+            
             <div className="space-y-3 rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
               <h2 className="text-lg font-semibold text-brand-dark">Chronologie IA (14 jours)</h2>
               <div className="overflow-x-auto">
@@ -413,6 +416,9 @@ export default function AdminDashboardRealtime({ since, daysWindow, initialData 
               </div>
             </div>
 
+          </section>
+
+          <section className="grid gap-6 lg:grid-cols-2">
             <div className="space-y-3 rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
               <h2 className="text-lg font-semibold text-brand-dark">Documents par jour</h2>
               <div className="overflow-x-auto">

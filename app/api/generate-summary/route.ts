@@ -251,6 +251,17 @@ ${context}
       context: pageRange ? JSON.stringify({ pageRange }) : null,
     });
 
+    // Logger l'activité pour le dashboard admin
+    const { logActivity } = await import('@/lib/metricsLogger');
+    await logActivity({
+      eventType: 'summary_generated',
+      userId: user.id,
+      eventData: {
+        documentPath,
+        pageRange: pageRange ?? null,
+      },
+    });
+
     return NextResponse.json(result, { status: 200 });
   } catch (error: unknown) {
     if (error instanceof QuotaError) {

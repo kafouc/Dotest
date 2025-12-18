@@ -92,6 +92,20 @@ export async function POST(request: Request) {
       throw error;
     }
 
+    // Logger l'activité pour le dashboard admin
+    const { logActivity } = await import('@/lib/metricsLogger');
+    await logActivity({
+      eventType: 'challenge_created',
+      userId: null,
+      eventData: {
+        shareCode: data.share_code,
+        questionCount: payload.quiz.length,
+        score,
+        total,
+        authorName,
+      },
+    });
+
     return NextResponse.json({ shareCode: data.share_code });
   } catch (error) {
     console.error('[challenge] Erreur création défi:', error);

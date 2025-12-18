@@ -228,7 +228,7 @@ CREATE TABLE IF NOT EXISTS public.metrics_ai_usage_events (
   created_at timestamptz NOT NULL DEFAULT now()
 );
 
-COMMENT ON TABLE public.metrics_ai_usage_events IS 'Événements bruts des appels IA (Groq / Cohere) utilisés pour les agrégations quotidiennes.';
+COMMENT ON TABLE public.metrics_ai_usage_events IS 'Événements bruts des appels IA (Groq) utilisés pour les agrégations quotidiennes.';
 
 CREATE INDEX IF NOT EXISTS idx_metrics_ai_usage_events_occurred_at
   ON public.metrics_ai_usage_events (occurred_at);
@@ -262,7 +262,7 @@ BEGIN
 END
 $$;
 
--- Daily AI usage metrics (Groq / Cohere)
+-- Daily AI usage metrics (Groq)
 CREATE TABLE IF NOT EXISTS public.metrics_daily_usage (
   usage_date date NOT NULL,
   provider text NOT NULL,
@@ -279,7 +279,7 @@ CREATE TABLE IF NOT EXISTS public.metrics_daily_usage (
   PRIMARY KEY (usage_date, provider, model)
 );
 
-COMMENT ON TABLE public.metrics_daily_usage IS 'Agrégations quotidiennes des appels IA (Groq / Cohere).';
+COMMENT ON TABLE public.metrics_daily_usage IS 'Agrégations quotidiennes des appels IA (Groq).';
 
 -- Daily documents metrics (imports & processing)
 CREATE TABLE IF NOT EXISTS public.metrics_daily_documents (

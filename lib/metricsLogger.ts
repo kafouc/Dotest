@@ -125,6 +125,33 @@ export async function recordAiUsage(event: AiUsageEvent): Promise<void> {
   }
 }
 
+export type ActivityEvent = {
+  eventType: string;
+  userId?: string | null;
+  eventData?: Record<string, unknown> | null;
+  occurredAt?: Date | string | null;
+};
+
+export async function logActivity(event: ActivityEvent): Promise<void> {
+  const client = getAdminClient();
+  if (!client) return;
+
+  const occurredAt = event.occurredAt instanceof Date
+    ? event.occurredAt.toISOString()
+    : event.occurredAt ?? new Date().toISOString();
+
+  try {
+    await client.from('activity_events').insert({
+      event_type: event.eventType,
+      user_id: event.userId ?? null,
+      event_data: event.eventData ?? null,
+      occurred_at: occurredAt,
+    });
+  } catch (error) {
+    console.warn('[metricsLogger] Échec insertion activity_events:', error);
+  }
+}
+
 export async function runDailyAggregation(targetDate?: string | Date): Promise<void> {
   const client = getAdminClient();
   if (!client) return;
