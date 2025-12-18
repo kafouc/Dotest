@@ -1,11 +1,10 @@
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { createServerClient } from '@supabase/ssr';
-import { CohereClient } from 'cohere-ai';
 import Groq from 'groq-sdk';
-import { AI_MODELS, BATCH_CONFIG, EMBEDDING_CONFIG } from '@/lib/constants';
+import { THEME_GENERATION_CONFIG } from '@/lib/constants';
 import { recordAiUsage } from '@/lib/metricsLogger';
-import { extractCohereTokenUsage, extractGroqUsage, estimateCohereEmbedCost, estimateGroqCost } from '@/lib/aiUsage';
+import { extractGroqUsage, estimateGroqCost } from '@/lib/aiUsage';
 
 type PageRange = {
   start?: number | null;
@@ -17,40 +16,6 @@ type SectionRow = {
   page_start?: number | null;
   page_end?: number | null;
 };
-
-const EMBED_SLOT_KEY = '__cohere_next_available__';
-
-type GlobalWithSlotState = typeof globalThis & {
-  __cohere_embed_slots__?: Record<string, number>;
-};
-
-function getSlotState(): Record<string, number> {
-  const globalRef = globalThis as GlobalWithSlotState;
-  if (!globalRef.__cohere_embed_slots__) {
-    globalRef.__cohere_embed_slots__ = {};
-  }
-  return globalRef.__cohere_embed_slots__;
-}
-
-const waitForEmbedSlot = async () => {
-  const interval = BATCH_CONFIG.MIN_EMBED_INTERVAL_MS ?? 0;
-  if (!interval) {
-    return;
-  }
-
-  const now = Date.now();
-  const slots = getSlotState();
-  const nextAvailable = slots[EMBED_SLOT_KEY] ?? now;
-  const waitMs = Math.max(0, nextAvailable - now);
-
-  if (waitMs > 0) {
-    await new Promise((resolve) => setTimeout(resolve, waitMs));
-  }
-
-  slots[EMBED_SLOT_KEY] = Date.now() + interval;
-};
-
-// Initialisation déplacée dans le handler pour une gestion propre des erreurs de configuration
 
 // Mini-verrou en mémoire pour éviter les appels concurrents sur le même document
 // Note: in-memory, non partagé entre instances (suffisant pour un mini-verrou local)
@@ -117,93 +82,43 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Non autorisé' }, { status: 401 });
     }
 
-    // Embedding d'une requête neutre pour récupérer des sections représentatives
-    // Initialiser les clients IA
-    const cohereKey = process.env.COHERE_API_KEY;
     const groqKey = process.env.GROQ_API_KEY;
-    if (!cohereKey || !groqKey) {
+    if (!groqKey) {
       return NextResponse.json(
-        { error: 'Configuration IA manquante (COHERE_API_KEY / GROQ_API_KEY)' },
+        { error: 'Configuration IA manquante (GROQ_API_KEY)' },
         { status: 503 }
       );
     }
-    const cohere = new CohereClient({ token: cohereKey });
+    const groq = new Groq({ apiKey: groqKey });
 
-    const embedPrompt = 'Identifier les thèmes principaux, chapitres, sujets clés et sous-thèmes pertinents du document.';
-    const embedMaxRetries = 1 + (BATCH_CONFIG.MAX_RETRIES ?? 3);
-    const embedBaseDelay = BATCH_CONFIG.RETRY_BASE_DELAY_MS ?? 1500;
-    const embedRateDelay = BATCH_CONFIG.RATE_LIMIT_DELAY_MS ?? 4000;
+    const maxThemes = THEME_GENERATION_CONFIG.MAX_THEMES;
+    const contextLimit = THEME_GENERATION_CONFIG.MAX_CONTEXT_CHARS;
+    const sectionLimit = THEME_GENERATION_CONFIG.SECTION_SAMPLE_LIMIT;
 
-    let queryEmbedding: number[] | null = null;
-    for (let attempt = 0; attempt < embedMaxRetries; attempt++) {
-      try {
-        await waitForEmbedSlot();
+    const sectionsQuery = supabase
+      .from('document_sections')
+      .select('content, page_start, page_end, created_at')
+      .eq('user_id', user.id);
 
-        const embedStartedAt = Date.now();
-        const embedResponse = await cohere.embed({
-          texts: [embedPrompt],
-          model: AI_MODELS.COHERE_EMBEDDING,
-          inputType: 'search_query',
-        });
-        // @ts-expect-error cohere types
-        queryEmbedding = embedResponse.embeddings?.[0] ?? null;
-        if (!queryEmbedding) {
-          throw new Error("Cohere n'a pas retourné d'embedding pour la requête thèmes.");
-        }
-        const embedLatencyMs = Date.now() - embedStartedAt;
-        const cohereUsage = extractCohereTokenUsage(embedResponse);
-        await recordAiUsage({
-          provider: 'cohere',
-          model: AI_MODELS.COHERE_EMBEDDING,
-          promptTokens: cohereUsage.inputTokens,
-          completionTokens: cohereUsage.outputTokens,
-          totalTokens: cohereUsage.totalTokens,
-          latencyMs: embedLatencyMs,
-          cost: estimateCohereEmbedCost(cohereUsage.totalTokens),
-          metadata: {
-            route: 'generate-themes',
-            hasDocument: Boolean(documentPath),
-            attempt,
-          },
-          userId: user.id,
-        });
-        break;
-      } catch (err: unknown) {
-        const statusCode = typeof err === 'object' && err && 'statusCode' in err
-          ? (err as { statusCode?: number }).statusCode
-          : undefined;
-        if (statusCode === 429 && attempt < embedMaxRetries - 1) {
-          const waitMs = embedRateDelay * (attempt + 1);
-          console.warn(`[GenerateThemes] Rate limit Cohere, retry ${attempt + 1}/${embedMaxRetries - 1} dans ${waitMs}ms`);
-          await new Promise((resolve) => setTimeout(resolve, waitMs));
-          continue;
-        }
-        if (attempt < embedMaxRetries - 1) {
-          const waitMs = embedBaseDelay * (attempt + 1);
-          console.warn(`[GenerateThemes] Erreur Cohere, retry ${attempt + 1}/${embedMaxRetries - 1} dans ${waitMs}ms`, err);
-          await new Promise((resolve) => setTimeout(resolve, waitMs));
-          continue;
-        }
-        throw err;
-      }
+    if (documentPath) {
+      sectionsQuery.eq('document_path', documentPath).order('page_start', { ascending: true });
+    } else {
+      sectionsQuery.order('created_at', { ascending: false });
     }
 
-    if (!queryEmbedding) {
-      throw new Error("Impossible de récupérer l'embedding de la requête thèmes.");
+    if (pageStart != null) {
+      sectionsQuery.gte('page_end', pageStart);
+    }
+    if (pageEnd != null) {
+      sectionsQuery.lte('page_start', pageEnd);
     }
 
-    const { data: sections, error: matchError } = await supabase.rpc('match_document_sections', {
-      query_embedding: queryEmbedding,
-      match_threshold: EMBEDDING_CONFIG.MATCH_THRESHOLD,
-      match_count: Math.max(EMBEDDING_CONFIG.MATCH_COUNT, 20),
-      p_user_id: user.id,
-      p_document_path: documentPath,
-      p_page_start: pageStart,
-      p_page_end: pageEnd,
-    });
+    const { data: sectionsData, error: sectionsError } = await sectionsQuery.limit(sectionLimit);
+    if (sectionsError) throw new Error(sectionsError.message);
 
-    if (matchError) throw new Error(matchError.message);
-    if (!sections || sections.length === 0) {
+    const sections = (sectionsData as SectionRow[]) ?? [];
+
+    if (sections.length === 0) {
       return NextResponse.json({ themes: [] }, { status: 200 });
     }
 
@@ -221,12 +136,12 @@ ${section.content}`;
         return section.content;
       })
       .join('\n\n---\n\n')
-      .slice(0, 12000); // limite le contexte
+      .slice(0, contextLimit);
 
     const prompt = `
 Tu es un assistant pédagogique. À partir du CONTEXTE suivant, propose une liste concise de thèmes pertinents pour créer des quiz.
 Règles :
-  - Propose exactement 3 thèmes pertinents, sans doublons.
+  - Propose exactement ${maxThemes} thèmes pertinents, sans doublons.
 - Chaque thème doit être court (3-7 mots) et spécifique au contenu.
 - Réponds uniquement avec un JSON valide du format : { "themes": ["...", "..."] }.
 
@@ -243,7 +158,6 @@ ${context}
     
     while (retries <= maxRetries) {
       try {
-        const groq = new Groq({ apiKey: groqKey });
         const groqStartedAt = Date.now();
         const localCompletion = await groq.chat.completions.create({
           messages: [
@@ -311,7 +225,7 @@ ${context}
         themes = raw
           .map((t) => (t ?? '').toString())
           .filter((s) => s.trim().length > 0)
-          .slice(0, 3);
+          .slice(0, maxThemes);
       }
     }
 

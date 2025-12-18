@@ -22,6 +22,7 @@ const questrial = Questrial({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL('https://sheetofpaper.app'),
   title: 'Sheet of Paper - Quiz IA',
   description: 'Générez des quiz intelligents à partir de vos documents avec l\'IA',
   manifest: '/manifest.json',

@@ -14,7 +14,7 @@ type AuthFormProps = {
   backHref?: string;
 };
 
-export default function AuthForm({ supabase, view, showBackButton = false, backHref = '/' }: AuthFormProps) {
+export default function AuthForm({ supabase, view, showBackButton = false, backHref = '/app' }: AuthFormProps) {
   // URL de retour pour OAuth (GitHub/Google)
   const redirectTo =
     typeof window !== 'undefined' ? `${window.location.origin}/auth/callback` : undefined;

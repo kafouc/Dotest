@@ -14,16 +14,28 @@ type UploadFormProps = {
 };
 
 function sanitizeFileName(name: string): string {
-  const normalized = name.normalize('NFKD').replace(/[\u0300-\u036f]/g, '');
-  const safe = normalized.replace(/[^a-zA-Z0-9._-]+/g, '-');
-  const collapsed = safe.replace(/-+/g, '-').replace(/^-|-$/g, '');
-  if (collapsed.length > 0) {
-    return collapsed;
-  }
+  const trimmed = name.trim();
+  const normalized = trimmed.normalize('NFKD').replace(/[\u0300-\u036f]/g, '');
 
-  const lastDot = name.lastIndexOf('.');
-  const extension = lastDot >= 0 ? name.slice(lastDot) : '';
-  return `document${extension || '.pdf'}`;
+  const lastDot = normalized.lastIndexOf('.');
+  const basePart = lastDot > 0 ? normalized.slice(0, lastDot) : normalized;
+  const extPartRaw = lastDot >= 0 ? normalized.slice(lastDot + 1) : '';
+
+  const safeBase = basePart
+    .replace(/[^a-zA-Z0-9_-]+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '')
+    .slice(0, 80);
+
+  const safeExtension = extPartRaw
+    .replace(/[^a-zA-Z0-9]+/g, '')
+    .toLowerCase()
+    .slice(0, 10);
+
+  const finalBase = safeBase.length > 0 ? safeBase : 'document';
+  const finalExtension = safeExtension ? `.${safeExtension}` : '.pdf';
+
+  return `${finalBase}${finalExtension}`;
 }
 
 export default function UploadForm({ session, supabase, onUploadSuccess }: UploadFormProps) {

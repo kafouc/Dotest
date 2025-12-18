@@ -28,7 +28,7 @@ export const EMBEDDING_CONFIG = {
   CHUNK_OVERLAP: 200, // Optimisé: overlap proportionnel
   EMBEDDING_DIMENSION: 1024, // Dimension des vecteurs Cohere
   MATCH_THRESHOLD: 0.4,
-  MATCH_COUNT: 7,
+  MATCH_COUNT: 5,
 } as const;
 
 // Configuration de traitement par batch (optimisé)
@@ -38,7 +38,7 @@ export const BATCH_CONFIG = {
   MAX_RETRIES: 4, // Nombre de tentatives en cas d'erreur ponctuelle
   RETRY_BASE_DELAY_MS: 1500, // Backoff de base entre les tentatives
   RATE_LIMIT_DELAY_MS: 4000, // Attente supplémentaire en cas de 429 Cohere
-  MIN_EMBED_INTERVAL_MS: 5000, // Pause minimum entre deux requêtes Cohere (ms)
+  MIN_EMBED_INTERVAL_MS: 2500, // Pause minimum entre deux requêtes Cohere (ms)
 } as const;
 
 // Configuration de quiz
@@ -52,6 +52,12 @@ export const AI_MODELS = {
   COHERE_EMBEDDING: 'embed-multilingual-v3.0',
   COHERE_EMBEDDING_LIGHT: 'embed-english-light-v3.0', // Modèle optimisé 40% plus rapide
   GROQ_QUIZ_GENERATION: 'qwen/qwen3-32b',
+} as const;
+
+export const THEME_GENERATION_CONFIG = {
+  MAX_CONTEXT_CHARS: 8_000,
+  MAX_THEMES: 5,
+  SECTION_SAMPLE_LIMIT: 24,
 } as const;
 
 export const PLAN_LIMITS = {

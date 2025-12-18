@@ -52,7 +52,7 @@ function LoginContent() {
 
   return (
     <div className="flex justify-center items-center min-h-screen p-4 bg-gradient-to-br from-brand-yellow-light via-white to-brand-teal-light">
-      <AuthForm supabase={supabase} view={initialView} showBackButton={true} backHref="/" />
+      <AuthForm supabase={supabase} view={initialView} showBackButton={true} backHref="/app" />
     </div>
   );
 }

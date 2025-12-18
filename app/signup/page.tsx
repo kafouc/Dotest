@@ -47,7 +47,7 @@ export default function SignupPage() {
 
   return (
     <div className="flex justify-center items-center min-h-screen p-4 bg-gradient-to-br from-brand-yellow-light via-white to-brand-teal-light">
-      <AuthForm supabase={supabase} view="sign_up" showBackButton={true} backHref="/" />
+      <AuthForm supabase={supabase} view="sign_up" showBackButton={true} backHref="/app" />
     </div>
   );
 }
