@@ -1,27 +1,27 @@
 // app/api/pdf/embed-batch-optimized/route.ts
 // Route optimisée avec parallélisation contrôlée + retry/backoff
-// Traite les embeddings par lot tout en respectant les limites de Cohere
+// Traite les embeddings par lot tout en respectant les limites de l'API
 
 import { NextResponse } from 'next/server';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
-import { CohereClient } from 'cohere-ai';
+import Groq from 'groq-sdk';
 import { AI_MODELS, BATCH_CONFIG } from '@/lib/constants';
 import { recordAiUsage } from '@/lib/metricsLogger';
-import { extractCohereTokenUsage, estimateCohereEmbedCost } from '@/lib/aiUsage';
+import { extractGroqEmbeddingUsage, estimateGroqEmbedCost } from '@/lib/aiUsage';
 import type { ChunkPayload } from '@/app/api/pdf/extract/route';
 
-const EMBED_SLOT_KEY = '__cohere_next_available__';
+const EMBED_SLOT_KEY = '__embedding_next_available__';
 
 type GlobalWithSlotState = typeof globalThis & {
-  __cohere_embed_slots__?: Record<string, number>;
+  __embed_slots__?: Record<string, number>;
 };
 
 function getSlotState(): Record<string, number> {
   const globalRef = globalThis as GlobalWithSlotState;
-  if (!globalRef.__cohere_embed_slots__) {
-    globalRef.__cohere_embed_slots__ = {};
+  if (!globalRef.__embed_slots__) {
+    globalRef.__embed_slots__ = {};
   }
-  return globalRef.__cohere_embed_slots__;
+  return globalRef.__embed_slots__;
 }
 
 const waitForEmbedSlot = async () => {
@@ -65,7 +65,7 @@ export async function POST(req: Request) {
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
     const supabaseAnon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
     const supabaseServiceRole = process.env.SUPABASE_SERVICE_ROLE_KEY;
-    const cohereKey = process.env.COHERE_API_KEY;
+    const groqKey = process.env.GROQ_API_KEY;
     
     if (!supabaseUrl || !supabaseAnon) {
       return NextResponse.json(
@@ -81,15 +81,15 @@ export async function POST(req: Request) {
       );
     }
     
-    if (!cohereKey) {
+    if (!groqKey) {
       return NextResponse.json(
-        { error: 'Clé API Cohere manquante' },
+        { error: 'Clé API Groq manquante' },
         { status: 503 }
       );
     }
     
     // 2. Initialiser les clients
-    const cohere = new CohereClient({ token: cohereKey });
+    const groq = new Groq({ apiKey: groqKey });
     
     supabaseAdmin = createClient(supabaseUrl, supabaseServiceRole, {
       auth: {
@@ -197,34 +197,30 @@ export async function POST(req: Request) {
         try {
           const batchTexts = batchChunks.map((chunk) => chunk.content);
 
-          // Générer les embeddings avec le modèle Cohere standard (dimension 1024)
+          // Générer les embeddings avec le modèle Groq
           await waitForEmbedSlot();
 
           const embedStartedAt = Date.now();
-          const embedResponse = await cohere.embed({
-            texts: batchTexts,
-            model: AI_MODELS.COHERE_EMBEDDING,
-            inputType: 'search_document',
+          const embedResponse = await groq.embeddings.create({
+            model: AI_MODELS.GROQ_EMBEDDING,
+            input: batchTexts,
           });
-          
-          const embeddingsPayload = embedResponse as unknown as {
-            embeddings?: number[][];
-          };
-          const embeddings = embeddingsPayload.embeddings;
-          if (!embeddings) {
-            throw new Error("Cohere n'a pas retourné d'embeddings");
+
+          const embeddings = embedResponse.data?.map((item) => item.embedding ?? []) ?? [];
+          if (embeddings.length !== batchChunks.length || embeddings.some((vector) => !Array.isArray(vector) || vector.length === 0)) {
+            throw new Error("Groq n'a pas retourné d'embeddings valides");
           }
 
           const embedLatencyMs = Date.now() - embedStartedAt;
-          const cohereUsage = extractCohereTokenUsage(embedResponse);
+          const groqUsage = extractGroqEmbeddingUsage(embedResponse);
           await recordAiUsage({
-            provider: 'cohere',
-            model: AI_MODELS.COHERE_EMBEDDING,
-            promptTokens: cohereUsage.inputTokens,
-            completionTokens: cohereUsage.outputTokens,
-            totalTokens: cohereUsage.totalTokens,
+            provider: 'groq',
+            model: AI_MODELS.GROQ_EMBEDDING,
+            promptTokens: groqUsage.promptTokens,
+            completionTokens: 0,
+            totalTokens: groqUsage.totalTokens,
             latencyMs: embedLatencyMs,
-            cost: estimateCohereEmbedCost(cohereUsage.totalTokens),
+            cost: estimateGroqEmbedCost(groqUsage.totalTokens),
             metadata: {
               route: 'pdf/embed-batch-optimized',
               documentId,
@@ -239,7 +235,7 @@ export async function POST(req: Request) {
           const sections = batchChunks.map((chunk, index) => ({
             user_id,
             content: chunk.content,
-            embedding: embeddings[index] ?? [],
+            embedding: embeddings[index],
             document_path: file_path,
             page_start: chunk.pageStart,
             page_end: chunk.pageEnd,
@@ -273,7 +269,7 @@ export async function POST(req: Request) {
             throw error;
           }
 
-          console.warn(`[Embed Optimized] Batch ${startIndex}: Retry ${attempt + 1}/${retries} dans ${waitMs}ms${statusCode === 429 ? ' (rate limit Cohere)' : ''}`);
+          console.warn(`[Embed Optimized] Batch ${startIndex}: Retry ${attempt + 1}/${retries} dans ${waitMs}ms${statusCode === 429 ? ' (rate limit API)' : ''}`);
           await new Promise((resolve) => setTimeout(resolve, waitMs));
         }
       }

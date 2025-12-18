@@ -1,18 +1,18 @@
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { createServerClient } from '@supabase/ssr';
-import { CohereClient } from 'cohere-ai';
+import Groq from 'groq-sdk';
 import { extractText } from 'unpdf';
 import { EMBEDDING_CONFIG, AI_MODELS } from '@/lib/constants';
 import { recordAiUsage } from '@/lib/metricsLogger';
-import { extractCohereTokenUsage, estimateCohereEmbedCost } from '@/lib/aiUsage';
+import { extractGroqEmbeddingUsage, estimateGroqEmbedCost } from '@/lib/aiUsage';
 
-// --- Initialisation du client Cohere ---
-if (!process.env.COHERE_API_KEY) {
-  throw new Error('La clé API COHERE_API_KEY est manquante');
+// --- Initialisation du client Groq ---
+if (!process.env.GROQ_API_KEY) {
+  throw new Error('La clé API GROQ_API_KEY est manquante');
 }
-const cohere = new CohereClient({
-  token: process.env.COHERE_API_KEY,
+const groq = new Groq({
+  apiKey: process.env.GROQ_API_KEY,
 });
 
 // --- Notre propre fonction de découpage ---
@@ -98,27 +98,26 @@ export async function POST(req: Request) {
 
     // 6. Génère les embeddings (vecteurs)
     const embedStartedAt = Date.now();
-    const embedResponse = await cohere.embed({
-      texts: textsToEmbed,
-      model: AI_MODELS.COHERE_EMBEDDING,
-      inputType: 'search_document',
+    const embedResponse = await groq.embeddings.create({
+      model: AI_MODELS.GROQ_EMBEDDING,
+      input: textsToEmbed,
     });
 
-    // @ts-expect-error (Corrige l'erreur ESLint)
-    if (!embedResponse.embeddings || embedResponse.embeddings.length === 0) {
-      throw new Error("Cohere n'a pas retourné d'embeddings.");
+    const embeddings = embedResponse.data?.map((item) => item.embedding ?? []) ?? [];
+    if (embeddings.length !== textsToEmbed.length || embeddings.some((vector) => !Array.isArray(vector) || vector.length === 0)) {
+      throw new Error("Groq n'a pas retourné d'embeddings valides.");
     }
 
     const embedLatencyMs = Date.now() - embedStartedAt;
-    const cohereUsage = extractCohereTokenUsage(embedResponse);
+    const groqUsage = extractGroqEmbeddingUsage(embedResponse);
     await recordAiUsage({
-      provider: 'cohere',
-      model: AI_MODELS.COHERE_EMBEDDING,
-      promptTokens: cohereUsage.inputTokens,
-      completionTokens: cohereUsage.outputTokens,
-      totalTokens: cohereUsage.totalTokens,
+      provider: 'groq',
+      model: AI_MODELS.GROQ_EMBEDDING,
+      promptTokens: groqUsage.promptTokens,
+      completionTokens: 0,
+      totalTokens: groqUsage.totalTokens,
       latencyMs: embedLatencyMs,
-      cost: estimateCohereEmbedCost(cohereUsage.totalTokens),
+      cost: estimateGroqEmbedCost(groqUsage.totalTokens),
       metadata: {
         route: 'embed',
         chunks: textsToEmbed.length,
@@ -129,11 +128,10 @@ export async function POST(req: Request) {
 
     // 7. Prépare les données
     const sections = textsToEmbed.map((content, index) => {
-      // @ts-expect-error (Corrige l'erreur ESLint)
-      const embedding = embedResponse.embeddings[index];
+      const embedding = embeddings[index];
       if (embedding.length !== EMBEDDING_CONFIG.EMBEDDING_DIMENSION) {
         throw new Error(
-          `Taille de vecteur Cohere inattendue: ${embedding.length} (attendu: ${EMBEDDING_CONFIG.EMBEDDING_DIMENSION})`
+          `Taille de vecteur Groq inattendue: ${embedding.length} (attendu: ${EMBEDDING_CONFIG.EMBEDDING_DIMENSION})`
         );
       }
       return {

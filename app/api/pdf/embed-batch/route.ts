@@ -5,10 +5,10 @@
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { createServerClient } from '@supabase/ssr';
-import { CohereClient } from 'cohere-ai';
+import Groq from 'groq-sdk';
 import { AI_MODELS } from '@/lib/constants';
 import { recordAiUsage } from '@/lib/metricsLogger';
-import { extractCohereTokenUsage, estimateCohereEmbedCost } from '@/lib/aiUsage';
+import { extractGroqEmbeddingUsage, estimateGroqEmbedCost } from '@/lib/aiUsage';
 import type { ChunkPayload } from '@/app/api/pdf/extract/route';
 
 // Configuration pour gérer les gros traitements
@@ -36,7 +36,7 @@ export async function POST(req: Request) {
     // 1. Vérifier la configuration
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
     const supabaseAnon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-    const cohereKey = process.env.COHERE_API_KEY;
+    const groqKey = process.env.GROQ_API_KEY;
     
     if (!supabaseUrl || !supabaseAnon) {
       return NextResponse.json(
@@ -45,15 +45,15 @@ export async function POST(req: Request) {
       );
     }
     
-    if (!cohereKey) {
+    if (!groqKey) {
       return NextResponse.json(
-        { error: 'Clé API Cohere manquante' },
+        { error: 'Clé API Groq manquante' },
         { status: 503 }
       );
     }
     
     // 2. Initialiser les clients
-    const cohere = new CohereClient({ token: cohereKey });
+    const groq = new Groq({ apiKey: groqKey });
     
     const supabase = createServerClient(
       supabaseUrl,
@@ -174,32 +174,28 @@ export async function POST(req: Request) {
     
     console.log(`[Embed Batch] Doc ${documentId}, Lot ${batchIndex}: Traitement de ${batchChunks.length} chunks (${progress}%)`);
     
-    // 10. Appeler Cohere pour générer les embeddings
+    // 10. Appeler Groq pour générer les embeddings
     const embedStartedAt = Date.now();
-    const embedResponse = await cohere.embed({
-      texts: batchChunks.map((chunk) => chunk.content),
-      model: AI_MODELS.COHERE_EMBEDDING,
-      inputType: 'search_document',
+    const embedResponse = await groq.embeddings.create({
+      model: AI_MODELS.GROQ_EMBEDDING,
+      input: batchChunks.map((chunk) => chunk.content),
     });
-    
-    const embeddingsPayload = embedResponse as unknown as {
-      embeddings?: number[][];
-    };
-    const embeddings = embeddingsPayload.embeddings;
-    if (!embeddings) {
-      throw new Error("Cohere n'a pas retourné d'embeddings");
+
+    const embeddings = embedResponse.data?.map((item) => item.embedding ?? []) ?? [];
+    if (embeddings.length !== batchChunks.length || embeddings.some((vector) => !Array.isArray(vector) || vector.length === 0)) {
+      throw new Error("Groq n'a pas retourné d'embeddings");
     }
 
     const embedLatencyMs = Date.now() - embedStartedAt;
-    const cohereUsage = extractCohereTokenUsage(embedResponse);
+    const groqUsage = extractGroqEmbeddingUsage(embedResponse);
     await recordAiUsage({
-      provider: 'cohere',
-      model: AI_MODELS.COHERE_EMBEDDING,
-      promptTokens: cohereUsage.inputTokens,
-      completionTokens: cohereUsage.outputTokens,
-      totalTokens: cohereUsage.totalTokens,
+      provider: 'groq',
+      model: AI_MODELS.GROQ_EMBEDDING,
+      promptTokens: groqUsage.promptTokens,
+      completionTokens: 0,
+      totalTokens: groqUsage.totalTokens,
       latencyMs: embedLatencyMs,
-      cost: estimateCohereEmbedCost(cohereUsage.totalTokens),
+      cost: estimateGroqEmbedCost(groqUsage.totalTokens),
       metadata: {
         route: 'pdf/embed-batch',
         documentId,
@@ -213,7 +209,7 @@ export async function POST(req: Request) {
     const sections = batchChunks.map((chunk, index) => ({
       user_id,
       content: chunk.content,
-      embedding: embeddings[index] ?? [],
+      embedding: embeddings[index],
       document_path: file_path,
       page_start: chunk.pageStart,
       page_end: chunk.pageEnd,

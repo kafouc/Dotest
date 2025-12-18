@@ -26,7 +26,7 @@ export const QUIZ_LIMITS = {
 export const EMBEDDING_CONFIG = {
   CHUNK_SIZE: 1000, // Optimisé: chunks plus gros pour réduire le nombre total
   CHUNK_OVERLAP: 200, // Optimisé: overlap proportionnel
-  EMBEDDING_DIMENSION: 1024, // Dimension des vecteurs Cohere
+  EMBEDDING_DIMENSION: 768, // Dimension des vecteurs Groq (nomic-embed-text)
   MATCH_THRESHOLD: 0.4,
   MATCH_COUNT: 5,
 } as const;
@@ -37,8 +37,8 @@ export const BATCH_CONFIG = {
   PARALLEL_BATCHES: 1, // Traiter les lots en série pour lisser la consommation de tokens
   MAX_RETRIES: 4, // Nombre de tentatives en cas d'erreur ponctuelle
   RETRY_BASE_DELAY_MS: 1500, // Backoff de base entre les tentatives
-  RATE_LIMIT_DELAY_MS: 4000, // Attente supplémentaire en cas de 429 Cohere
-  MIN_EMBED_INTERVAL_MS: 2500, // Pause minimum entre deux requêtes Cohere (ms)
+  RATE_LIMIT_DELAY_MS: 4000, // Attente supplémentaire en cas de 429 côté API
+  MIN_EMBED_INTERVAL_MS: 1500, // Pause minimum entre deux requêtes d'embedding (ms)
 } as const;
 
 // Configuration de quiz
@@ -49,8 +49,7 @@ export const QUIZ_CONFIG = {
 
 // Modèles IA
 export const AI_MODELS = {
-  COHERE_EMBEDDING: 'embed-multilingual-v3.0',
-  COHERE_EMBEDDING_LIGHT: 'embed-english-light-v3.0', // Modèle optimisé 40% plus rapide
+  GROQ_EMBEDDING: 'nomic-embed-text',
   GROQ_QUIZ_GENERATION: 'qwen/qwen3-32b',
 } as const;
 

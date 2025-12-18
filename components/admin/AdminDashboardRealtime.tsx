@@ -305,7 +305,7 @@ export default function AdminDashboardRealtime({ since, daysWindow, initialData 
             <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
               <div className="text-xs font-semibold uppercase tracking-wide text-brand-dark-lighter">Coût estimé</div>
               <div className="mt-2 text-2xl font-semibold text-brand-dark">{currencyFormatter.format(aggregates.totalEstimatedCost)}</div>
-              <div className="mt-1 text-xs text-brand-dark-lighter">IA (Groq + Cohere)</div>
+              <div className="mt-1 text-xs text-brand-dark-lighter">IA (Groq)</div>
             </div>
             <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
               <div className="text-xs font-semibold uppercase tracking-wide text-brand-dark-lighter">Documents importés</div>

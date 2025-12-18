@@ -1,12 +1,11 @@
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { createServerClient } from '@supabase/ssr';
-import { CohereClient } from 'cohere-ai';
 import Groq from 'groq-sdk';
 import { EMBEDDING_CONFIG, AI_MODELS } from '@/lib/constants';
 import { recordAiUsage } from '@/lib/metricsLogger';
 import { touchUserStreak } from '@/lib/streaks';
-import { extractCohereTokenUsage, extractGroqUsage, estimateCohereEmbedCost, estimateGroqCost } from '@/lib/aiUsage';
+import { extractGroqEmbeddingUsage, extractGroqUsage, estimateGroqCost, estimateGroqEmbedCost } from '@/lib/aiUsage';
 import { ensureRevisionQuota, QuotaError } from '@/lib/quota';
 import { logExportEvent } from '@/lib/exportEvents';
 
@@ -20,11 +19,6 @@ type SectionRow = {
   page_start?: number | null;
   page_end?: number | null;
 };
-
-if (!process.env.COHERE_API_KEY) {
-  throw new Error('La clé API COHERE_API_KEY est manquante');
-}
-const cohere = new CohereClient({ token: process.env.COHERE_API_KEY });
 
 if (!process.env.GROQ_API_KEY) {
   throw new Error('La clé API GROQ_API_KEY est manquante');
@@ -71,25 +65,31 @@ export async function POST(req: Request) {
 
     // 1) Embedding d'une requête neutre pour récupérer des sections représentatives
     const embedStartedAt = Date.now();
-    const embed = await cohere.embed({
-      texts: ['Synthétise le document: points clés, définitions, formules, erreurs fréquentes, conseils, 5 questions d’auto-évaluation.'],
-      model: AI_MODELS.COHERE_EMBEDDING,
-      inputType: 'search_query',
+    const embedResponse = await groq.embeddings.create({
+      model: AI_MODELS.GROQ_EMBEDDING,
+      input: ['Synthétise le document: points clés, définitions, formules, erreurs fréquentes, conseils, 5 questions d’auto-évaluation.'],
     });
-    // @ts-expect-error Cohere types not perfect
-    const queryEmbedding = embed.embeddings?.[0];
-    if (!queryEmbedding) throw new Error("Cohere n'a pas renvoyé d'embedding.");
+    const rawEmbedding = embedResponse.data?.[0]?.embedding;
+    if (!Array.isArray(rawEmbedding) || rawEmbedding.length === 0) {
+      throw new Error("Groq n'a pas renvoyé d'embedding valide.");
+    }
+    if (rawEmbedding.length !== EMBEDDING_CONFIG.EMBEDDING_DIMENSION) {
+      throw new Error(
+        `Dimension d'embedding Groq inattendue: ${rawEmbedding.length} (attendu: ${EMBEDDING_CONFIG.EMBEDDING_DIMENSION}).`
+      );
+    }
+    const queryEmbedding = rawEmbedding as number[];
 
     const embedLatencyMs = Date.now() - embedStartedAt;
-    const cohereUsage = extractCohereTokenUsage(embed);
+    const embedUsage = extractGroqEmbeddingUsage(embedResponse);
     await recordAiUsage({
-      provider: 'cohere',
-      model: AI_MODELS.COHERE_EMBEDDING,
-      promptTokens: cohereUsage.inputTokens,
-      completionTokens: cohereUsage.outputTokens,
-      totalTokens: cohereUsage.totalTokens,
+      provider: 'groq',
+      model: AI_MODELS.GROQ_EMBEDDING,
+      promptTokens: embedUsage.promptTokens,
+      completionTokens: 0,
+      totalTokens: embedUsage.totalTokens,
       latencyMs: embedLatencyMs,
-      cost: estimateCohereEmbedCost(cohereUsage.totalTokens),
+      cost: estimateGroqEmbedCost(embedUsage.totalTokens),
       metadata: {
         route: 'generate-summary',
         stage: 'embedding',

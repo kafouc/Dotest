@@ -2,11 +2,10 @@ import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { createServerClient } from '@supabase/ssr';
 import Groq from 'groq-sdk';
-import { CohereClient } from 'cohere-ai';
 import { EMBEDDING_CONFIG, AI_MODELS, QUIZ_LIMITS } from '@/lib/constants';
 import { recordAiUsage } from '@/lib/metricsLogger';
 import { touchUserStreak } from '@/lib/streaks';
-import { extractCohereTokenUsage, extractGroqUsage, estimateCohereEmbedCost, estimateGroqCost } from '@/lib/aiUsage';
+import { extractGroqEmbeddingUsage, extractGroqUsage, estimateGroqCost, estimateGroqEmbedCost } from '@/lib/aiUsage';
 import { ensureQuizQuota, QuotaError } from '@/lib/quota';
 import { logExportEvent } from '@/lib/exportEvents';
 
@@ -27,27 +26,26 @@ type SectionRow = {
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-        // Vérifier la configuration Supabase
-        const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-        const supabaseAnon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-        if (!supabaseUrl || !supabaseAnon) {
-          return NextResponse.json(
-            { error: 'Configuration Supabase manquante (NEXT_PUBLIC_SUPABASE_URL / NEXT_PUBLIC_SUPABASE_ANON_KEY)' },
-            { status: 503 }
-          );
-        }
 
-        // Initialisation clients IA avec vérification des clés
-        const cohereKey = process.env.COHERE_API_KEY;
-        const groqKey = process.env.GROQ_API_KEY;
-        if (!cohereKey || !groqKey) {
-          return NextResponse.json(
-            { error: 'Configuration IA manquante (COHERE_API_KEY / GROQ_API_KEY)' },
-            { status: 503 }
-          );
-        }
-        const cohere = new CohereClient({ token: cohereKey });
-        const groq = new Groq({ apiKey: groqKey });
+    // Vérifier la configuration Supabase
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const supabaseAnon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    if (!supabaseUrl || !supabaseAnon) {
+      return NextResponse.json(
+        { error: 'Configuration Supabase manquante (NEXT_PUBLIC_SUPABASE_URL / NEXT_PUBLIC_SUPABASE_ANON_KEY)' },
+        { status: 503 }
+      );
+    }
+
+    // Initialisation client Groq avec vérification de la clé
+    const groqKey = process.env.GROQ_API_KEY;
+    if (!groqKey) {
+      return NextResponse.json(
+        { error: 'Configuration IA manquante (GROQ_API_KEY)' },
+        { status: 503 }
+      );
+    }
+    const groq = new Groq({ apiKey: groqKey });
     const {
       query: userQuery,
       documentPath,
@@ -113,31 +111,34 @@ export async function POST(req: Request) {
 
     await ensureQuizQuota(supabase, user.id, documentPath ?? null);
 
-    // 3. Générer le vecteur de la question avec Cohere
+    // 3. Générer le vecteur de la question avec Groq
     const embedStartedAt = Date.now();
-    const embedResponse = await cohere.embed({
-      texts: [userQuery],
-      model: AI_MODELS.COHERE_EMBEDDING,
-      inputType: 'search_query',
+    const embedResponse = await groq.embeddings.create({
+      model: AI_MODELS.GROQ_EMBEDDING,
+      input: [userQuery],
     });
 
-    // @ts-expect-error (Corrige l'erreur ESLint)
-    if (!embedResponse.embeddings || embedResponse.embeddings.length === 0) {
-      throw new Error("Cohere n'a pas retourné d'embedding pour la question.");
+    const rawEmbedding = embedResponse.data?.[0]?.embedding;
+    if (!Array.isArray(rawEmbedding) || rawEmbedding.length === 0) {
+      throw new Error("Groq n'a pas retourné d'embedding pour la question.");
     }
-    // @ts-expect-error (Corrige l'erreur ESLint)
-    const queryEmbedding = embedResponse.embeddings[0];
+    if (rawEmbedding.length !== EMBEDDING_CONFIG.EMBEDDING_DIMENSION) {
+      throw new Error(
+        `Dimension d'embedding Groq inattendue: ${rawEmbedding.length} (attendu: ${EMBEDDING_CONFIG.EMBEDDING_DIMENSION}).`
+      );
+    }
+    const queryEmbedding = rawEmbedding as number[];
 
     const embedLatencyMs = Date.now() - embedStartedAt;
-    const cohereUsage = extractCohereTokenUsage(embedResponse);
+    const embedUsage = extractGroqEmbeddingUsage(embedResponse);
     await recordAiUsage({
-      provider: 'cohere',
-      model: AI_MODELS.COHERE_EMBEDDING,
-      promptTokens: cohereUsage.inputTokens,
-      completionTokens: cohereUsage.outputTokens,
-      totalTokens: cohereUsage.totalTokens,
+      provider: 'groq',
+      model: AI_MODELS.GROQ_EMBEDDING,
+      promptTokens: embedUsage.promptTokens,
+      completionTokens: 0,
+      totalTokens: embedUsage.totalTokens,
       latencyMs: embedLatencyMs,
-      cost: estimateCohereEmbedCost(cohereUsage.totalTokens),
+      cost: estimateGroqEmbedCost(embedUsage.totalTokens),
       metadata: {
         route: 'generate-quiz',
         stage: 'embedding',
