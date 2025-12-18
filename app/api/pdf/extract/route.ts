@@ -419,7 +419,7 @@ export async function POST(req: Request) {
       eventData: {
         documentId,
         filePath: storageFilePath,
-        mimeType: mime,
+        mimeType: type,
         chunkCount: chunks.length,
       },
     });
