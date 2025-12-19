@@ -392,27 +392,21 @@ export async function POST(req: Request) {
       || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null)
       || new URL(req.url).origin;
 
-    import('@/app/api/pdf/embed-batch-optimized/route')
-      .then(async (module) => {
-        const handler = module.POST;
-        if (typeof handler !== 'function') {
-          throw new Error('Handler embed-batch-optimized introuvable');
-        }
+    const targetUrl = `${baseUrl}/api/pdf/embed-batch-optimized`;
 
-        const request = new Request(`${baseUrl}/api/pdf/embed-batch-optimized`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            documentId,
-            chunkFilePath: chunkFileName,
-            totalChunks: chunks.length,
-          }),
-        });
-
-        const response = await handler(request);
+    fetch(targetUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        documentId,
+        chunkFilePath: chunkFileName,
+        totalChunks: chunks.length,
+      }),
+    })
+      .then(async (response) => {
         if (!response.ok) {
           const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
-          console.error(`[PDF Extract] Batch optimized failed:`, errorData);
+          console.error('[PDF Extract] Batch optimized failed:', errorData);
           throw new Error(`Embedding failed: ${JSON.stringify(errorData)}`);
         }
       })
