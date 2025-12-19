@@ -5,9 +5,10 @@ import Groq from 'groq-sdk';
 import { EMBEDDING_CONFIG, AI_MODELS } from '@/lib/constants';
 import { recordAiUsage } from '@/lib/metricsLogger';
 import { touchUserStreak } from '@/lib/streaks';
-import { extractGroqEmbeddingUsage, extractGroqUsage, estimateGroqCost, estimateGroqEmbedCost } from '@/lib/aiUsage';
+import { extractEmbeddingUsage, extractGroqUsage, estimateGroqCost, estimateEmbeddingCost } from '@/lib/aiUsage';
 import { ensureRevisionQuota, QuotaError } from '@/lib/quota';
 import { logExportEvent } from '@/lib/exportEvents';
+import { createJinaEmbeddings, extractEmbeddingsFromResponse, formatJinaError } from '@/lib/jinaClient';
 
 type PageRange = {
   start?: number | null;
@@ -63,33 +64,36 @@ export async function POST(req: Request) {
 
     await ensureRevisionQuota(supabase, user.id);
 
+    if (!process.env.JINA_API_KEY) {
+      return NextResponse.json({ error: 'Configuration IA manquante (JINA_API_KEY)' }, { status: 503 });
+    }
+
     // 1) Embedding d'une requête neutre pour récupérer des sections représentatives
     const embedStartedAt = Date.now();
-    const embedResponse = await groq.embeddings.create({
-      model: AI_MODELS.GROQ_EMBEDDING,
-      input: ['Synthétise le document: points clés, définitions, formules, erreurs fréquentes, conseils, 5 questions d’auto-évaluation.'],
-    });
-    const rawEmbedding = embedResponse.data?.[0]?.embedding;
+    const embedResponse = await createJinaEmbeddings([
+      'Synthétise le document: points clés, définitions, formules, erreurs fréquentes, conseils, 5 questions d’auto-évaluation.',
+    ], AI_MODELS.EMBEDDING);
+    const rawEmbedding = extractEmbeddingsFromResponse(embedResponse)[0];
     if (!Array.isArray(rawEmbedding) || rawEmbedding.length === 0) {
-      throw new Error("Groq n'a pas renvoyé d'embedding valide.");
+      throw new Error("Jina n'a pas renvoyé d'embedding valide.");
     }
     if (rawEmbedding.length !== EMBEDDING_CONFIG.EMBEDDING_DIMENSION) {
       throw new Error(
-        `Dimension d'embedding Groq inattendue: ${rawEmbedding.length} (attendu: ${EMBEDDING_CONFIG.EMBEDDING_DIMENSION}).`
+        `Dimension d'embedding Jina inattendue: ${rawEmbedding.length} (attendu: ${EMBEDDING_CONFIG.EMBEDDING_DIMENSION}).`
       );
     }
     const queryEmbedding = rawEmbedding as number[];
 
     const embedLatencyMs = Date.now() - embedStartedAt;
-    const embedUsage = extractGroqEmbeddingUsage(embedResponse);
+    const embedUsage = extractEmbeddingUsage(embedResponse);
     await recordAiUsage({
-      provider: 'groq',
-      model: AI_MODELS.GROQ_EMBEDDING,
+      provider: 'jina',
+      model: AI_MODELS.EMBEDDING,
       promptTokens: embedUsage.promptTokens,
       completionTokens: 0,
       totalTokens: embedUsage.totalTokens,
       latencyMs: embedLatencyMs,
-      cost: estimateGroqEmbedCost(embedUsage.totalTokens),
+      cost: estimateEmbeddingCost(embedUsage.totalTokens),
       metadata: {
         route: 'generate-summary',
         stage: 'embedding',
@@ -272,7 +276,7 @@ ${context}
       }, { status: 402 });
     }
     console.error('Erreur API Generate Summary:', error);
-    const msg = error instanceof Error ? error.message : 'Erreur inconnue';
+    const msg = error instanceof Error ? formatJinaError(error) : 'Erreur inconnue';
     return NextResponse.json({ error: msg }, { status: 500 });
   }
 }

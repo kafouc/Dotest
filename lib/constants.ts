@@ -26,7 +26,7 @@ export const QUIZ_LIMITS = {
 export const EMBEDDING_CONFIG = {
   CHUNK_SIZE: 1000, // Optimisé: chunks plus gros pour réduire le nombre total
   CHUNK_OVERLAP: 200, // Optimisé: overlap proportionnel
-  EMBEDDING_DIMENSION: 768, // Dimension des vecteurs Groq (nomic-embed-text)
+  EMBEDDING_DIMENSION: 1024, // Dimension des vecteurs Jina (jina-embeddings-v3)
   MATCH_THRESHOLD: 0.4,
   MATCH_COUNT: 5,
 } as const;
@@ -49,8 +49,8 @@ export const QUIZ_CONFIG = {
 
 // Modèles IA
 export const AI_MODELS = {
-  GROQ_EMBEDDING: 'nomic-embed-text',
-  GROQ_QUIZ_GENERATION: 'qwen/qwen3-32b',
+  EMBEDDING: 'jina-embeddings-v3',
+  QUIZ_GENERATION: 'qwen/qwen3-32b',
 } as const;
 
 export const THEME_GENERATION_CONFIG = {

@@ -5,10 +5,10 @@
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { createServerClient } from '@supabase/ssr';
-import Groq from 'groq-sdk';
 import { AI_MODELS } from '@/lib/constants';
 import { recordAiUsage } from '@/lib/metricsLogger';
-import { extractGroqEmbeddingUsage, estimateGroqEmbedCost } from '@/lib/aiUsage';
+import { extractEmbeddingUsage, estimateEmbeddingCost } from '@/lib/aiUsage';
+import { createJinaEmbeddings, extractEmbeddingsFromResponse, formatJinaError } from '@/lib/jinaClient';
 import type { ChunkPayload } from '@/app/api/pdf/extract/route';
 
 // Configuration pour gérer les gros traitements
@@ -36,7 +36,7 @@ export async function POST(req: Request) {
     // 1. Vérifier la configuration
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
     const supabaseAnon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-    const groqKey = process.env.GROQ_API_KEY;
+    const jinaKey = process.env.JINA_API_KEY;
     
     if (!supabaseUrl || !supabaseAnon) {
       return NextResponse.json(
@@ -45,16 +45,14 @@ export async function POST(req: Request) {
       );
     }
     
-    if (!groqKey) {
+    if (!jinaKey) {
       return NextResponse.json(
-        { error: 'Clé API Groq manquante' },
+        { error: 'Clé API Jina manquante' },
         { status: 503 }
       );
     }
     
     // 2. Initialiser les clients
-    const groq = new Groq({ apiKey: groqKey });
-    
     const supabase = createServerClient(
       supabaseUrl,
       supabaseAnon,
@@ -174,28 +172,28 @@ export async function POST(req: Request) {
     
     console.log(`[Embed Batch] Doc ${documentId}, Lot ${batchIndex}: Traitement de ${batchChunks.length} chunks (${progress}%)`);
     
-    // 10. Appeler Groq pour générer les embeddings
+    // 10. Appeler Jina pour générer les embeddings
     const embedStartedAt = Date.now();
-    const embedResponse = await groq.embeddings.create({
-      model: AI_MODELS.GROQ_EMBEDDING,
-      input: batchChunks.map((chunk) => chunk.content),
-    });
+    const embedResponse = await createJinaEmbeddings(
+      batchChunks.map((chunk) => chunk.content),
+      AI_MODELS.EMBEDDING,
+    );
 
-    const embeddings = embedResponse.data?.map((item) => item.embedding ?? []) ?? [];
+    const embeddings = extractEmbeddingsFromResponse(embedResponse);
     if (embeddings.length !== batchChunks.length || embeddings.some((vector) => !Array.isArray(vector) || vector.length === 0)) {
-      throw new Error("Groq n'a pas retourné d'embeddings");
+      throw new Error("Jina n'a pas retourné d'embeddings");
     }
 
     const embedLatencyMs = Date.now() - embedStartedAt;
-    const groqUsage = extractGroqEmbeddingUsage(embedResponse);
+    const embeddingUsage = extractEmbeddingUsage(embedResponse);
     await recordAiUsage({
-      provider: 'groq',
-      model: AI_MODELS.GROQ_EMBEDDING,
-      promptTokens: groqUsage.promptTokens,
+      provider: 'jina',
+      model: AI_MODELS.EMBEDDING,
+      promptTokens: embeddingUsage.promptTokens,
       completionTokens: 0,
-      totalTokens: groqUsage.totalTokens,
+      totalTokens: embeddingUsage.totalTokens,
       latencyMs: embedLatencyMs,
-      cost: estimateGroqEmbedCost(groqUsage.totalTokens),
+      cost: estimateEmbeddingCost(embeddingUsage.totalTokens),
       metadata: {
         route: 'pdf/embed-batch',
         documentId,
@@ -251,7 +249,7 @@ export async function POST(req: Request) {
     });
     
   } catch (error: unknown) {
-    const errorMessage = error instanceof Error ? error.message : 'Erreur interne';
+    const errorMessage = error instanceof Error ? formatJinaError(error) : 'Erreur interne';
     console.error(`[Embed Batch] Erreur lot ${batchIndex}:`, errorMessage);
     
     // Mettre à jour le statut du document en cas d'erreur

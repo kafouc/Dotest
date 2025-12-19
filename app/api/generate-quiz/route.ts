@@ -5,9 +5,10 @@ import Groq from 'groq-sdk';
 import { EMBEDDING_CONFIG, AI_MODELS, QUIZ_LIMITS } from '@/lib/constants';
 import { recordAiUsage } from '@/lib/metricsLogger';
 import { touchUserStreak } from '@/lib/streaks';
-import { extractGroqEmbeddingUsage, extractGroqUsage, estimateGroqCost, estimateGroqEmbedCost } from '@/lib/aiUsage';
+import { extractEmbeddingUsage, extractGroqUsage, estimateGroqCost, estimateEmbeddingCost } from '@/lib/aiUsage';
 import { ensureQuizQuota, QuotaError } from '@/lib/quota';
 import { logExportEvent } from '@/lib/exportEvents';
+import { createJinaEmbeddings, extractEmbeddingsFromResponse, formatJinaError } from '@/lib/jinaClient';
 
 type PageRange = {
   start?: number | null;
@@ -33,6 +34,14 @@ export async function POST(req: Request) {
     if (!supabaseUrl || !supabaseAnon) {
       return NextResponse.json(
         { error: 'Configuration Supabase manquante (NEXT_PUBLIC_SUPABASE_URL / NEXT_PUBLIC_SUPABASE_ANON_KEY)' },
+        { status: 503 }
+      );
+    }
+
+    const jinaKey = process.env.JINA_API_KEY;
+    if (!jinaKey) {
+      return NextResponse.json(
+        { error: 'Configuration IA manquante (JINA_API_KEY)' },
         { status: 503 }
       );
     }
@@ -111,34 +120,31 @@ export async function POST(req: Request) {
 
     await ensureQuizQuota(supabase, user.id, documentPath ?? null);
 
-    // 3. Générer le vecteur de la question avec Groq
+    // 3. Générer le vecteur de la question avec Jina
     const embedStartedAt = Date.now();
-    const embedResponse = await groq.embeddings.create({
-      model: AI_MODELS.GROQ_EMBEDDING,
-      input: [userQuery],
-    });
+    const embedResponse = await createJinaEmbeddings([userQuery], AI_MODELS.EMBEDDING);
 
-    const rawEmbedding = embedResponse.data?.[0]?.embedding;
+    const rawEmbedding = extractEmbeddingsFromResponse(embedResponse)[0];
     if (!Array.isArray(rawEmbedding) || rawEmbedding.length === 0) {
-      throw new Error("Groq n'a pas retourné d'embedding pour la question.");
+      throw new Error("Jina n'a pas retourné d'embedding pour la question.");
     }
     if (rawEmbedding.length !== EMBEDDING_CONFIG.EMBEDDING_DIMENSION) {
       throw new Error(
-        `Dimension d'embedding Groq inattendue: ${rawEmbedding.length} (attendu: ${EMBEDDING_CONFIG.EMBEDDING_DIMENSION}).`
+        `Dimension d'embedding Jina inattendue: ${rawEmbedding.length} (attendu: ${EMBEDDING_CONFIG.EMBEDDING_DIMENSION}).`
       );
     }
     const queryEmbedding = rawEmbedding as number[];
 
     const embedLatencyMs = Date.now() - embedStartedAt;
-    const embedUsage = extractGroqEmbeddingUsage(embedResponse);
+    const embedUsage = extractEmbeddingUsage(embedResponse);
     await recordAiUsage({
-      provider: 'groq',
-      model: AI_MODELS.GROQ_EMBEDDING,
+      provider: 'jina',
+      model: AI_MODELS.EMBEDDING,
       promptTokens: embedUsage.promptTokens,
       completionTokens: 0,
       totalTokens: embedUsage.totalTokens,
       latencyMs: embedLatencyMs,
-      cost: estimateGroqEmbedCost(embedUsage.totalTokens),
+      cost: estimateEmbeddingCost(embedUsage.totalTokens),
       metadata: {
         route: 'generate-quiz',
         stage: 'embedding',
@@ -218,7 +224,7 @@ export async function POST(req: Request) {
         },
         { role: 'user', content: prompt },
       ],
-      model: AI_MODELS.GROQ_QUIZ_GENERATION,
+      model: AI_MODELS.QUIZ_GENERATION,
       temperature: 0.1,
       response_format: { type: 'json_object' },
     });
@@ -232,7 +238,7 @@ export async function POST(req: Request) {
     const groqUsage = extractGroqUsage(chatCompletion.usage);
     await recordAiUsage({
       provider: 'groq',
-      model: chatCompletion.model ?? AI_MODELS.GROQ_QUIZ_GENERATION,
+      model: chatCompletion.model ?? AI_MODELS.QUIZ_GENERATION,
       promptTokens: groqUsage.promptTokens,
       completionTokens: groqUsage.completionTokens,
       totalTokens: groqUsage.totalTokens,
@@ -307,7 +313,7 @@ export async function POST(req: Request) {
     }
     console.error('Erreur API Generate Quiz:', error);
     const errorMessage =
-      error instanceof Error ? error.message : 'Erreur inconnue';
+      error instanceof Error ? formatJinaError(error) : 'Erreur inconnue';
     return NextResponse.json({ error: errorMessage }, { status: 500 });
   }
 }

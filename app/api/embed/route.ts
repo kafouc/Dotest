@@ -1,21 +1,13 @@
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { createServerClient } from '@supabase/ssr';
-import Groq from 'groq-sdk';
 import { extractText } from 'unpdf';
 import { EMBEDDING_CONFIG, AI_MODELS } from '@/lib/constants';
 import { recordAiUsage } from '@/lib/metricsLogger';
-import { extractGroqEmbeddingUsage, estimateGroqEmbedCost } from '@/lib/aiUsage';
+import { extractEmbeddingUsage, estimateEmbeddingCost } from '@/lib/aiUsage';
+import { createJinaEmbeddings, extractEmbeddingsFromResponse, formatJinaError } from '@/lib/jinaClient';
 
-// --- Initialisation du client Groq ---
-if (!process.env.GROQ_API_KEY) {
-  throw new Error('La clé API GROQ_API_KEY est manquante');
-}
-const groq = new Groq({
-  apiKey: process.env.GROQ_API_KEY,
-});
-
-// --- Notre propre fonction de découpage ---
+// --- Fonction de découpage personnalisée ---
 function createChunks(
   text: string,
   chunkSize: number,
@@ -98,26 +90,22 @@ export async function POST(req: Request) {
 
     // 6. Génère les embeddings (vecteurs)
     const embedStartedAt = Date.now();
-    const embedResponse = await groq.embeddings.create({
-      model: AI_MODELS.GROQ_EMBEDDING,
-      input: textsToEmbed,
-    });
-
-    const embeddings = embedResponse.data?.map((item) => item.embedding ?? []) ?? [];
+    const embedResponse = await createJinaEmbeddings(textsToEmbed, AI_MODELS.EMBEDDING);
+    const embeddings = extractEmbeddingsFromResponse(embedResponse);
     if (embeddings.length !== textsToEmbed.length || embeddings.some((vector) => !Array.isArray(vector) || vector.length === 0)) {
-      throw new Error("Groq n'a pas retourné d'embeddings valides.");
+      throw new Error("Jina n'a pas retourné d'embeddings valides.");
     }
 
     const embedLatencyMs = Date.now() - embedStartedAt;
-    const groqUsage = extractGroqEmbeddingUsage(embedResponse);
+    const usage = extractEmbeddingUsage(embedResponse);
     await recordAiUsage({
-      provider: 'groq',
-      model: AI_MODELS.GROQ_EMBEDDING,
-      promptTokens: groqUsage.promptTokens,
+      provider: 'jina',
+      model: AI_MODELS.EMBEDDING,
+      promptTokens: usage.promptTokens,
       completionTokens: 0,
-      totalTokens: groqUsage.totalTokens,
+      totalTokens: usage.totalTokens,
       latencyMs: embedLatencyMs,
-      cost: estimateGroqEmbedCost(groqUsage.totalTokens),
+      cost: estimateEmbeddingCost(usage.totalTokens),
       metadata: {
         route: 'embed',
         chunks: textsToEmbed.length,
@@ -131,7 +119,7 @@ export async function POST(req: Request) {
       const embedding = embeddings[index];
       if (embedding.length !== EMBEDDING_CONFIG.EMBEDDING_DIMENSION) {
         throw new Error(
-          `Taille de vecteur Groq inattendue: ${embedding.length} (attendu: ${EMBEDDING_CONFIG.EMBEDDING_DIMENSION})`
+          `Taille de vecteur Jina inattendue: ${embedding.length} (attendu: ${EMBEDDING_CONFIG.EMBEDDING_DIMENSION})`
         );
       }
       return {
@@ -159,7 +147,7 @@ export async function POST(req: Request) {
     // 'any' corrigé en 'unknown'
     console.error('Erreur API Embed:', error);
     const errorMessage =
-      error instanceof Error ? error.message : 'Erreur inconnue';
+      error instanceof Error ? formatJinaError(error) : 'Erreur inconnue';
     return NextResponse.json({ error: errorMessage }, { status: 500 });
   }
 }

@@ -97,13 +97,13 @@ export async function POST(req: Request) {
 
     const sectionsQuery = supabase
       .from('document_sections')
-      .select('content, page_start, page_end, created_at')
+      .select('content, page_start, page_end')
       .eq('user_id', user.id);
 
     if (documentPath) {
       sectionsQuery.eq('document_path', documentPath).order('page_start', { ascending: true });
     } else {
-      sectionsQuery.order('created_at', { ascending: false });
+      sectionsQuery.order('id', { ascending: false });
     }
 
     if (pageStart != null) {

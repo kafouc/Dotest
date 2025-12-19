@@ -1,6 +1,6 @@
 const GROQ_PROMPT_COST_PER_1K = Number(process.env.GROQ_COST_PER_1K_PROMPT ?? 0);
 const GROQ_COMPLETION_COST_PER_1K = Number(process.env.GROQ_COST_PER_1K_COMPLETION ?? 0);
-const GROQ_EMBED_COST_PER_1K = Number(process.env.GROQ_COST_PER_1K_EMBED ?? 0);
+const EMBEDDING_COST_PER_1K = Number(process.env.EMBED_COST_PER_1K ?? 0);
 
 export type GroqUsage = {
   promptTokens: number;
@@ -8,12 +8,12 @@ export type GroqUsage = {
   totalTokens: number;
 };
 
-export type GroqEmbeddingUsage = {
+export type EmbeddingUsage = {
   promptTokens: number;
   totalTokens: number;
 };
 
-export function extractGroqEmbeddingUsage(response: unknown): GroqEmbeddingUsage {
+export function extractEmbeddingUsage(response: unknown): EmbeddingUsage {
   const usage = (response as { usage?: Record<string, unknown> } | null | undefined)?.usage ?? {};
   const promptTokens = normalizeTokenValue((usage as Record<string, unknown>).prompt_tokens ?? (usage as Record<string, unknown>).promptTokens);
   const totalTokensRaw = (usage as Record<string, unknown>).total_tokens ?? (usage as Record<string, unknown>).totalTokens;
@@ -46,11 +46,11 @@ export function estimateGroqCost(promptTokens: number, completionTokens: number)
   return Number((promptCost + completionCost).toFixed(4));
 }
 
-export function estimateGroqEmbedCost(totalTokens: number): number {
-  if (!GROQ_EMBED_COST_PER_1K) {
+export function estimateEmbeddingCost(totalTokens: number): number {
+  if (!EMBEDDING_COST_PER_1K) {
     return 0;
   }
-  const cost = (totalTokens / 1000) * GROQ_EMBED_COST_PER_1K;
+  const cost = (totalTokens / 1000) * EMBEDDING_COST_PER_1K;
   return Number(cost.toFixed(4));
 }
 

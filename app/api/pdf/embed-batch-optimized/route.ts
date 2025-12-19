@@ -4,10 +4,10 @@
 
 import { NextResponse } from 'next/server';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
-import Groq from 'groq-sdk';
 import { AI_MODELS, BATCH_CONFIG } from '@/lib/constants';
 import { recordAiUsage } from '@/lib/metricsLogger';
-import { extractGroqEmbeddingUsage, estimateGroqEmbedCost } from '@/lib/aiUsage';
+import { extractEmbeddingUsage, estimateEmbeddingCost } from '@/lib/aiUsage';
+import { createJinaEmbeddings, extractEmbeddingsFromResponse, formatJinaError } from '@/lib/jinaClient';
 import type { ChunkPayload } from '@/app/api/pdf/extract/route';
 
 const EMBED_SLOT_KEY = '__embedding_next_available__';
@@ -65,7 +65,7 @@ export async function POST(req: Request) {
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
     const supabaseAnon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
     const supabaseServiceRole = process.env.SUPABASE_SERVICE_ROLE_KEY;
-    const groqKey = process.env.GROQ_API_KEY;
+    const jinaKey = process.env.JINA_API_KEY;
     
     if (!supabaseUrl || !supabaseAnon) {
       return NextResponse.json(
@@ -81,16 +81,14 @@ export async function POST(req: Request) {
       );
     }
     
-    if (!groqKey) {
+    if (!jinaKey) {
       return NextResponse.json(
-        { error: 'Clé API Groq manquante' },
+        { error: 'Clé API Jina manquante' },
         { status: 503 }
       );
     }
     
     // 2. Initialiser les clients
-    const groq = new Groq({ apiKey: groqKey });
-    
     supabaseAdmin = createClient(supabaseUrl, supabaseServiceRole, {
       auth: {
         persistSession: false,
@@ -197,30 +195,27 @@ export async function POST(req: Request) {
         try {
           const batchTexts = batchChunks.map((chunk) => chunk.content);
 
-          // Générer les embeddings avec le modèle Groq
+          // Générer les embeddings avec le modèle Jina
           await waitForEmbedSlot();
 
           const embedStartedAt = Date.now();
-          const embedResponse = await groq.embeddings.create({
-            model: AI_MODELS.GROQ_EMBEDDING,
-            input: batchTexts,
-          });
+          const embedResponse = await createJinaEmbeddings(batchTexts, AI_MODELS.EMBEDDING);
 
-          const embeddings = embedResponse.data?.map((item) => item.embedding ?? []) ?? [];
+          const embeddings = extractEmbeddingsFromResponse(embedResponse);
           if (embeddings.length !== batchChunks.length || embeddings.some((vector) => !Array.isArray(vector) || vector.length === 0)) {
-            throw new Error("Groq n'a pas retourné d'embeddings valides");
+            throw new Error("Jina n'a pas retourné d'embeddings valides");
           }
 
           const embedLatencyMs = Date.now() - embedStartedAt;
-          const groqUsage = extractGroqEmbeddingUsage(embedResponse);
+          const embeddingUsage = extractEmbeddingUsage(embedResponse);
           await recordAiUsage({
-            provider: 'groq',
-            model: AI_MODELS.GROQ_EMBEDDING,
-            promptTokens: groqUsage.promptTokens,
+            provider: 'jina',
+            model: AI_MODELS.EMBEDDING,
+            promptTokens: embeddingUsage.promptTokens,
             completionTokens: 0,
-            totalTokens: groqUsage.totalTokens,
+            totalTokens: embeddingUsage.totalTokens,
             latencyMs: embedLatencyMs,
-            cost: estimateGroqEmbedCost(groqUsage.totalTokens),
+            cost: estimateEmbeddingCost(embeddingUsage.totalTokens),
             metadata: {
               route: 'pdf/embed-batch-optimized',
               documentId,
@@ -257,8 +252,12 @@ export async function POST(req: Request) {
           return; // Succès
           
         } catch (error) {
-          const statusCode = typeof error === 'object' && error && 'statusCode' in error
-            ? (error as { statusCode?: number }).statusCode
+          const statusCode = typeof error === 'object' && error
+            ? (('status' in error && typeof (error as { status?: unknown }).status === 'number')
+              ? (error as { status?: number }).status
+              : (('statusCode' in error && typeof (error as { statusCode?: unknown }).statusCode === 'number')
+                ? (error as { statusCode?: number }).statusCode
+                : undefined))
             : undefined;
 
           const baseDelay = statusCode === 429 ? RATE_LIMIT_DELAY_MS : RETRY_BASE_DELAY_MS;
@@ -338,7 +337,7 @@ export async function POST(req: Request) {
     });
     
   } catch (error: unknown) {
-    const errorMessage = error instanceof Error ? error.message : 'Erreur interne';
+    const errorMessage = error instanceof Error ? formatJinaError(error) : 'Erreur interne';
     const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
     console.error(`[Embed Optimized] Erreur après ${elapsed}s:`, errorMessage);
     
