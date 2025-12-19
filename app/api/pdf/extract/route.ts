@@ -409,10 +409,27 @@ export async function POST(req: Request) {
           }),
         });
 
-        await handler(request);
+        const response = await handler(request);
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+          console.error(`[PDF Extract] Batch optimized failed:`, errorData);
+          throw new Error(`Embedding failed: ${JSON.stringify(errorData)}`);
+        }
       })
       .catch((err) => {
-        console.error('Erreur déclenchement batch optimisé:', err);
+        console.error('[PDF Extract] Erreur déclenchement batch optimisé:', err);
+        // Update document status to failed
+        if (documentId && supabaseAdmin) {
+          supabaseAdmin
+            .from('documents')
+            .update({
+              status: 'failed',
+              status_message: `Erreur embedding: ${err instanceof Error ? err.message : String(err)}`,
+            })
+            .eq('id', documentId)
+            .then(() => console.log(`[PDF Extract] Doc ${documentId} marqué comme failed`))
+            .catch((updateErr) => console.error('[PDF Extract] Erreur mise à jour status:', updateErr));
+        }
       });
     
     // Logger l'activité pour le dashboard admin

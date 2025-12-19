@@ -23,7 +23,8 @@ export async function fetchUserPlan(supabase: SupabaseClient): Promise<UserPlan 
     .single();
 
   if (error) {
-    if (error.code === 'PGRST116' || error.code === '406') {
+    // PGRST116: no rows, PGRST205: table not found - both silent
+    if (error.code === 'PGRST116' || error.code === '406' || error.code === 'PGRST205') {
       return null;
     }
     console.warn('[subscriptions] fetchUserPlan failed:', error);

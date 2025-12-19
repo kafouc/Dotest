@@ -42,7 +42,7 @@ export async function ensureRevisionQuota(
   supabase: SupabaseClient,
   userId: string,
 ): Promise<void> {
-  const planRow = await fetchUserPlan(supabase);
+  const planRow = await fetchUserPlan(supabase).catch(() => null);
   const plan = resolvePlan(planRow?.plan as SubscriptionPlan | null);
   const limits = PLAN_LIMITS[plan];
   if (!limits) return;
@@ -76,7 +76,7 @@ export async function ensureQuizQuota(
   userId: string,
   documentPath: string | null,
 ): Promise<void> {
-  const planRow = await fetchUserPlan(supabase);
+  const planRow = await fetchUserPlan(supabase).catch(() => null);
   const plan = resolvePlan(planRow?.plan as SubscriptionPlan | null);
   const limits = PLAN_LIMITS[plan];
   if (!limits) return;
@@ -111,7 +111,7 @@ export async function validateLiveParticipants(
   userId: string,
   desiredParticipants: number,
 ): Promise<void> {
-  const planRow = await fetchUserPlan(supabase);
+  const planRow = await fetchUserPlan(supabase).catch(() => null);
   const plan = resolvePlan(planRow?.plan as SubscriptionPlan | null);
   const limits = PLAN_LIMITS[plan];
   if (!limits) return;
