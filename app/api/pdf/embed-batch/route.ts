@@ -226,9 +226,12 @@ export async function POST(req: Request) {
     
     // 13. Déclencher le lot suivant
     const nextBatchIndex = batchIndex + 1;
-    
+
+    const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || new URL(req.url).origin;
+    const targetUrl = new URL('/api/pdf/embed-batch', baseUrl).toString();
+
     // Appel récursif pour le prochain batch (fire and forget)
-    fetch(req.url, {
+    fetch(targetUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
