@@ -416,19 +416,22 @@ export async function POST(req: Request) {
           throw new Error(`Embedding failed: ${JSON.stringify(errorData)}`);
         }
       })
-      .catch((err) => {
+      .catch(async (err) => {
         console.error('[PDF Extract] Erreur déclenchement batch optimisé:', err);
         // Update document status to failed
         if (documentId && supabaseAdmin) {
-          supabaseAdmin
-            .from('documents')
-            .update({
-              status: 'failed',
-              status_message: `Erreur embedding: ${err instanceof Error ? err.message : String(err)}`,
-            })
-            .eq('id', documentId)
-            .then(() => console.log(`[PDF Extract] Doc ${documentId} marqué comme failed`))
-            .catch((updateErr) => console.error('[PDF Extract] Erreur mise à jour status:', updateErr));
+          try {
+            await supabaseAdmin
+              .from('documents')
+              .update({
+                status: 'failed',
+                status_message: `Erreur embedding: ${err instanceof Error ? err.message : String(err)}`,
+              })
+              .eq('id', documentId);
+            console.log(`[PDF Extract] Doc ${documentId} marqué comme failed`);
+          } catch (updateErr) {
+            console.error('[PDF Extract] Erreur mise à jour status:', updateErr);
+          }
         }
       });
     
