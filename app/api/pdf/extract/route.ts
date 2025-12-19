@@ -388,6 +388,10 @@ export async function POST(req: Request) {
     await updateDocumentStatus('processing', 'Génération des embeddings (0%)...');
     
     // Lancer le traitement en arrière-plan via le handler interne
+    const baseUrl = process.env.NEXT_PUBLIC_SITE_URL
+      || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null)
+      || new URL(req.url).origin;
+
     import('@/app/api/pdf/embed-batch-optimized/route')
       .then(async (module) => {
         const handler = module.POST;
@@ -395,7 +399,7 @@ export async function POST(req: Request) {
           throw new Error('Handler embed-batch-optimized introuvable');
         }
 
-        const request = new Request('http://localhost/api/pdf/embed-batch-optimized', {
+        const request = new Request(`${baseUrl}/api/pdf/embed-batch-optimized`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
