@@ -263,7 +263,7 @@ export default function DemoPage() {
                       exit={{ opacity: 0, y: 12 }}
                       className="absolute bottom-4 left-4 right-4 rounded-2xl bg-brand-teal/10 px-4 py-3 text-sm text-brand-teal"
                     >
-                      Tout est prêt : vous n'avez rien à importer pour cette démo, concentrez-vous sur le parcours.
+                      Tout est prêt : vous n&apos;avez rien à importer pour cette démo, concentrez-vous sur le parcours.
                     </motion.div>
                   )}
                 </AnimatePresence>
@@ -316,7 +316,7 @@ export default function DemoPage() {
                       exit={{ opacity: 0, y: 12 }}
                       className="absolute bottom-4 left-4 right-4 rounded-2xl bg-brand-yellow/15 px-4 py-3 text-sm text-brand-dark"
                     >
-                      Chaque section est cliquable dans l'application réelle pour approfondir ou réviser à votre rythme.
+                      Chaque section est cliquable dans l&apos;application réelle pour approfondir ou réviser à votre rythme.
                     </motion.div>
                   )}
                 </AnimatePresence>
@@ -413,7 +413,7 @@ export default function DemoPage() {
                       Prochaine session recommandée demain à 18h
                     </div>
                     <p className="mt-2 leading-relaxed">
-                      Notre algorithme planifie vos rappels pour réviser avant l'oubli et consolider vos acquis au bon moment.
+                      Notre algorithme planifie vos rappels pour réviser avant l&apos;oubli et consolider vos acquis au bon moment.
                     </p>
                   </div>
                 </div>
@@ -426,7 +426,7 @@ export default function DemoPage() {
                       exit={{ opacity: 0, y: 12 }}
                       className="absolute bottom-4 left-4 right-4 rounded-2xl bg-brand-teal/10 px-4 py-3 text-sm text-brand-teal"
                     >
-                      Vous recevez aussi des notifications de rappel quand c'est pertinent (mobile et email).
+                      Vous recevez aussi des notifications de rappel quand c&apos;est pertinent (mobile et email).
                     </motion.div>
                   )}
                 </AnimatePresence>
@@ -491,7 +491,7 @@ export default function DemoPage() {
                   onClick={handleSkipDemo}
                   className="w-full rounded-full border border-dashed border-brand-dark/20 px-4 py-2 font-semibold text-brand-dark transition hover:border-brand-teal/40 hover:text-brand-teal"
                 >
-                  Passer la démo et m'inscrire
+                  Passer la démo et m&apos;inscrire
                 </button>
               ) : (
                 <button
@@ -499,7 +499,7 @@ export default function DemoPage() {
                   onClick={goHomeAfterCompletion}
                   className="w-full rounded-full border border-brand-dark/15 px-4 py-2 font-semibold text-brand-dark transition hover:border-brand-teal/40 hover:text-brand-teal"
                 >
-                  Retourner à l'accueil
+                  Retourner à l&apos;accueil
                 </button>
               )}
             </div>
