@@ -116,9 +116,10 @@ export default function Hero() {
                     alt="PDF"
                     width={120}
                     height={120}
-                    className={`absolute inset-0 h-full w-full object-contain transition-all duration-[2500ms] ease-in-out ${
+                    className={`absolute inset-0 h-full w-full object-contain transition-all ease-in-out ${
                       isTransforming ? "scale-75 opacity-0 blur-sm" : "scale-100 opacity-100"
                     }`}
+                    style={{ transitionDuration: '2500ms' }}
                     priority
                     unoptimized
                   />
@@ -127,9 +128,10 @@ export default function Hero() {
                     alt="Quiz"
                     width={120}
                     height={120}
-                    className={`absolute inset-0 h-full w-full object-contain transition-all duration-[2500ms] ease-in-out ${
+                    className={`absolute inset-0 h-full w-full object-contain transition-all ease-in-out ${
                       isTransforming ? "scale-100 opacity-100" : "-translate-y-4 scale-75 opacity-0"
                     }`}
+                    style={{ transitionDuration: '2500ms' }}
                     priority
                     unoptimized
                   />
