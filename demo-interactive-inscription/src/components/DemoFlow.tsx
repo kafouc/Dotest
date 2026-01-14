@@ -1,13 +1,14 @@
 import React, { useState } from 'react';
-import { useInteractiveGuide } from '../hooks/useInteractiveGuide';
+import useInteractiveGuide from '../hooks/useInteractiveGuide';
 import SignupPrompt from './SignupPrompt';
 
 const DemoFlow: React.FC = () => {
-    const { currentStep, nextStep, isComplete } = useInteractiveGuide();
+    const { currentStep, nextStep, steps } = useInteractiveGuide();
     const [showSignup, setShowSignup] = useState(false);
+    const isLastStep = currentStep >= steps.length - 1;
 
     const handleNext = () => {
-        if (currentStep === 'final') {
+        if (isLastStep) {
             setShowSignup(true);
         } else {
             nextStep();
@@ -20,10 +21,10 @@ const DemoFlow: React.FC = () => {
                 <SignupPrompt />
             ) : (
                 <div>
-                    <h2>Étape {currentStep}</h2>
-                    <p>Voici une démonstration interactive de l'application.</p>
+                    <h2>Étape {currentStep + 1}</h2>
+                    <p>{steps[currentStep]}</p>
                     <button onClick={handleNext}>
-                        {isComplete ? 'Terminer' : 'Suivant'}
+                        {isLastStep ? 'Terminer' : 'Suivant'}
                     </button>
                 </div>
             )}
