@@ -1,0 +1,31 @@
+{
+  "name": "demo-interactive-inscription",
+  "version": "1.0.0",
+  "description": "A demo application for interactive user onboarding and signup.",
+  "main": "src/main.tsx",
+  "scripts": {
+    "start": "webpack serve --mode development",
+    "build": "webpack --mode production",
+    "test": "jest"
+  },
+  "dependencies": {
+    "react": "^17.0.2",
+    "react-dom": "^17.0.2",
+    "react-router-dom": "^5.2.0"
+  },
+  "devDependencies": {
+    "typescript": "^4.4.3",
+    "webpack": "^5.51.1",
+    "webpack-cli": "^4.8.0",
+    "webpack-dev-server": "^3.11.2",
+    "jest": "^27.0.6",
+    "ts-jest": "^27.0.3"
+  },
+  "keywords": [
+    "demo",
+    "interactive",
+    "signup"
+  ],
+  "author": "kafouc",
+  "license": "MIT"
+}

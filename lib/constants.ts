@@ -101,3 +101,7 @@ export const SESSION_STATUS = {
   COMPLETED: 'completed',
 } as const;
 
+export const ONBOARDING_STORAGE_KEYS = {
+  demoCompleted: 'dotest_onboarding_demo_completed',
+} as const;
+

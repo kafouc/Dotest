@@ -1,7 +1,9 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import { ONBOARDING_STORAGE_KEYS } from "@/lib/constants";
 
 type Shape = {
   x: number;
@@ -16,6 +18,8 @@ const SHAPE_COUNT = 32;
 
 export default function Hero() {
   const [isTransforming, setIsTransforming] = useState(false);
+  const [hasDemoCompleted, setHasDemoCompleted] = useState(false);
+  const router = useRouter();
   const shapesPalette = useMemo<Shape[]>(() => {
     return Array.from({ length: SHAPE_COUNT }, () => ({
       x: Math.random() * 100,
@@ -25,6 +29,14 @@ export default function Hero() {
       delay: Math.random() * 4,
       hue: 40 + Math.random() * 120,
     }));
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    const completed = window.localStorage.getItem(ONBOARDING_STORAGE_KEYS.demoCompleted) === "true";
+    setHasDemoCompleted(completed);
   }, []);
 
   useEffect(() => {
@@ -49,6 +61,20 @@ export default function Hero() {
       }
     };
   }, []);
+
+  const handleStartClick = useCallback(() => {
+    const alreadyCompleted =
+      typeof window !== "undefined"
+        ? window.localStorage.getItem(ONBOARDING_STORAGE_KEYS.demoCompleted) === "true"
+        : hasDemoCompleted;
+
+    if (!alreadyCompleted) {
+      router.push("/demo");
+      return;
+    }
+
+    router.push("/signup");
+  }, [hasDemoCompleted, router]);
 
   return (
     <section className="relative flex min-h-screen items-center justify-center overflow-hidden px-4 pt-28 md:pt-24">
@@ -123,12 +149,13 @@ export default function Hero() {
             </p>
 
             <div className="flex w-full flex-col items-center justify-center">
-              <a
-                href="/signup"
+              <button
+                type="button"
+                onClick={handleStartClick}
                 className="group flex min-h-[48px] items-center justify-center rounded-full bg-gradient-to-r from-brand-yellow via-brand-yellow-dark to-brand-teal px-10 py-3 text-base font-semibold text-brand-dark shadow-[0_20px_40px_-20px_rgba(251,191,29,0.65)] transition duration-300 hover:scale-[1.02] hover:shadow-[0_30px_60px_-24px_rgba(45,143,111,0.55)] md:min-h-[56px] md:px-12 md:text-lg"
               >
                 Commencer
-              </a>
+              </button>
             </div>
 
             <p className="text-xs uppercase tracking-[0.3em] text-brand-dark-lighter md:text-sm">
