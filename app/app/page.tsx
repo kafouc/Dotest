@@ -75,17 +75,75 @@ function AppHomeContent() {
     return () => clearTimeout(timer);
   }, [checkoutNotice]);
 
-  const refreshUserPlan = useCallback(async () => {
+  const loadUserPlan = useCallback(async (): Promise<SubscriptionPlan> => {
     const planRow = await fetchUserPlan(supabase).catch(() => null);
-    setUserPlan(planRow?.plan ?? 'freemium');
+    const plan = planRow?.plan;
+    return plan === 'partial' || plan === 'pro' ? plan : 'freemium';
   }, [supabase]);
 
-  useEffect(() => {
-    if (checkoutNotice === 'partial' || checkoutNotice === 'pro') {
-      setUserPlan(checkoutNotice);
-      void refreshUserPlan();
+  const refreshUserPlan = useCallback(async (): Promise<SubscriptionPlan> => {
+    const nextPlan = await loadUserPlan();
+    setUserPlan(nextPlan);
+    return nextPlan;
+  }, [loadUserPlan]);
+
+  const resyncUserPlan = useCallback(async (): Promise<SubscriptionPlan | null> => {
+    try {
+      const response = await fetch('/api/billing/resync', { method: 'POST' });
+      if (!response.ok) {
+        return null;
+      }
+      const data = await response.json() as { plan?: SubscriptionPlan };
+      const plan = data?.plan;
+      if (plan === 'freemium' || plan === 'partial' || plan === 'pro') {
+        return plan;
+      }
+      return null;
+    } catch (error) {
+      console.warn('[billing] resyncUserPlan failed', error);
+      return null;
     }
-  }, [checkoutNotice, refreshUserPlan]);
+  }, []);
+
+  useEffect(() => {
+    if (checkoutNotice !== 'partial' && checkoutNotice !== 'pro') {
+      return;
+    }
+
+    setUserPlan(checkoutNotice);
+
+    let cancelled = false;
+    let retryTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const syncPlan = async () => {
+      const fetchedPlan = await loadUserPlan();
+      if (cancelled) return;
+      if (fetchedPlan === checkoutNotice) {
+        setUserPlan(fetchedPlan);
+        return;
+      }
+      const resyncedPlan = await resyncUserPlan();
+      if (cancelled) return;
+      if (resyncedPlan) {
+        setUserPlan(resyncedPlan);
+      } else if (fetchedPlan !== checkoutNotice) {
+        setUserPlan(fetchedPlan);
+      }
+    };
+
+    void syncPlan();
+
+    retryTimer = window.setTimeout(() => {
+      void syncPlan();
+    }, 4000);
+
+    return () => {
+      cancelled = true;
+      if (retryTimer) {
+        clearTimeout(retryTimer);
+      }
+    };
+  }, [checkoutNotice, loadUserPlan, resyncUserPlan]);
 
   const refreshStreak = useCallback(async () => {
     if (!userId) {
