@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo, type ReactNode } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useParams } from 'next/navigation';
 import { createSupabaseBrowserClient } from '@/lib/supabaseClient';
 import {
@@ -236,15 +236,6 @@ export default function LiveDashboardPage() {
   const [questionFormError, setQuestionFormError] = useState<string | null>(null);
   const [savingQuestion, setSavingQuestion] = useState(false);
   const { toasts, showToast, removeToast } = useToast();
-
-  const withToasts = useMemo(() => (
-    (content: ReactNode) => (
-      <>
-        <ToastContainer toasts={toasts} onClose={removeToast} />
-        {content}
-      </>
-    )
-  ), [toasts, removeToast]);
 
   // Charger les données initiales
   useEffect(() => {
@@ -682,25 +673,32 @@ export default function LiveDashboardPage() {
   };
 
   if (loading) {
-    return withToasts(
-      <div className="min-h-screen flex items-center justify-center bg-gray-100">
-        <p className="text-lg text-gray-700">Chargement du dashboard...</p>
-      </div>
+    return (
+      <>
+        <ToastContainer toasts={toasts} onClose={removeToast} />
+        <div className="min-h-screen flex items-center justify-center bg-gray-100">
+          <p className="text-lg text-gray-700">Chargement du dashboard...</p>
+        </div>
+      </>
     );
   }
 
   if (error) {
-    return withToasts(
-      <div className="min-h-screen flex items-center justify-center bg-gray-100 p-4">
-        <div className="bg-white rounded-xl p-6 max-w-md w-full text-center">
-          <p className="text-red-600 font-medium">{error}</p>
+    return (
+      <>
+        <ToastContainer toasts={toasts} onClose={removeToast} />
+        <div className="min-h-screen flex items-center justify-center bg-gray-100 p-4">
+          <div className="bg-white rounded-xl p-6 max-w-md w-full text-center">
+            <p className="text-red-600 font-medium">{error}</p>
+          </div>
         </div>
-      </div>
+      </>
     );
   }
 
-  return withToasts(
+  return (
     <div className="min-h-screen bg-gray-100 p-4 py-8">
+      <ToastContainer toasts={toasts} onClose={removeToast} />
       <div className="max-w-7xl mx-auto">
         <div className="bg-white rounded-xl shadow-lg p-6 mb-6">
           <div className="flex justify-between items-start mb-4">
@@ -1106,7 +1104,6 @@ export default function LiveDashboardPage() {
                         const chosen = a?.answer?.toUpperCase();
                         const correctAnswer = 'reponse_correcte' in q ? q.reponse_correcte : (q.reponses_correctes?.[0] ?? '');
                         const correct = (correctAnswer || '').toUpperCase();
-                        // const isCorrect = chosen && chosen === correct; // non utilisé, conservé via couleurs ci-dessous
                         const letters = ['A','B','C','D'] as const;
                         const opts = Object.entries(q.options || {});
                         return (
