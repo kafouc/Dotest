@@ -185,10 +185,16 @@ export default function SettingsPage() {
     pro: 'Limites étendues, sessions live jusqu’à 300 participants et priorisation.',
   };
 
+  const partialCheckoutUrl = process.env.NEXT_PUBLIC_STRIPE_PARTIAL_CHECKOUT_URL;
+
   const startCheckout = async (targetPlan: 'partial' | 'pro') => {
     setBillingError(null);
     setBillingAction(targetPlan);
     try {
+      if (targetPlan === 'partial' && partialCheckoutUrl) {
+        window.location.href = partialCheckoutUrl;
+        return;
+      }
       const response = await fetch('/api/billing/create-checkout-session', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
