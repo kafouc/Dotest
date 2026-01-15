@@ -16,6 +16,13 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'subscription requis' }, { status: 400 });
     }
 
+    const endpoint = typeof subscription.endpoint === 'string' ? subscription.endpoint.trim() : '';
+    const p256dh = subscription.keys?.p256dh ?? null;
+    const auth = subscription.keys?.auth ?? null;
+    if (!endpoint || !p256dh || !auth) {
+      return NextResponse.json({ error: 'subscription invalide (endpoint/keys manquants)' }, { status: 400 });
+    }
+
     const supabase = createServerClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -40,13 +47,13 @@ export async function POST(req: Request) {
     // Upsert into push_subscriptions
     const row = {
       user_id: user.id,
-      endpoint: subscription?.endpoint ?? null,
+      endpoint,
       keys: subscription?.keys ?? null,
       raw: subscription,
     };
 
     const { error } = await supabase.from('push_subscriptions').upsert(row, {
-      onConflict: 'user_id',
+      onConflict: 'endpoint',
     });
     if (error) throw error;
 

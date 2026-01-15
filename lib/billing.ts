@@ -31,6 +31,17 @@ type BillingCustomerRow = {
 
 type SupabaseAdmin = SupabaseClient;
 
+export function resolvePlanFromPrice(priceId: string | null): BillingPlan {
+  if (!priceId) return 'freemium';
+  if (priceId === process.env.STRIPE_PRICE_PARTIAL) return 'partial';
+  if (priceId === process.env.STRIPE_PRICE_PRO) return 'pro';
+  return 'freemium';
+}
+
+function shouldKeepPaidPlan(status: Stripe.Subscription.Status | null | undefined): boolean {
+  return status === 'active' || status === 'trialing' || status === 'past_due' || status === 'unpaid';
+}
+
 async function getAdminClient(): Promise<SupabaseAdmin> {
   const client = getSupabaseAdminClient();
   if (!client) {
@@ -105,6 +116,11 @@ export async function createCheckoutSession(opts: {
   const session = await stripe.checkout.sessions.create({
     mode: 'subscription',
     customer: customerRow.stripe_customer_id,
+    client_reference_id: opts.userId,
+    metadata: {
+      supabase_user_id: opts.userId,
+      target_plan: opts.plan,
+    },
     line_items: [
       {
         price: priceIdEnv,
@@ -152,13 +168,149 @@ export async function handleStripeWebhook(payload: Buffer, signature: string | u
   return stripe.webhooks.constructEvent(payload, signature, webhookSecret);
 }
 
+export async function hasProcessedStripeEvent(eventId: string): Promise<boolean> {
+  const admin = await getAdminClient();
+  const { data, error } = await admin
+    .from('stripe_webhook_events')
+    .select('event_id')
+    .eq('event_id', eventId)
+    .single();
+
+  if (error) {
+    if (error.code === 'PGRST116' || error.code === '406') {
+      return false;
+    }
+    throw error;
+  }
+
+  return Boolean(data?.event_id);
+}
+
+export async function markStripeEventProcessed(eventId: string): Promise<void> {
+  const admin = await getAdminClient();
+  await admin
+    .from('stripe_webhook_events')
+    .upsert({ event_id: eventId }, { onConflict: 'event_id' });
+}
+
+export async function syncUserPlanFromStripe(userId: string): Promise<BillingPlan> {
+  const admin = await getAdminClient();
+  const { data: customerRow, error } = await admin
+    .from('billing_customers')
+    .select('stripe_customer_id')
+    .eq('user_id', userId)
+    .single();
+
+  if (error || !customerRow?.stripe_customer_id) {
+    throw new Error('Client Stripe introuvable pour cet utilisateur.');
+  }
+
+  const stripe = getStripe();
+  const subscriptions = await stripe.subscriptions.list({
+    customer: customerRow.stripe_customer_id,
+    status: 'all',
+    limit: 1,
+  });
+
+  const subscription = subscriptions.data[0] ?? null;
+  const status = subscription?.status ?? null;
+  const priceId = subscription?.items.data[0]?.price?.id ?? null;
+  const periodEnd = subscription?.current_period_end
+    ? new Date(subscription.current_period_end * 1000).toISOString()
+    : null;
+
+  const targetPlan = subscription?.metadata?.target_plan ?? null;
+  const resolvedPlan = (targetPlan === 'partial' || targetPlan === 'pro')
+    ? targetPlan
+    : resolvePlanFromPrice(priceId);
+  const plan = shouldKeepPaidPlan(status) ? resolvedPlan : 'freemium';
+
+  await admin.from('billing_customers').upsert({
+    user_id: userId,
+    stripe_customer_id: customerRow.stripe_customer_id,
+    stripe_subscription_id: subscription?.id ?? null,
+    stripe_price_id: priceId,
+    subscription_status: status,
+    plan,
+    current_period_end: periodEnd,
+  });
+
+  await admin.rpc('set_user_plan', {
+    p_user_id: userId,
+    p_plan: plan,
+    p_assigned_by: null,
+  });
+
+  return plan;
+}
+
 export async function syncPlanFromStripe(event: Stripe.Event): Promise<void> {
   const admin = await getAdminClient();
 
+  if (event.type === 'checkout.session.completed') {
+    const session = event.data.object as Stripe.Checkout.Session;
+    if (session.mode !== 'subscription') return;
+
+    let userId = session.client_reference_id ?? session.metadata?.supabase_user_id ?? null;
+    const customerId = typeof session.customer === 'string' ? session.customer : null;
+
+    if (!userId && customerId) {
+      const { data } = await admin
+        .from('billing_customers')
+        .select('user_id')
+        .eq('stripe_customer_id', customerId)
+        .single();
+      userId = data?.user_id ?? null;
+    }
+
+    if (!userId) return;
+
+    const stripe = getStripe();
+    const subscriptionId = typeof session.subscription === 'string' ? session.subscription : null;
+    const subscription = subscriptionId
+      ? await stripe.subscriptions.retrieve(subscriptionId)
+      : null;
+
+    const priceId = subscription?.items.data[0]?.price?.id ?? null;
+    const status = subscription?.status ?? null;
+    const periodEnd = subscription?.current_period_end
+      ? new Date(subscription.current_period_end * 1000).toISOString()
+      : null;
+    const targetPlan = session.metadata?.target_plan ?? null;
+    const plan = (targetPlan === 'partial' || targetPlan === 'pro')
+      ? targetPlan
+      : resolvePlanFromPrice(priceId);
+
+    await admin.from('billing_customers').upsert({
+      user_id: userId,
+      stripe_customer_id: customerId ?? session.customer?.toString() ?? '',
+      stripe_subscription_id: subscription?.id ?? subscriptionId,
+      stripe_price_id: priceId,
+      subscription_status: status,
+      plan,
+      current_period_end: periodEnd,
+    });
+
+    await admin.rpc('set_user_plan', {
+      p_user_id: userId,
+      p_plan: plan,
+      p_assigned_by: null,
+    });
+  }
+
   if (event.type === 'customer.subscription.updated' || event.type === 'customer.subscription.created') {
     const subscription = event.data.object as Stripe.Subscription;
-    const userId = subscription.metadata?.supabase_user_id ?? null;
+    let userId = subscription.metadata?.supabase_user_id ?? null;
     const targetPlan = subscription.metadata?.target_plan ?? null;
+    const customerId = subscription.customer as string;
+    if (!userId && customerId) {
+      const { data } = await admin
+        .from('billing_customers')
+        .select('user_id')
+        .eq('stripe_customer_id', customerId)
+        .single();
+      userId = data?.user_id ?? null;
+    }
     if (!userId) {
       return;
     }
@@ -166,7 +318,9 @@ export async function syncPlanFromStripe(event: Stripe.Event): Promise<void> {
     const priceId = subscription.items.data[0]?.price?.id ?? null;
     const status = subscription.status;
     const periodEnd = subscription.current_period_end ? new Date(subscription.current_period_end * 1000).toISOString() : null;
-    const plan = (targetPlan === 'partial' || targetPlan === 'pro') ? targetPlan : 'freemium';
+    const plan = (targetPlan === 'partial' || targetPlan === 'pro')
+      ? targetPlan
+      : resolvePlanFromPrice(priceId);
 
     await admin.from('billing_customers').upsert({
       user_id: userId,

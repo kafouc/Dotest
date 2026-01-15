@@ -3,11 +3,15 @@ import type { NextRequest } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
 
 const MARKETING_PATHS = ['/', '/vitrine'];
+const PROTECTED_PREFIXES = ['/app', '/settings'];
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  if (!MARKETING_PATHS.includes(pathname)) {
+  const isMarketing = MARKETING_PATHS.includes(pathname);
+  const isProtected = PROTECTED_PREFIXES.some((prefix) => pathname.startsWith(prefix));
+
+  if (!isMarketing && !isProtected) {
     return NextResponse.next();
   }
 
@@ -41,7 +45,11 @@ export async function middleware(request: NextRequest) {
     data: { session },
   } = await supabase.auth.getSession();
 
-  if (session) {
+  if (isProtected && !session) {
+    return NextResponse.redirect(new URL('/login', request.url));
+  }
+
+  if (isMarketing && session) {
     return NextResponse.redirect(new URL('/app', request.url));
   }
 
@@ -49,5 +57,5 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/', '/vitrine'],
+  matcher: ['/', '/vitrine', '/app/:path*', '/settings/:path*'],
 };

@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { handleStripeWebhook, syncPlanFromStripe } from '@/lib/billing';
+import { handleStripeWebhook, syncPlanFromStripe, hasProcessedStripeEvent, markStripeEventProcessed } from '@/lib/billing';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -10,7 +10,12 @@ export async function POST(request: Request) {
 
   try {
     const event = await handleStripeWebhook(raw, signature);
+    const alreadyProcessed = await hasProcessedStripeEvent(event.id);
+    if (alreadyProcessed) {
+      return NextResponse.json({ received: true, duplicate: true });
+    }
     await syncPlanFromStripe(event);
+    await markStripeEventProcessed(event.id);
     return NextResponse.json({ received: true });
   } catch (error) {
     console.error('[billing] webhook error:', error);

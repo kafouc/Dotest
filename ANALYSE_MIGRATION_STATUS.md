@@ -5,8 +5,8 @@
 ### Fichiers de routes API créés (Nouvelle architecture)
 1. ✅ `/app/api/pdf/extract/route.ts` - Extraction de texte (remplace embed-worker)
 2. ✅ `/app/api/pdf/embed-batch/route.ts` - Traitement batch (remplace process-batch)
-3. ✅ `/app/api/process-pdf/route.ts` - Point d'entrée mis à jour
-4. ✅ `/app/api/process-file/route.ts` - **MIGRÉ** - Utilise maintenant /api/pdf/extract
+3. ✅ `/app/api/process-pdf/route.ts` - **DÉPRÉCIÉ** - Redirige vers /api/process-file
+4. ✅ `/app/api/process-file/route.ts` - **MIGRÉ** - Utilise /api/pdf/extract
 
 ### Fichiers de configuration mis à jour
 5. ✅ `/supabase/config.toml` - Edge Functions désactivées et commentées
@@ -46,7 +46,7 @@ Tous les appels aux Edge Functions ont été migrés:
 - ✅ `embed-worker` → `/api/pdf/extract`
 - ✅ `process-batch` → `/api/pdf/embed-batch`
 - ✅ `/api/process-file` utilise maintenant `/api/pdf/extract`
-- ✅ `/api/process-pdf` utilise maintenant `/api/pdf/extract`
+- ✅ `/api/process-pdf` redirige vers `/api/process-file`
 
 ---
 

@@ -14,8 +14,8 @@ function getOrigin(request: Request): string {
 
 export async function POST(request: Request) {
   try {
-    const body = await request.json();
-    const plan = body?.plan as BillingPlan | undefined;
+    const body = await request.json().catch(() => null);
+    const plan = (body && typeof body === 'object' ? body?.plan : undefined) as BillingPlan | undefined;
     if (!plan || plan === 'freemium') {
       return NextResponse.json({ error: 'Plan invalide.' }, { status: 400 });
     }

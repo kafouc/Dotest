@@ -6,14 +6,12 @@ import { NextResponse } from 'next/server';
 
 export async function POST(req: Request) {
   try {
-    const body = await req.json();
-    const { filePath, documentId, mimeType } = body as { 
-      filePath?: string; 
-      documentId?: number; 
-      mimeType?: string; 
-    };
+    const body = await req.json().catch(() => ({}));
+    const filePath = typeof body?.filePath === 'string' ? body.filePath : '';
+    const documentId = Number(body?.documentId);
+    const mimeType = typeof body?.mimeType === 'string' ? body.mimeType : undefined;
 
-    if (!filePath || !documentId) {
+    if (!filePath || !Number.isFinite(documentId)) {
       return NextResponse.json(
         { error: 'Chemin du fichier ou ID de document manquant' },
         { status: 400 }

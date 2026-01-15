@@ -176,9 +176,13 @@ serve(async (req) => {
       throw new Error(`Failed to load push_subscriptions: ${subscriptionError.message}`);
     }
 
-    const subscriptions = new Map<string, SubscriptionRow>();
+    const subscriptions = new Map<string, SubscriptionRow[]>();
     for (const sub of subscriptionRows ?? []) {
-      subscriptions.set(sub.user_id, sub as SubscriptionRow);
+      const row = sub as SubscriptionRow;
+      if (!subscriptions.has(row.user_id)) {
+        subscriptions.set(row.user_id, []);
+      }
+      subscriptions.get(row.user_id)!.push(row);
     }
 
     const results = {
@@ -190,8 +194,8 @@ serve(async (req) => {
     };
 
     for (const candidate of candidates) {
-      const subscriptionRow = subscriptions.get(candidate.userId);
-      if (!subscriptionRow || !subscriptionRow.endpoint || !subscriptionRow.keys?.p256dh || !subscriptionRow.keys?.auth) {
+      const userSubscriptions = subscriptions.get(candidate.userId) ?? [];
+      if (userSubscriptions.length === 0) {
         results.skippedNoSubscription += 1;
         continue;
       }
@@ -210,36 +214,42 @@ serve(async (req) => {
         },
       });
 
-      const { p256dh, auth } = subscriptionRow.keys as { p256dh: string; auth: string };
-      const pushSubscription: PushSubscription = {
-        endpoint: subscriptionRow.endpoint,
-        keys: {
-          p256dh,
-          auth,
-        },
-      };
-
-      try {
-        await webpush.sendNotification(pushSubscription, payload, {
-          TTL: 60 * 60,
-        });
-
-        await supabase.rpc("mark_streak_reminder_sent", {
-          p_user_id: candidate.userId,
-          p_day: candidate.today,
-          p_window: reminderWindow,
-          p_sent_at: new Date().toISOString(),
-        });
-
-        results.sent += 1;
-      } catch (error) {
-        const status = typeof error === "object" && error && "statusCode" in error
-          ? (error as { statusCode?: number }).statusCode
-          : undefined;
-        if (status === 410 || status === 404) {
-          await supabase.from("push_subscriptions").delete().eq("user_id", candidate.userId);
+      for (const subscriptionRow of userSubscriptions) {
+        if (!subscriptionRow.endpoint || !subscriptionRow.keys?.p256dh || !subscriptionRow.keys?.auth) {
+          continue;
         }
-        results.errors.push(`user ${candidate.userId}: ${(error as Error)?.message ?? "unknown error"}`);
+
+        const { p256dh, auth } = subscriptionRow.keys as { p256dh: string; auth: string };
+        const pushSubscription: PushSubscription = {
+          endpoint: subscriptionRow.endpoint,
+          keys: {
+            p256dh,
+            auth,
+          },
+        };
+
+        try {
+          await webpush.sendNotification(pushSubscription, payload, {
+            TTL: 60 * 60,
+          });
+
+          await supabase.rpc("mark_streak_reminder_sent", {
+            p_user_id: candidate.userId,
+            p_day: candidate.today,
+            p_window: reminderWindow,
+            p_sent_at: new Date().toISOString(),
+          });
+
+          results.sent += 1;
+        } catch (error) {
+          const status = typeof error === "object" && error && "statusCode" in error
+            ? (error as { statusCode?: number }).statusCode
+            : undefined;
+          if (status === 410 || status === 404) {
+            await supabase.from("push_subscriptions").delete().eq("endpoint", subscriptionRow.endpoint);
+          }
+          results.errors.push(`user ${candidate.userId}: ${(error as Error)?.message ?? "unknown error"}`);
+        }
       }
     }
 

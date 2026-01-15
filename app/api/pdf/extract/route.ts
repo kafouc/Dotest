@@ -282,11 +282,13 @@ export async function POST(req: Request) {
     }
     
     // 4. Parser le payload
-    const body: ExtractPayload = await req.json();
-    const { filePath, documentId: docId, mimeType } = body;
+    const body: ExtractPayload = await req.json().catch(() => ({} as ExtractPayload));
+    const filePath = typeof body.filePath === 'string' ? body.filePath : undefined;
+    const docId = Number(body.documentId);
+    const mimeType = typeof body.mimeType === 'string' ? body.mimeType : undefined;
     documentId = docId;
     
-    if (!documentId) {
+    if (!Number.isFinite(documentId)) {
       return NextResponse.json(
         { error: 'Paramètres manquants (documentId)' },
         { status: 400 }

@@ -10,7 +10,7 @@ import { extractEmbeddingUsage, estimateEmbeddingCost } from '@/lib/aiUsage';
 import { createJinaEmbeddings, extractEmbeddingsFromResponse, formatJinaError } from '@/lib/jinaClient';
 import type { ChunkPayload } from '@/app/api/pdf/extract/route';
 
-const EMBED_SLOT_KEY = '__embedding_next_available__';
+const EMBED_SLOT_KEY = 'global';
 
 type GlobalWithSlotState = typeof globalThis & {
   __embed_slots__?: Record<string, number>;
@@ -24,10 +24,25 @@ function getSlotState(): Record<string, number> {
   return globalRef.__embed_slots__;
 }
 
-const waitForEmbedSlot = async () => {
+const waitForEmbedSlot = async (supabaseAdmin?: SupabaseClient | null) => {
   const interval = BATCH_CONFIG.MIN_EMBED_INTERVAL_MS ?? 0;
   if (!interval) {
     return;
+  }
+
+  if (supabaseAdmin) {
+    const { data, error } = await supabaseAdmin.rpc('acquire_embedding_slot', {
+      p_slot_key: EMBED_SLOT_KEY,
+      p_min_interval_ms: interval,
+    });
+
+    if (!error) {
+      const waitMs = Number(data);
+      if (Number.isFinite(waitMs) && waitMs > 0) {
+        await new Promise((resolve) => setTimeout(resolve, waitMs));
+      }
+      return;
+    }
   }
 
   const now = Date.now();
@@ -196,7 +211,7 @@ export async function POST(req: Request) {
           const batchTexts = batchChunks.map((chunk) => chunk.content);
 
           // Générer les embeddings avec le modèle Jina
-          await waitForEmbedSlot();
+          await waitForEmbedSlot(supabaseAdmin);
 
           const embedStartedAt = Date.now();
           const embedResponse = await createJinaEmbeddings(batchTexts, AI_MODELS.EMBEDDING);

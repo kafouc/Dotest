@@ -26,7 +26,10 @@ type SectionRow = {
 // --- Handler de la route API (POST) ---
 export async function POST(req: Request) {
   try {
-    const body = await req.json();
+    const body = await req.json().catch(() => null);
+    if (!body || typeof body !== 'object') {
+      return NextResponse.json({ error: 'Payload invalide' }, { status: 400 });
+    }
 
     // Vérifier la configuration Supabase
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -55,24 +58,23 @@ export async function POST(req: Request) {
       );
     }
     const groq = new Groq({ apiKey: groqKey });
-    const {
-      query: userQuery,
-      documentPath,
-      numQuestions = QUIZ_LIMITS.DEFAULT_QUESTIONS,
-      mode = 'qcu',
-      theme,
-      pageRange,
-    } = body as {
-      query: string;
-      documentPath?: string;
-      numQuestions?: number;
-      mode?: 'qcu' | 'qcm' | 'vf';
-      theme?: string;
-      pageRange?: PageRange | null;
-    };
+    const userQuery = typeof body.query === 'string' ? body.query.trim() : '';
+    const documentPath = typeof body.documentPath === 'string' ? body.documentPath : undefined;
+    const numQuestions = typeof body.numQuestions === 'number'
+      ? body.numQuestions
+      : QUIZ_LIMITS.DEFAULT_QUESTIONS;
+    const mode = typeof body.mode === 'string' ? body.mode : 'qcu';
+    const theme = typeof body.theme === 'string' ? body.theme : undefined;
+    const pageRange = (body.pageRange && typeof body.pageRange === 'object')
+      ? (body.pageRange as PageRange)
+      : null;
 
-    const pageStart = pageRange?.start ?? null;
-    const pageEnd = pageRange?.end ?? null;
+    const pageStart = typeof pageRange?.start === 'number' && Number.isFinite(pageRange.start)
+      ? pageRange.start
+      : null;
+    const pageEnd = typeof pageRange?.end === 'number' && Number.isFinite(pageRange.end)
+      ? pageRange.end
+      : null;
 
     const allowedCounts = [5, 7, 10];
     const nearestAllowed = allowedCounts.reduce((prev, cur) => {

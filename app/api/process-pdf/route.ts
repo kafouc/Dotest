@@ -5,48 +5,31 @@ import { NextResponse } from 'next/server';
 
 export async function POST(req: Request) {
   try {
-    const body = await req.json();
-    const { filePath, documentId, mimeType } = body;
+    const body = await req.json().catch(() => ({}));
+    const filePath = typeof body?.filePath === 'string' ? body.filePath : '';
+    const documentId = Number(body?.documentId);
+    const mimeType = typeof body?.mimeType === 'string' ? body.mimeType : undefined;
 
-    if (!filePath || !documentId) {
+    if (!filePath || !Number.isFinite(documentId)) {
       return NextResponse.json(
         { error: 'Chemin du fichier ou ID de document manquant' },
         { status: 400 }
       );
     }
 
-    // Appeler notre nouvelle route d'extraction Next.js
-    const extractUrl = new URL('/api/pdf/extract', req.url);
-    
-    const extractResponse = await fetch(extractUrl.toString(), {
+    const processUrl = new URL('/api/process-file', req.url);
+
+    const processResponse = await fetch(processUrl.toString(), {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        'X-Deprecated': 'Use /api/process-file',
       },
-      body: JSON.stringify({ 
-        filePath, 
-        documentId, 
-        mimeType: mimeType || 'application/pdf' 
-      }),
+      body: JSON.stringify({ filePath, documentId, mimeType }),
     });
 
-    if (!extractResponse.ok) {
-      const errorData = await extractResponse.json();
-      throw new Error(
-        errorData.error || `Échec de l'extraction. Statut: ${extractResponse.status}`
-      );
-    }
-
-    const result = await extractResponse.json();
-
-    return NextResponse.json(
-      { 
-        success: true, 
-        message: 'Analyse démarrée en arrière-plan',
-        chunks: result.chunks 
-      },
-      { status: 200 }
-    );
+    const payload = await processResponse.json().catch(() => ({}));
+    return NextResponse.json(payload, { status: processResponse.status });
   } catch (error: unknown) {
     console.error('Erreur API Process PDF:', error);
     const errorMessage =
