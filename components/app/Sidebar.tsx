@@ -4,6 +4,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { Flame } from 'lucide-react';
 import type { Session, SupabaseClient } from '@supabase/supabase-js';
+import type { SubscriptionPlan } from '@/lib/subscriptions';
 import type { DocumentInfo } from '@/lib/types';
 import type { UserStreak } from '@/lib/streaks';
 import DocumentList from '@/components/DocumentList';
@@ -22,6 +23,7 @@ type SidebarProps = {
   isMobileMenuOpen?: boolean;
   onCloseMobile?: () => void;
   streak?: UserStreak | null;
+  userPlan?: SubscriptionPlan;
 };
 
 export default function Sidebar({ 
@@ -38,9 +40,22 @@ export default function Sidebar({
   isMobileMenuOpen = false,
   onCloseMobile,
   streak,
+  userPlan,
 }: SidebarProps) {
   const currentStreak = streak?.current_streak ?? 0;
   const streakLabel = currentStreak > 0 ? `${currentStreak} jour${currentStreak > 1 ? 's' : ''}` : '0 jour';
+  const planLabels: Record<SubscriptionPlan, string> = {
+    freemium: 'Plan Gratuit',
+    partial: 'Plan Partiel',
+    pro: 'Plan Sérénité',
+  };
+  const planBadgeStyles: Record<SubscriptionPlan, string> = {
+    freemium: 'border border-gray-200 bg-gray-100 text-gray-600',
+    partial: 'border border-amber-200 bg-amber-100 text-amber-700',
+    pro: 'border border-emerald-200 bg-emerald-100 text-emerald-700',
+  };
+  const planLabel = userPlan ? planLabels[userPlan] : null;
+  const planBadgeClass = userPlan ? planBadgeStyles[userPlan] : '';
 
   return (
     <aside
@@ -129,6 +144,11 @@ export default function Sidebar({
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-sm font-semibold text-brand-dark truncate">{session.user.email}</p>
+              {planLabel && (
+                <span className={`mt-1 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold ${planBadgeClass}`}>
+                  {planLabel}
+                </span>
+              )}
               <div className="mt-1 flex items-center gap-1 text-xs text-orange-600">
                 <Flame className="h-4 w-4" aria-hidden="true" />
                 <span className="font-semibold leading-none">{streakLabel}</span>
@@ -192,7 +212,18 @@ export default function Sidebar({
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
           </svg>
-          {!isMinimized && <span>Paramètres</span>}
+          {!isMinimized ? (
+            <>
+              <span>Paramètres</span>
+              {planLabel && (
+                <span className={`ml-auto inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold ${planBadgeClass}`}>
+                  {planLabel}
+                </span>
+              )}
+            </>
+          ) : (
+            <span className="sr-only">Paramètres</span>
+          )}
         </Link>
       </nav>
 

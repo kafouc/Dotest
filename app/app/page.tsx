@@ -21,6 +21,7 @@ import { DOCUMENT_STATUS } from '@/lib/constants';
 import { ensureNotificationPermission, registerServiceWorker, subscribePush, sendSubscriptionToServer } from '@/lib/pushManager';
 import { trackPageView } from '@/lib/trackPageView';
 import { fetchUserStreak, type UserStreak } from '@/lib/streaks';
+import { fetchUserPlan, type SubscriptionPlan } from '@/lib/subscriptions';
 import ToastContainer, { useToast } from '@/components/ui/Toast';
 
 function AppHomeContent() {
@@ -37,6 +38,7 @@ function AppHomeContent() {
   const [showUploadForm, setShowUploadForm] = useState(false);
   const [openDocumentIds, setOpenDocumentIds] = useState<Set<string>>(new Set());
   const [deletingPath, setDeletingPath] = useState<string | null>(null);
+  const [userPlan, setUserPlan] = useState<SubscriptionPlan>('freemium');
   const searchParams = useSearchParams();
   const checkoutParam = searchParams.get('checkout');
   const searchParamsString = searchParams.toString();
@@ -72,6 +74,18 @@ function AppHomeContent() {
     const timer = setTimeout(() => setCheckoutNotice(null), 8000);
     return () => clearTimeout(timer);
   }, [checkoutNotice]);
+
+  const refreshUserPlan = useCallback(async () => {
+    const planRow = await fetchUserPlan(supabase).catch(() => null);
+    setUserPlan(planRow?.plan ?? 'freemium');
+  }, [supabase]);
+
+  useEffect(() => {
+    if (checkoutNotice === 'partial' || checkoutNotice === 'pro') {
+      setUserPlan(checkoutNotice);
+      void refreshUserPlan();
+    }
+  }, [checkoutNotice, refreshUserPlan]);
 
   const refreshStreak = useCallback(async () => {
     if (!userId) {
@@ -172,6 +186,14 @@ function AppHomeContent() {
     return () => subscription.unsubscribe();
   }, [supabase, router]);
 
+  useEffect(() => {
+    if (!session) {
+      setUserPlan('freemium');
+      return;
+    }
+    void refreshUserPlan();
+  }, [session, refreshUserPlan]);
+
   // Auto-activer les notifications au premier chargement
   useEffect(() => {
     if (!session) return;
@@ -221,6 +243,7 @@ function AppHomeContent() {
     await supabase.auth.signOut();
     setSession(null);
     setStreak(null);
+    setUserPlan('freemium');
   };
 
   const handleCreateNew = () => {
@@ -379,6 +402,7 @@ function AppHomeContent() {
         isMobileMenuOpen={isMobileMenuOpen}
         onCloseMobile={() => setIsMobileMenuOpen(false)}
         streak={streak}
+        userPlan={userPlan}
       />
 
       {/* Main Content Area */}
