@@ -113,7 +113,7 @@ function AppHomeContent() {
     setUserPlan(checkoutNotice);
 
     let cancelled = false;
-    let retryTimer: ReturnType<typeof setTimeout> | null = null;
+    let retryTimer: number | null = null;
 
     const syncPlan = async () => {
       const fetchedPlan = await loadUserPlan();
@@ -139,8 +139,8 @@ function AppHomeContent() {
 
     return () => {
       cancelled = true;
-      if (retryTimer) {
-        clearTimeout(retryTimer);
+      if (retryTimer !== null) {
+        window.clearTimeout(retryTimer);
       }
     };
   }, [checkoutNotice, loadUserPlan, resyncUserPlan]);
