@@ -31,11 +31,136 @@ type BillingCustomerRow = {
 
 type SupabaseAdmin = SupabaseClient;
 
-export function resolvePlanFromPrice(priceId: string | null): BillingPlan {
+type PlanPriceSources = {
+  priceId?: string | null;
+  lookupKey?: string | null;
+  productId?: string | null;
+};
+
+const planPriceConfig: Record<BillingPlan, PlanPriceSources> = {
+  freemium: {},
+  partial: {
+    priceId: process.env.STRIPE_PRICE_PARTIAL,
+    lookupKey: process.env.STRIPE_PRICE_PARTIAL_LOOKUP_KEY,
+    productId: process.env.STRIPE_PRODUCT_PARTIAL_ID,
+  },
+  pro: {
+    priceId: process.env.STRIPE_PRICE_PRO,
+    lookupKey: process.env.STRIPE_PRICE_PRO_LOOKUP_KEY,
+    productId: process.env.STRIPE_PRODUCT_PRO_ID,
+  },
+};
+
+const sharedProductId = process.env.STRIPE_PRODUCT_ID;
+
+const priceIdCache: Partial<Record<BillingPlan, string>> = {};
+
+export async function resolvePlanFromPrice(priceId: string | null): Promise<BillingPlan> {
   if (!priceId) return 'freemium';
-  if (priceId === process.env.STRIPE_PRICE_PARTIAL) return 'partial';
-  if (priceId === process.env.STRIPE_PRICE_PRO) return 'pro';
+
+  if (priceId === process.env.STRIPE_PRICE_PARTIAL || priceId === priceIdCache.partial) {
+    return 'partial';
+  }
+  if (priceId === process.env.STRIPE_PRICE_PRO || priceId === priceIdCache.pro) {
+    return 'pro';
+  }
+
+  const stripe = getStripe();
+  try {
+    const price = await stripe.prices.retrieve(priceId);
+    const lookup = (price.lookup_key ?? '').toLowerCase();
+    if (lookup === 'partial' || lookup === 'pro') {
+      priceIdCache[lookup] = price.id;
+      return lookup as BillingPlan;
+    }
+
+    const metadataPlan = (price.metadata?.plan ?? '').toLowerCase();
+    if (metadataPlan === 'partial' || metadataPlan === 'pro') {
+      priceIdCache[metadataPlan] = price.id;
+      return metadataPlan as BillingPlan;
+    }
+  } catch (error) {
+    if (!isStripeMissingResource(error)) {
+      throw error;
+    }
+    console.warn(`[billing] Impossible de résoudre le plan pour le prix ${priceId}.`, error);
+  }
+
   return 'freemium';
+}
+
+function isStripeMissingResource(error: unknown): boolean {
+  return error instanceof Stripe.errors.StripeError && error.code === 'resource_missing';
+}
+
+async function resolveStripePriceId(stripe: Stripe, plan: BillingPlan): Promise<string> {
+  if (plan === 'freemium') {
+    throw new Error('Aucun prix Stripe requis pour le plan freemium.');
+  }
+
+  if (priceIdCache[plan]) {
+    return priceIdCache[plan] as string;
+  }
+
+  const config = planPriceConfig[plan];
+
+  if (config?.priceId) {
+    try {
+      const price = await stripe.prices.retrieve(config.priceId);
+      if (price.active) {
+        priceIdCache[plan] = price.id;
+        return price.id;
+      }
+      console.warn(`[billing] Prix ${config.priceId} inactif pour le plan ${plan}.`);
+    } catch (error) {
+      if (!isStripeMissingResource(error)) {
+        throw error;
+      }
+      console.warn(`[billing] Prix ${config.priceId} introuvable pour le plan ${plan}, tentative de repli.`, error);
+    }
+  }
+
+  const lookupCandidates = [config?.lookupKey, plan]
+    .filter((value): value is string => Boolean(value))
+    .filter((value, index, array) => array.indexOf(value) === index);
+
+  if (lookupCandidates.length) {
+    const { data } = await stripe.prices.list({
+      lookup_keys: lookupCandidates,
+      active: true,
+      limit: lookupCandidates.length,
+    });
+
+    const match = data.find((price) => price.lookup_key && lookupCandidates.includes(price.lookup_key));
+    if (match) {
+      priceIdCache[plan] = match.id;
+      return match.id;
+    }
+  }
+
+  const productCandidates = [config?.productId, sharedProductId]
+    .filter((value): value is string => Boolean(value))
+    .filter((value, index, array) => array.indexOf(value) === index);
+
+  for (const productId of productCandidates) {
+    const { data } = await stripe.prices.list({
+      product: productId,
+      active: true,
+      limit: 10,
+    });
+
+    let match = data.find((price) => (price.metadata?.plan ?? '').toLowerCase() === plan);
+    if (!match && data.length === 1 && productId === config?.productId) {
+      match = data[0];
+    }
+
+    if (match) {
+      priceIdCache[plan] = match.id;
+      return match.id;
+    }
+  }
+
+  throw new Error(`Aucun prix Stripe actif n'est configuré pour le plan ${plan}.`);
 }
 
 function shouldKeepPaidPlan(status: Stripe.Subscription.Status | null | undefined): boolean {
@@ -105,13 +230,23 @@ export async function createCheckoutSession(opts: {
   cancelUrl: string;
 }): Promise<{ url: string }>
 {
-  const priceIdEnv = opts.plan === 'partial' ? process.env.STRIPE_PRICE_PARTIAL : process.env.STRIPE_PRICE_PRO;
-  if (!priceIdEnv) {
-    throw new Error('Identifiant de prix Stripe manquant pour ce plan.');
-  }
-
   const customerRow = await ensureStripeCustomer(opts.userId, opts.email);
   const stripe = getStripe();
+
+  const fallbackCheckoutUrl = opts.plan === 'partial'
+    ? process.env.NEXT_PUBLIC_STRIPE_PARTIAL_CHECKOUT_URL
+    : undefined;
+
+  let priceId: string;
+  try {
+    priceId = await resolveStripePriceId(stripe, opts.plan);
+  } catch (error) {
+    if (fallbackCheckoutUrl) {
+      console.warn('[billing] Fallback vers le lien de checkout préconfiguré pour le plan partiel.', error);
+      return { url: fallbackCheckoutUrl };
+    }
+    throw error;
+  }
 
   const session = await stripe.checkout.sessions.create({
     mode: 'subscription',
@@ -123,7 +258,7 @@ export async function createCheckoutSession(opts: {
     },
     line_items: [
       {
-        price: priceIdEnv,
+        price: priceId,
         quantity: 1,
       },
     ],
@@ -222,7 +357,7 @@ export async function syncUserPlanFromStripe(userId: string): Promise<BillingPla
   const targetPlan = subscription?.metadata?.target_plan ?? null;
   const resolvedPlan = (targetPlan === 'partial' || targetPlan === 'pro')
     ? targetPlan
-    : resolvePlanFromPrice(priceId);
+    : await resolvePlanFromPrice(priceId);
   const plan = shouldKeepPaidPlan(status) ? resolvedPlan : 'freemium';
 
   await admin.from('billing_customers').upsert({
@@ -279,7 +414,7 @@ export async function syncPlanFromStripe(event: Stripe.Event): Promise<void> {
     const targetPlan = session.metadata?.target_plan ?? null;
     const plan = (targetPlan === 'partial' || targetPlan === 'pro')
       ? targetPlan
-      : resolvePlanFromPrice(priceId);
+      : await resolvePlanFromPrice(priceId);
 
     await admin.from('billing_customers').upsert({
       user_id: userId,
@@ -320,7 +455,7 @@ export async function syncPlanFromStripe(event: Stripe.Event): Promise<void> {
     const periodEnd = subscription.current_period_end ? new Date(subscription.current_period_end * 1000).toISOString() : null;
     const plan = (targetPlan === 'partial' || targetPlan === 'pro')
       ? targetPlan
-      : resolvePlanFromPrice(priceId);
+      : await resolvePlanFromPrice(priceId);
 
     await admin.from('billing_customers').upsert({
       user_id: userId,
