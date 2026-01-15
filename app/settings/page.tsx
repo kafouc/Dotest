@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, Suspense } from 'react';
 import type { Session } from '@supabase/supabase-js';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { createSupabaseBrowserClient } from '@/lib/supabaseClient';
 import { FaBell, FaBellSlash, FaArrowLeft, FaCheck, FaTimes } from 'react-icons/fa';
 import {
@@ -13,7 +13,7 @@ import {
 } from '@/lib/pushManager';
 import { fetchUserPlan, type SubscriptionPlan } from '@/lib/subscriptions';
 
-export default function SettingsPage() {
+function SettingsPageContent() {
   const router = useRouter();
   const [supabase] = useState(() => createSupabaseBrowserClient());
   const [session, setSession] = useState<Session | null>(null);
@@ -25,6 +25,24 @@ export default function SettingsPage() {
   const [isPlanLoading, setIsPlanLoading] = useState(true);
   const [billingError, setBillingError] = useState<string | null>(null);
   const [billingAction, setBillingAction] = useState<'partial' | 'pro' | 'portal' | null>(null);
+  const searchParams = useSearchParams();
+  const checkoutParam = searchParams.get('checkout');
+  const searchParamsString = searchParams.toString();
+  const [checkoutNotice, setCheckoutNotice] = useState<{ type: 'success' | 'cancel'; plan?: SubscriptionPlan } | null>(null);
+  const partialCheckoutUrl = process.env.NEXT_PUBLIC_STRIPE_PARTIAL_CHECKOUT_URL;
+  const refreshPlan = useCallback(async () => {
+    if (!session) {
+      return;
+    }
+    try {
+      const result = await fetchUserPlan(supabase);
+      if (result?.plan) {
+        setPlan(result.plan);
+      }
+    } catch (error) {
+      console.error('Erreur actualisation abonnement:', error);
+    }
+  }, [session, supabase]);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -74,6 +92,53 @@ export default function SettingsPage() {
       cancelled = true;
     };
   }, [session, supabase]);
+
+  useEffect(() => {
+    if (!checkoutParam) {
+      return;
+    }
+
+    let retryTimer: ReturnType<typeof setTimeout> | null = null;
+
+    if (checkoutParam === 'partial' || checkoutParam === 'pro') {
+      setCheckoutNotice({ type: 'success', plan: checkoutParam });
+      const syncPlan = async () => {
+        setIsPlanLoading(true);
+        try {
+          await refreshPlan();
+        } finally {
+          setIsPlanLoading(false);
+        }
+      };
+      syncPlan();
+      retryTimer = setTimeout(syncPlan, 4000);
+    } else if (checkoutParam === 'cancel') {
+      setCheckoutNotice({ type: 'cancel' });
+    }
+
+    const cleanUrlTimer = setTimeout(() => {
+      const params = new URLSearchParams(searchParamsString);
+      params.delete('checkout');
+      params.delete('session_id');
+      const nextQuery = params.toString();
+      router.replace(nextQuery ? `/settings?${nextQuery}` : '/settings', { scroll: false });
+    }, 1500);
+
+    return () => {
+      if (retryTimer) {
+        clearTimeout(retryTimer);
+      }
+      clearTimeout(cleanUrlTimer);
+    };
+  }, [checkoutParam, refreshPlan, router, searchParamsString]);
+
+  useEffect(() => {
+    if (!checkoutNotice) {
+      return;
+    }
+    const timer = setTimeout(() => setCheckoutNotice(null), 8000);
+    return () => clearTimeout(timer);
+  }, [checkoutNotice]);
 
   // Vérifier l'état des notifications au chargement
   useEffect(() => {
@@ -160,7 +225,6 @@ export default function SettingsPage() {
       setIsProcessing(false);
     }
   };
-
   if (isCheckingAuth) {
     return (
       <div className="flex justify-center items-center min-h-screen">
@@ -181,20 +245,14 @@ export default function SettingsPage() {
 
   const planNotes: Record<SubscriptionPlan, string> = {
     freemium: '1 fiche de révision par semaine et 3 quiz par document (50/mois).',
-    partial: 'Générations illimitées par document et quotidiens confortables.',
+    partial: 'Quotas confort pour chaque document et suivi optimisé.',
     pro: 'Limites étendues, sessions live jusqu’à 300 participants et priorisation.',
   };
-
-  const partialCheckoutUrl = process.env.NEXT_PUBLIC_STRIPE_PARTIAL_CHECKOUT_URL;
 
   const startCheckout = async (targetPlan: 'partial' | 'pro') => {
     setBillingError(null);
     setBillingAction(targetPlan);
     try {
-      if (targetPlan === 'partial' && partialCheckoutUrl) {
-        window.location.href = partialCheckoutUrl;
-        return;
-      }
       const response = await fetch('/api/billing/create-checkout-session', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -207,6 +265,10 @@ export default function SettingsPage() {
       window.location.href = data.url as string;
     } catch (error) {
       console.error('Erreur checkout Stripe:', error);
+      if (targetPlan === 'partial' && partialCheckoutUrl) {
+        window.location.href = partialCheckoutUrl;
+        return;
+      }
       setBillingError(error instanceof Error ? error.message : 'Erreur inconnue');
     } finally {
       setBillingAction(null);
@@ -333,6 +395,33 @@ export default function SettingsPage() {
           </div>
         </div>
 
+        {checkoutNotice && (
+          <div
+            className={`mb-4 flex flex-col gap-3 rounded-lg border px-4 py-3 text-sm sm:flex-row sm:items-start sm:justify-between ${
+              checkoutNotice.type === 'success'
+                ? 'border-green-200 bg-green-50 text-green-800'
+                : 'border-yellow-200 bg-yellow-50 text-yellow-800'
+            }`}
+          >
+            <span>
+              {checkoutNotice.type === 'success' ? (
+                <>
+                  Votre {checkoutNotice.plan ? planLabels[checkoutNotice.plan] : 'abonnement'} est activé&nbsp;! Si le statut ne s&apos;actualise pas immédiatement, patientez quelques secondes ou rafraîchissez cette page.
+                </>
+              ) : (
+                <>Paiement annulé. Aucun changement n&apos;a été appliqué à votre abonnement.</>
+              )}
+            </span>
+            <button
+              type="button"
+              onClick={() => setCheckoutNotice(null)}
+              className="self-start rounded-md border border-current px-3 py-1 text-xs font-semibold uppercase tracking-wide"
+            >
+              Compris
+            </button>
+          </div>
+        )}
+
         {/* Subscription Section */}
         <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-4 sm:p-6 mb-4 sm:mb-6">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
@@ -389,7 +478,7 @@ export default function SettingsPage() {
                     disabled={billingAction !== null}
                     className="w-full rounded-md border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-100 disabled:opacity-50"
                   >
-                    {billingAction === 'portal' ? 'Ouverture...' : 'Gérer mon abonnement'}
+                    {billingAction === 'portal' ? 'Ouverture...' : 'Gérer / résilier mon abonnement'}
                   </button>
                 </>
               )}
@@ -400,7 +489,7 @@ export default function SettingsPage() {
                   disabled={billingAction !== null}
                   className="w-full rounded-md bg-brand-teal px-4 py-2 text-sm font-semibold text-white hover:bg-brand-teal-dark disabled:opacity-50"
                 >
-                  {billingAction === 'portal' ? 'Ouverture...' : 'Gérer mon abonnement'}
+                  {billingAction === 'portal' ? 'Ouverture...' : 'Gérer / résilier mon abonnement'}
                 </button>
               )}
             </div>
@@ -417,5 +506,13 @@ export default function SettingsPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function SettingsPage() {
+  return (
+    <Suspense fallback={null}>
+      <SettingsPageContent />
+    </Suspense>
   );
 }

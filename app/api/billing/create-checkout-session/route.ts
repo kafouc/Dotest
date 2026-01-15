@@ -46,8 +46,8 @@ export async function POST(request: Request) {
     }
 
     const origin = getOrigin(request);
-    const successUrl = `${origin}/app?checkout=success`;
-    const cancelUrl = `${origin}/app?checkout=cancel`;
+    const successUrl = `${origin}/app?checkout=${plan}&session_id={CHECKOUT_SESSION_ID}`;
+    const cancelUrl = `${origin}/settings?checkout=cancel`;
 
     const session = await createCheckoutSession({
       userId: user.id,

@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useEffect, useCallback, useTransition } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, useEffect, useCallback, useTransition, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import type { Session } from '@supabase/supabase-js';
 import { createSupabaseBrowserClient } from '@/lib/supabaseClient';
 import { FaSpinner, FaCheckCircle, FaTimesCircle, FaTrash } from 'react-icons/fa';
@@ -22,7 +22,7 @@ import { ensureNotificationPermission, registerServiceWorker, subscribePush, sen
 import { trackPageView } from '@/lib/trackPageView';
 import { fetchUserStreak, type UserStreak } from '@/lib/streaks';
 
-export default function AppHome() {
+function AppHomeContent() {
   const router = useRouter();
   const [supabase] = useState(() => createSupabaseBrowserClient());
   const [session, setSession] = useState<Session | null>(null);
@@ -36,12 +36,40 @@ export default function AppHome() {
   const [showUploadForm, setShowUploadForm] = useState(false);
   const [openDocumentIds, setOpenDocumentIds] = useState<Set<string>>(new Set());
   const [deletingPath, setDeletingPath] = useState<string | null>(null);
+  const searchParams = useSearchParams();
+  const checkoutParam = searchParams.get('checkout');
+  const searchParamsString = searchParams.toString();
+  const [checkoutNotice, setCheckoutNotice] = useState<'partial' | 'pro' | 'cancel' | null>(null);
   const userId = session?.user?.id ?? null;
   const [, startDocumentTransition] = useTransition();
 
   useEffect(() => {
     trackPageView('/app');
   }, []);
+
+  useEffect(() => {
+    if (!checkoutParam) {
+      return;
+    }
+
+    if (checkoutParam === 'partial' || checkoutParam === 'pro' || checkoutParam === 'cancel') {
+      setCheckoutNotice(checkoutParam);
+    }
+
+    const params = new URLSearchParams(searchParamsString);
+    params.delete('checkout');
+    params.delete('session_id');
+    const nextQuery = params.toString();
+    router.replace(nextQuery ? `/app?${nextQuery}` : '/app', { scroll: false });
+  }, [checkoutParam, router, searchParamsString]);
+
+  useEffect(() => {
+    if (!checkoutNotice) {
+      return;
+    }
+    const timer = setTimeout(() => setCheckoutNotice(null), 8000);
+    return () => clearTimeout(timer);
+  }, [checkoutNotice]);
 
   const refreshStreak = useCallback(async () => {
     if (!userId) {
@@ -377,6 +405,48 @@ export default function AppHome() {
           openDocumentIds={openDocumentIds}
         />
 
+        {checkoutNotice && (
+          <div
+            className={`mx-4 mt-4 rounded-lg border px-4 py-3 text-sm sm:mx-6 ${
+              checkoutNotice === 'cancel'
+                ? 'border-yellow-200 bg-yellow-50 text-yellow-800'
+                : 'border-green-200 bg-green-50 text-green-800'
+            }`}
+          >
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <span>
+                {checkoutNotice === 'partial' && (
+                  <>Plan Partiel activé&nbsp;! Les quotas confort sont maintenant disponibles.</>
+                )}
+                {checkoutNotice === 'pro' && (
+                  <>Plan Sérénité activé&nbsp;! Toutes les fonctionnalités avancées sont débloquées.</>
+                )}
+                {checkoutNotice === 'cancel' && (
+                  <>Paiement annulé. Aucun changement n&apos;a été effectué.</>
+                )}
+              </span>
+              <div className="flex items-center gap-2">
+                {checkoutNotice !== 'cancel' && (
+                  <button
+                    type="button"
+                    onClick={() => router.push('/settings')}
+                    className="rounded-md border border-current px-3 py-1 text-xs font-semibold uppercase tracking-wide"
+                  >
+                    Gérer mon abonnement
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setCheckoutNotice(null)}
+                  className="rounded-md border border-transparent bg-white/40 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-inherit hover:bg-white/70"
+                >
+                  Fermer
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Content Area */}
         <main className="flex-1 overflow-y-auto bg-white">
           <div className="h-full p-6">
@@ -577,5 +647,13 @@ export default function AppHome() {
       <PWAInstallPrompt />
       <AutoEnablePushNotifications />
     </div>
+  );
+}
+
+export default function AppHome() {
+  return (
+    <Suspense fallback={null}>
+      <AppHomeContent />
+    </Suspense>
   );
 }

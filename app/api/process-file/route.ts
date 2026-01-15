@@ -27,16 +27,20 @@ export async function POST(req: Request) {
       'application/pdf',
       'application/vnd.openxmlformats-officedocument.wordprocessingml.document', // .docx
       'application/vnd.openxmlformats-officedocument.presentationml.presentation', // .pptx
+      'application/vnd.ms-powerpoint',
+      'application/mspowerpoint',
+      'application/x-mspowerpoint',
     ];
     
     const isSupported = supported.includes(type) || 
                        lowerPath.endsWith('.pdf') || 
                        lowerPath.endsWith('.docx') || 
-                       lowerPath.endsWith('.pptx');
+                       lowerPath.endsWith('.pptx') ||
+                       lowerPath.endsWith('.ppt');
 
     if (!isSupported) {
       return NextResponse.json(
-        { error: 'Type de fichier non pris en charge (PDF, DOCX, PPTX).' },
+        { error: 'Type de fichier non pris en charge (PDF, DOCX, PPTX, PPT).' },
         { status: 415 }
       );
     }

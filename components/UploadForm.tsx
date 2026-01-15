@@ -38,6 +38,25 @@ function sanitizeFileName(name: string): string {
   return `${finalBase}${finalExtension}`;
 }
 
+function inferMimeType(file: File): string {
+  if (file.type) {
+    return file.type;
+  }
+
+  const name = (file.name || '').toLowerCase();
+  if (name.endsWith('.pdf')) return 'application/pdf';
+  if (name.endsWith('.docx')) {
+    return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+  }
+  if (name.endsWith('.pptx')) {
+    return 'application/vnd.openxmlformats-officedocument.presentationml.presentation';
+  }
+  if (name.endsWith('.ppt')) {
+    return 'application/vnd.ms-powerpoint';
+  }
+  return 'application/octet-stream';
+}
+
 export default function UploadForm({ session, supabase, onUploadSuccess }: UploadFormProps) {
   const [file, setFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
@@ -57,12 +76,15 @@ export default function UploadForm({ session, supabase, onUploadSuccess }: Uploa
       'application/pdf',
       'application/vnd.openxmlformats-officedocument.wordprocessingml.document', // .docx
       'application/vnd.openxmlformats-officedocument.presentationml.presentation', // .pptx
+      'application/vnd.ms-powerpoint',
+      'application/mspowerpoint',
+      'application/x-mspowerpoint',
     ];
     const name = (file.name || '').toLowerCase();
-    const extOk = name.endsWith('.pdf') || name.endsWith('.docx') || name.endsWith('.pptx');
+    const extOk = name.endsWith('.pdf') || name.endsWith('.docx') || name.endsWith('.pptx') || name.endsWith('.ppt');
     const typeOk = allowedTypes.includes(file.type);
     if (!(typeOk || extOk)) {
-      return 'Types acceptés: PDF, Word (.docx), PowerPoint (.pptx).';
+      return 'Types acceptés: PDF, Word (.docx), PowerPoint (.pptx/.ppt).';
     }
 
     return null;
@@ -125,6 +147,7 @@ export default function UploadForm({ session, supabase, onUploadSuccess }: Uploa
       const userId = session.user.id;
       const sanitized = sanitizeFileName(file.name);
       const filePath = `${userId}/${Date.now()}-${sanitized}`;
+      const mimeType = inferMimeType(file);
 
       // 1: Upload vers Storage
       setUploadProgress(30);
@@ -156,7 +179,7 @@ export default function UploadForm({ session, supabase, onUploadSuccess }: Uploa
       const triggerResponse = await fetch('/api/process-file', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ filePath: filePath, documentId: insertData.id, mimeType: file.type }),
+        body: JSON.stringify({ filePath: filePath, documentId: insertData.id, mimeType }),
       });
       if (!triggerResponse.ok) {
         throw new Error("Erreur lors du déclenchement de l'analyse.");
@@ -173,7 +196,7 @@ export default function UploadForm({ session, supabase, onUploadSuccess }: Uploa
               documentId: insertData.id,
               fileName: file.name,
               fileSize: file.size,
-              mimeType: file.type,
+              mimeType,
             },
           }),
         });
@@ -222,7 +245,7 @@ export default function UploadForm({ session, supabase, onUploadSuccess }: Uploa
       >
         <input
           type="file"
-          accept=".pdf,.docx,.pptx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.presentationml.presentation"
+          accept=".pdf,.docx,.pptx,.ppt,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.presentationml.presentation,application/vnd.ms-powerpoint,application/mspowerpoint,application/x-mspowerpoint"
           onChange={handleFileChange}
           disabled={uploading}
           id="file-upload"
@@ -248,10 +271,10 @@ export default function UploadForm({ session, supabase, onUploadSuccess }: Uploa
             />
           </svg>
           <span className="text-sm sm:text-base font-medium text-gray-700">
-            {file ? file.name : 'Glissez-déposez un fichier (PDF, .docx, .pptx) ou cliquez pour sélectionner'}
+            {file ? file.name : 'Glissez-déposez un fichier (PDF, .docx, .pptx, .ppt) ou cliquez pour sélectionner'}
           </span>
           <span className="text-xs sm:text-sm text-gray-500">
-            Max {FILE_LIMITS.MAX_SIZE_MB} Mo — Types: PDF, Word (.docx), PowerPoint (.pptx)
+            Max {FILE_LIMITS.MAX_SIZE_MB} Mo — Types: PDF, Word (.docx), PowerPoint (.pptx/.ppt)
           </span>
         </label>
       </div>

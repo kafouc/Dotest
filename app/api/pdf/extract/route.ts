@@ -9,6 +9,8 @@ import { createClient } from '@supabase/supabase-js';
 import { extractText } from 'unpdf';
 import mammoth from 'mammoth';
 import JSZip from 'jszip';
+import PPT from 'ppt';
+import { read as readCFB } from 'cfb';
 import { EMBEDDING_CONFIG } from '@/lib/constants';
 
 // Configuration pour gérer les gros fichiers
@@ -208,6 +210,25 @@ async function extractFromPPTX(buffer: ArrayBuffer): Promise<string> {
   return texts.join('\n\n');
 }
 
+async function extractFromPPT(buffer: ArrayBuffer): Promise<string[]> {
+  try {
+    const cfb = readCFB(Buffer.from(buffer), { type: 'buffer' });
+    const presentation = PPT.parse_pptcfb(cfb, {});
+    const toText = PPT?.utils && typeof PPT.utils.to_text === 'function'
+      ? PPT.utils.to_text.bind(PPT.utils)
+      : null;
+    const rawSlides = toText ? (toText(presentation) as unknown[]) : [];
+
+    return rawSlides
+      .map((entry) => (typeof entry === 'string' ? entry : ''))
+      .map((text) => text.replace(/\s+/g, ' ').trim())
+      .filter((text) => text.length > 0);
+  } catch (error) {
+    console.error('Erreur extraction PPT:', error);
+    throw new Error('Impossible d\'extraire le texte du fichier PPT');
+  }
+}
+
 // Handler principal
 export async function POST(req: Request) {
   let documentId: number | null = null;
@@ -330,6 +351,8 @@ export async function POST(req: Request) {
         type = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
       } else if (lowerPath.endsWith('.pptx')) {
         type = 'application/vnd.openxmlformats-officedocument.presentationml.presentation';
+      } else if (lowerPath.endsWith('.ppt')) {
+        type = 'application/vnd.ms-powerpoint';
       }
     }
     
@@ -356,11 +379,22 @@ export async function POST(req: Request) {
     } else if (type === 'application/vnd.openxmlformats-officedocument.presentationml.presentation') {
       text = await extractFromPPTX(buffer);
       segments = [{ text, page: null }];
+    } else if (
+      type === 'application/vnd.ms-powerpoint' ||
+      type === 'application/mspowerpoint' ||
+      type === 'application/x-mspowerpoint' ||
+      lowerPath.endsWith('.ppt')
+    ) {
+      const slides = await extractFromPPT(buffer);
+      segments = slides.map((slideText, index) => ({
+        text: slideText,
+        page: index + 1,
+      }));
     } else {
       throw new Error(`Type de fichier non pris en charge: ${type}`);
     }
 
-    const aggregated = segments.map((s) => s.text).join('');
+    const aggregated = segments.map((s) => s.text).join('\n');
     if (!aggregated || aggregated.trim().length === 0) {
       throw new Error('Extraction du texte vide ou impossible');
     }
