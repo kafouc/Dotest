@@ -5,6 +5,7 @@ import { createSupabaseBrowserClient } from '@/lib/supabaseClient';
 import { createSharedQuiz, createQuizSession } from '@/lib/liveQuiz';
 import type { QuizQuestion } from '@/lib/quiz.types';
 import QRCode from 'qrcode';
+import ToastContainer, { useToast } from '@/components/ui/Toast';
 
 type Props = {
   quizTitle: string;
@@ -17,6 +18,7 @@ export default function ShareQuizButton({ quizTitle, questions }: Props) {
   const [shareCode, setShareCode] = useState<string | null>(null);
   const [qrCodeUrl, setQrCodeUrl] = useState<string | null>(null);
   const [sessionId, setSessionId] = useState<string | null>(null);
+  const { toasts, showToast, removeToast } = useToast();
 
   const handleShare = async () => {
     try {
@@ -26,11 +28,7 @@ export default function ShareQuizButton({ quizTitle, questions }: Props) {
       const { data: { user }, error: authError } = await supabase.auth.getUser();
       
       if (authError || !user) {
-        alert(
-          '⚠️ Vous devez être connecté pour partager un quiz.\n\n' +
-          'Veuillez vous déconnecter puis vous reconnecter.\n' +
-          'Si le problème persiste, rechargez la page (Ctrl+Shift+R).'
-        );
+        showToast('Connexion requise pour partager un quiz.', 'warning');
         console.error('Erreur auth:', authError || 'Aucun utilisateur');
         setLoading(false);
         return;
@@ -57,15 +55,14 @@ export default function ShareQuizButton({ quizTitle, questions }: Props) {
       setShareCode(sharedQuiz.share_code);
       setQrCodeUrl(qrDataUrl);
       setSessionId(session.id);
+      showToast('Quiz prêt à être partagé.', 'success');
     } catch (error) {
       const anyErr = error as { message?: string; code?: string };
       console.error('Erreur partage quiz:', anyErr);
-      alert(
-        `Impossible de partager le quiz.\n\n` +
-        (anyErr?.message ? `Message: ${anyErr.message}\n` : '') +
-        (anyErr?.code ? `Code: ${anyErr.code}\n` : '') +
-        'Astuce: exécutez FIX_CREATOR_ID.sql et vérifiez VERIFICATION_SIMPLE.sql si le problème persiste.'
-      );
+      const friendlyMessage = anyErr?.message
+        ? `Impossible de partager le quiz (${anyErr.message}).`
+        : 'Impossible de partager le quiz pour le moment.';
+      showToast(friendlyMessage, 'error');
     } finally {
       setLoading(false);
     }
@@ -73,7 +70,9 @@ export default function ShareQuizButton({ quizTitle, questions }: Props) {
 
   if (shareCode && qrCodeUrl && sessionId) {
     return (
-      <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+      <>
+        <ToastContainer toasts={toasts} onClose={removeToast} />
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
         <div className="bg-white rounded-xl p-6 max-w-md w-full">
           <h3 className="text-xl font-heading font-bold text-brand-dark mb-4">
             Quiz Partagé !
@@ -124,18 +123,22 @@ export default function ShareQuizButton({ quizTitle, questions }: Props) {
           </div>
         </div>
       </div>
+      </>
     );
   }
 
   return (
-    <button
-      type="button"
-      onClick={handleShare}
-      disabled={loading}
-      className="px-4 py-2 bg-brand-teal text-white rounded-md hover:bg-brand-teal-dark disabled:opacity-50 flex items-center gap-2 font-semibold"
-    >
-      <span>📱</span>
-      {loading ? 'Partage en cours...' : 'Partager en temps réel'}
-    </button>
+    <>
+      <ToastContainer toasts={toasts} onClose={removeToast} />
+      <button
+        type="button"
+        onClick={handleShare}
+        disabled={loading}
+        className="px-4 py-2 bg-brand-teal text-white rounded-md hover:bg-brand-teal-dark disabled:opacity-50 flex items-center gap-2 font-semibold"
+      >
+        <span>📱</span>
+        {loading ? 'Partage en cours...' : 'Partager en temps réel'}
+      </button>
+    </>
   );
 }

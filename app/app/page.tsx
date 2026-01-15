@@ -21,6 +21,7 @@ import { DOCUMENT_STATUS } from '@/lib/constants';
 import { ensureNotificationPermission, registerServiceWorker, subscribePush, sendSubscriptionToServer } from '@/lib/pushManager';
 import { trackPageView } from '@/lib/trackPageView';
 import { fetchUserStreak, type UserStreak } from '@/lib/streaks';
+import ToastContainer, { useToast } from '@/components/ui/Toast';
 
 function AppHomeContent() {
   const router = useRouter();
@@ -42,6 +43,7 @@ function AppHomeContent() {
   const [checkoutNotice, setCheckoutNotice] = useState<'partial' | 'pro' | 'cancel' | null>(null);
   const userId = session?.user?.id ?? null;
   const [, startDocumentTransition] = useTransition();
+  const { toasts, showToast, removeToast } = useToast();
 
   useEffect(() => {
     trackPageView('/app');
@@ -96,12 +98,13 @@ function AppHomeContent() {
   }, [supabase, userId]);
 
   // Mémorisation de fetchDocuments - supabase ne change jamais donc pas besoin de dépendance
-  const fetchDocuments = useCallback(async (isInitialLoad = false) => {
+  const fetchDocuments = useCallback(async (isInitialLoad = false): Promise<DocumentInfo[]> => {
     if (isInitialLoad) setIsLoadingDocs(true);
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user) { 
-      if (isInitialLoad) setIsLoadingDocs(false); 
-      return; 
+    if (!user) {
+      if (isInitialLoad) setIsLoadingDocs(false);
+      setDocuments([]);
+      return [];
     }
     const { data: docs, error: fetchError } = await supabase
       .from('documents')
@@ -113,7 +116,7 @@ function AppHomeContent() {
     if (fetchError) {
       console.error("Erreur chargement DB:", fetchError);
       if (isInitialLoad) setIsLoadingDocs(false);
-      return;
+      return [];
     }
     
     const documentList = docs?.map(doc => ({
@@ -126,14 +129,15 @@ function AppHomeContent() {
     
     setDocuments(documentList);
     if (isInitialLoad) setIsLoadingDocs(false);
+    return documentList;
   }, [supabase]);
 
   // Charger les documents quand la session est disponible
-  useEffect(() => {
-    if (session) {
-      fetchDocuments(true);
-    }
-  }, [session, fetchDocuments]);
+    useEffect(() => {
+      if (session) {
+        void fetchDocuments(true);
+      }
+    }, [session, fetchDocuments]);
 
   // Polling optimisé : seulement si des documents sont en traitement
   useEffect(() => {
@@ -145,7 +149,7 @@ function AppHomeContent() {
     
     // Interval de polling (5 secondes)
     const interval = setInterval(() => {
-      fetchDocuments(false);
+        void fetchDocuments(false);
     }, 5000);
     
     return () => clearInterval(interval);
@@ -237,47 +241,40 @@ function AppHomeContent() {
 
   const handleCloseDocument = (documentId: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    // Retirer le document des documents ouverts
     setOpenDocumentIds(prev => {
-      const newSet = new Set(prev);
-      newSet.delete(documentId);
-      return newSet;
+      const next = new Set(prev);
+      next.delete(documentId);
+      return next;
     });
-    
-    if (activeDocumentId === documentId) {
-      // Si on ferme le document actif, on revient à la vue par défaut ou on sélectionne un autre document
+
+    setActiveDocumentId(prevActive => {
+      if (prevActive !== documentId) {
+        return prevActive;
+      }
       const remainingIds = Array.from(openDocumentIds).filter(id => id !== documentId);
-      if (remainingIds.length > 0) {
-        setActiveDocumentId(remainingIds[0]);
-      } else {
-        setActiveDocumentId(null);
+      const nextActive = remainingIds[0] ?? null;
+      if (!nextActive) {
         setShowUploadForm(false);
       }
-    }
-    // Rafraîchit toute la page après fermeture pour refléter l'état
-    if (typeof window !== 'undefined') {
-      window.location.reload();
-    }
+      return nextActive;
+    });
+
+    void fetchDocuments(false);
   };
 
-  const handleUploadSuccess = () => {
-    fetchDocuments(false);
+  const handleUploadSuccess = async () => {
     setShowUploadForm(false);
-    // Sélectionner automatiquement le dernier document uploadé après un court délai
-    setTimeout(() => {
-      fetchDocuments(false).then(() => {
-        // Le nouveau document sera le premier dans la liste après le refresh
-        // On doit attendre que les documents soient rechargés
-        setTimeout(() => {
-          if (documents.length > 0) {
-            const latestDoc = documents[0];
-            const docId = latestDoc.path || latestDoc.name;
-            setActiveDocumentId(docId);
-            setOpenDocumentIds(prev => new Set(prev).add(docId));
-          }
-        }, 100);
-      });
-    }, 500);
+    const refreshed = await fetchDocuments(false);
+    const latestDoc = refreshed[0];
+    if (!latestDoc) {
+      return;
+    }
+    const docId = latestDoc.path || latestDoc.name;
+    if (!docId) {
+      return;
+    }
+    setActiveDocumentId(docId);
+    setOpenDocumentIds(prev => new Set(prev).add(docId));
   };
 
   const handleDeleteDocument = useCallback(async (documentPath: string) => {
@@ -331,18 +328,22 @@ function AppHomeContent() {
       await fetchDocuments(false);
     } catch (err: unknown) {
       console.error('Erreur suppression:', err);
-      alert(err instanceof Error ? err.message : 'Une erreur est survenue lors de la suppression.');
+      const message = err instanceof Error ? err.message : 'Une erreur est survenue lors de la suppression.';
+      showToast(message, 'error');
     } finally {
       setDeletingPath(null);
     }
-  }, [supabase, activeDocumentId, openDocumentIds, fetchDocuments]);
+  }, [supabase, activeDocumentId, openDocumentIds, fetchDocuments, showToast]);
 
   // Afficher un loader pendant la vérification de l'authentification
   if (isCheckingAuth) {
     return (
-      <div className="flex justify-center items-center min-h-screen">
-        <div className="text-brand-dark">Chargement...</div>
-      </div>
+      <>
+        <ToastContainer toasts={toasts} onClose={removeToast} />
+        <div className="flex justify-center items-center min-h-screen">
+          <div className="text-brand-dark">Chargement...</div>
+        </div>
+      </>
     );
   }
 
@@ -352,7 +353,9 @@ function AppHomeContent() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col md:flex-row relative">
+    <>
+      <ToastContainer toasts={toasts} onClose={removeToast} />
+      <div className="min-h-screen bg-gray-50 flex flex-col md:flex-row relative">
       {/* Overlay mobile */}
       {isMobileMenuOpen && (
         <div 
@@ -371,7 +374,7 @@ function AppHomeContent() {
         supabase={supabase}
         documents={documents}
         isLoadingDocs={isLoadingDocs}
-        onDeleteSuccess={() => fetchDocuments(false)}
+        onDeleteSuccess={() => { void fetchDocuments(false); }}
         onSelectDocument={handleSelectDocument}
         isMobileMenuOpen={isMobileMenuOpen}
         onCloseMobile={() => setIsMobileMenuOpen(false)}
@@ -646,7 +649,8 @@ function AppHomeContent() {
       </div>
       <PWAInstallPrompt />
       <AutoEnablePushNotifications />
-    </div>
+      </div>
+    </>
   );
 }
 

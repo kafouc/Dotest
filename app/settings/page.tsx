@@ -12,6 +12,7 @@ import {
   sendSubscriptionToServer,
 } from '@/lib/pushManager';
 import { fetchUserPlan, type SubscriptionPlan } from '@/lib/subscriptions';
+import ToastContainer, { useToast } from '@/components/ui/Toast';
 
 function SettingsPageContent() {
   const router = useRouter();
@@ -30,6 +31,7 @@ function SettingsPageContent() {
   const searchParamsString = searchParams.toString();
   const [checkoutNotice, setCheckoutNotice] = useState<{ type: 'success' | 'cancel'; plan?: SubscriptionPlan } | null>(null);
   const partialCheckoutUrl = process.env.NEXT_PUBLIC_STRIPE_PARTIAL_CHECKOUT_URL;
+  const { toasts, showToast, removeToast } = useToast();
   const refreshPlan = useCallback(async () => {
     if (!session) {
       return;
@@ -161,11 +163,11 @@ function SettingsPageContent() {
   };
 
   const handleEnableNotifications = async () => {
-    setIsProcessing(true);
+      setIsProcessing(true);
     try {
       const permitted = await ensureNotificationPermission();
       if (!permitted || permitted === 'denied') {
-        alert('Vous devez autoriser les notifications pour activer cette fonctionnalité.');
+          showToast('Autorisez les notifications pour activer cette fonctionnalité.', 'warning');
         setIsProcessing(false);
         return;
       }
@@ -188,15 +190,15 @@ function SettingsPageContent() {
       
       setNotificationsEnabled(true);
       setNotificationStatus('granted');
-      alert('✓ Notifications activées avec succès !');
+      showToast('Notifications activées avec succès !', 'success');
     } catch (e) {
       console.error(e);
       const errorMessage = e instanceof Error ? e.message : 'Erreur activation des notifications';
       
       if (errorMessage.includes('Service Worker non actif')) {
-        alert('⏳ Le Service Worker est en cours d\'initialisation. Veuillez réessayer dans quelques secondes.');
+        showToast('Le Service Worker finit de s\'initialiser, réessayez dans quelques secondes.', 'info');
       } else {
-        alert('❌ ' + errorMessage);
+        showToast(errorMessage, 'error');
       }
     } finally {
       setIsProcessing(false);
@@ -204,7 +206,7 @@ function SettingsPageContent() {
   };
 
   const handleDisableNotifications = async () => {
-    setIsProcessing(true);
+      setIsProcessing(true);
     try {
       if (!('serviceWorker' in navigator)) {
         throw new Error('Service Worker non supporté');
@@ -216,11 +218,11 @@ function SettingsPageContent() {
       if (subscription) {
         await subscription.unsubscribe();
         setNotificationsEnabled(false);
-        alert('✓ Notifications désactivées');
+          showToast('Notifications désactivées.', 'info');
       }
     } catch (e) {
       console.error(e);
-      alert(e instanceof Error ? e.message : 'Erreur désactivation des notifications');
+        showToast(e instanceof Error ? e.message : 'Erreur désactivation des notifications', 'error');
     } finally {
       setIsProcessing(false);
     }
@@ -298,6 +300,7 @@ function SettingsPageContent() {
 
   return (
     <div className="min-h-screen bg-gray-50">
+      <ToastContainer toasts={toasts} onClose={removeToast} />
       <div className="max-w-4xl mx-auto p-4 sm:p-6">
         {/* Header */}
         <div className="mb-6 sm:mb-8">

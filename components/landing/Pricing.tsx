@@ -109,7 +109,7 @@ export default function Pricing() {
                   plan.name === 'Pass Partiel'
                     ? '/signup?plan=partial'
                     : plan.name === 'Passe Sérénité'
-                    ? '/signup?plan=serenite'
+                    ? '/signup?plan=pro'
                     : '/signup'
                 }
                 className="group flex min-h-[48px] w-full items-center justify-center rounded-full bg-gradient-to-r from-brand-yellow via-brand-yellow-dark to-brand-teal px-6 py-3 text-sm font-semibold text-brand-dark shadow-[0_20px_42px_-20px_rgba(251,191,29,0.75)] transition duration-300 hover:scale-[1.02] hover:shadow-[0_30px_60px_-24px_rgba(45,143,111,0.55)] md:min-h-[56px] md:text-base"

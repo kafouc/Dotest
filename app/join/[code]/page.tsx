@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, type ReactNode } from 'react';
 import { useParams } from 'next/navigation';
 import { createSupabaseBrowserClient } from '@/lib/supabaseClient';
 import {
@@ -14,6 +14,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import type { QuizQuestion } from '@/lib/quiz.types';
 import { QUIZ_CONFIG } from '@/lib/constants';
 import { isAnswerCorrect, calculateQuizScore } from '@/lib/utils';
+import ToastContainer, { useToast } from '@/components/ui/Toast';
 
 export default function JoinCodePage() {
   const params = useParams();
@@ -34,6 +35,14 @@ export default function JoinCodePage() {
   const [selectedAnswers, setSelectedAnswers] = useState<{ [key: number]: string }>({});
   const [quizFinished, setQuizFinished] = useState(false);
   const [score, setScore] = useState(0);
+  const { toasts, showToast, removeToast } = useToast();
+
+  const withToasts = useCallback((content: ReactNode) => (
+    <>
+      <ToastContainer toasts={toasts} onClose={removeToast} />
+      {content}
+    </>
+  ), [toasts, removeToast]);
 
   // Charger le quiz et la session via API interne
   useEffect(() => {
@@ -159,7 +168,7 @@ export default function JoinCodePage() {
       setHasJoined(true);
     } catch (err) {
       console.error(err);
-      alert('Impossible de rejoindre. Le pseudo est peut-être déjà pris.');
+      showToast('Impossible de rejoindre. Le pseudo est peut-être déjà pris.', 'error');
     }
   };
 
@@ -219,7 +228,7 @@ export default function JoinCodePage() {
   );
 
   if (loading) {
-    return (
+    return withToasts(
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-brand-yellow-light via-brand-teal-light to-white">
         <p className="text-lg text-gray-700">Chargement...</p>
       </div>
@@ -227,7 +236,7 @@ export default function JoinCodePage() {
   }
 
   if (error) {
-    return (
+    return withToasts(
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-brand-yellow-light via-brand-teal-light to-white p-4">
         <div className="bg-white rounded-xl p-6 max-w-md w-full text-center">
           <p className="text-red-600 font-medium">{error}</p>
@@ -237,7 +246,7 @@ export default function JoinCodePage() {
   }
 
   if (!hasJoined) {
-    return (
+    return withToasts(
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-brand-yellow-light via-brand-teal-light to-white p-4">
         <div className="bg-white rounded-xl shadow-2xl p-8 max-w-md w-full">
           <h1 className="text-2xl font-heading font-bold text-brand-dark mb-4 text-center">
@@ -279,7 +288,7 @@ export default function JoinCodePage() {
   }
 
   if (session?.status === 'waiting') {
-    return (
+    return withToasts(
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-brand-yellow-light via-brand-teal-light to-white p-4">
         <div className="bg-white rounded-xl p-8 max-w-md w-full text-center">
           <h2 className="text-2xl font-heading font-bold text-brand-dark mb-4">
@@ -301,7 +310,7 @@ export default function JoinCodePage() {
   }
 
   if (quizFinished) {
-    return (
+    return withToasts(
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-brand-yellow-light via-brand-teal-light to-white p-4">
         <motion.div
           initial={{ opacity: 0, scale: 0.8 }}
@@ -328,7 +337,7 @@ export default function JoinCodePage() {
     return null;
   }
 
-  return (
+  return withToasts(
     <div className="min-h-screen bg-gradient-to-br from-brand-yellow-light via-brand-teal-light to-white p-4 py-8">
       <div className="max-w-2xl mx-auto">
         <div className="bg-white rounded-xl shadow-lg p-6">

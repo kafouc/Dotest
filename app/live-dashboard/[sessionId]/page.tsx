@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, type ReactNode } from 'react';
 import { useParams } from 'next/navigation';
 import { createSupabaseBrowserClient } from '@/lib/supabaseClient';
 import {
@@ -16,6 +16,7 @@ import {
 } from '@/lib/liveQuiz';
 import type { QuizQuestion } from '@/lib/quiz.types';
 import { openPrintableDocument, escapeHtml, formatDateTime, formatDuration, downloadJsonWorkbook } from '@/lib/exporters';
+import ToastContainer, { useToast } from '@/components/ui/Toast';
 
 type ParticipantSummary = {
   id: string;
@@ -234,6 +235,16 @@ export default function LiveDashboardPage() {
   const [editQuestionDraft, setEditQuestionDraft] = useState<QuizQuestion | null>(null);
   const [questionFormError, setQuestionFormError] = useState<string | null>(null);
   const [savingQuestion, setSavingQuestion] = useState(false);
+  const { toasts, showToast, removeToast } = useToast();
+
+  const withToasts = useMemo(() => (
+    (content: ReactNode) => (
+      <>
+        <ToastContainer toasts={toasts} onClose={removeToast} />
+        {content}
+      </>
+    )
+  ), [toasts, removeToast]);
 
   // Charger les données initiales
   useEffect(() => {
@@ -370,9 +381,10 @@ export default function LiveDashboardPage() {
     if (!session) return;
     try {
       await startSession(supabase, sessionId);
+      showToast('Session démarrée.', 'success');
     } catch (err) {
       console.error(err);
-      alert('Erreur lors du démarrage.');
+      showToast('Erreur lors du démarrage.', 'error');
     }
   };
 
@@ -380,9 +392,10 @@ export default function LiveDashboardPage() {
     if (!session) return;
     try {
       await completeSession(supabase, sessionId);
+      showToast('Session clôturée.', 'success');
     } catch (err) {
       console.error(err);
-      alert('Erreur lors de la clôture.');
+      showToast('Erreur lors de la clôture.', 'error');
     }
   };
 
@@ -459,8 +472,10 @@ export default function LiveDashboardPage() {
         { name: 'Participants', rows: participantRows },
         { name: 'Questions', rows: questionRows },
       ]);
+      showToast('Export Excel prêt.', 'success');
     } catch (error) {
       console.error('Erreur lors de l\'export Excel', error);
+      showToast('Erreur lors de l\'export Excel.', 'error');
     }
   };
 
@@ -667,7 +682,7 @@ export default function LiveDashboardPage() {
   };
 
   if (loading) {
-    return (
+    return withToasts(
       <div className="min-h-screen flex items-center justify-center bg-gray-100">
         <p className="text-lg text-gray-700">Chargement du dashboard...</p>
       </div>
@@ -675,7 +690,7 @@ export default function LiveDashboardPage() {
   }
 
   if (error) {
-    return (
+    return withToasts(
       <div className="min-h-screen flex items-center justify-center bg-gray-100 p-4">
         <div className="bg-white rounded-xl p-6 max-w-md w-full text-center">
           <p className="text-red-600 font-medium">{error}</p>
@@ -684,7 +699,7 @@ export default function LiveDashboardPage() {
     );
   }
 
-  return (
+  return withToasts(
     <div className="min-h-screen bg-gray-100 p-4 py-8">
       <div className="max-w-7xl mx-auto">
         <div className="bg-white rounded-xl shadow-lg p-6 mb-6">

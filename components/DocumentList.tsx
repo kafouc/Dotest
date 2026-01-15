@@ -55,7 +55,7 @@ export default function DocumentList(props: DocumentListProps) {
 
             return (
               <li
-                key={doc.path}
+                key={docId}
                 className={`flex items-center gap-2 p-2 rounded-md hover:bg-gray-100 transition-all duration-200 cursor-pointer`}
                 onClick={() => onSelectDocument && onSelectDocument(docId)}
                 title={doc.status_message || doc.name}
