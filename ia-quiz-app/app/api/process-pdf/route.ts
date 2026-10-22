@@ -1,6 +1,8 @@
 // app/api/process-pdf/route.ts
 
 import { NextResponse } from 'next/server';
+import { cookies } from 'next/headers';
+import { createServerClient, type CookieOptions } from '@supabase/ssr';
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -24,13 +26,57 @@ export async function POST(req: Request) {
       );
     }
 
+    const cookieStore = cookies();
+    const supabase = createServerClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+      cookies: {
+        get(name: string) {
+          return cookieStore.get(name)?.value;
+        },
+        set(name: string, value: string, options: CookieOptions) {
+          cookieStore.set({ name, value, ...options });
+        },
+        remove(name: string, options: CookieOptions) {
+          cookieStore.set({ name, value: '', ...options });
+        },
+      },
+    });
+
+    // 1. L'appelant doit être connecté
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) {
+      return NextResponse.json({ error: 'Non autorisé' }, { status: 401 });
+    }
+
+    // 2. Le document doit appartenir à l'appelant et correspondre au chemin fourni
+    const { data: doc } = await supabase
+      .from('documents')
+      .select('id')
+      .eq('id', documentId)
+      .eq('user_id', user.id)
+      .eq('file_path', filePath)
+      .maybeSingle();
+    if (!doc) {
+      return NextResponse.json({ error: 'Document introuvable' }, { status: 404 });
+    }
+
+    // 3. On transmet le JWT de l'utilisateur (et non la clé anon publique) :
+    //    l'edge function revérifie l'identité et la propriété du document.
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    if (!session?.access_token) {
+      return NextResponse.json({ error: 'Non autorisé' }, { status: 401 });
+    }
+
     const edgeFunctionUrl = `${SUPABASE_URL}/functions/v1/${FUNCTION_NAME}`;
 
     const functionResponse = await fetch(edgeFunctionUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+        Authorization: `Bearer ${session.access_token}`,
       },
       body: JSON.stringify({ filePath, documentId }),
     });
@@ -48,9 +94,7 @@ export async function POST(req: Request) {
       { status: 200 }
     );
   } catch (error: unknown) {
-    // <-- CORRECTION ICI (any -> unknown)
     console.error('Erreur API Process PDF:', error);
-    // On vérifie le type de l'erreur
     const errorMessage =
       error instanceof Error
         ? error.message

@@ -27,7 +27,7 @@ describe('Live Quiz Integration', () => {
     // Créer un quiz partagé minimal (questions = tableau vide acceptable ? sinon mock)
     const { data, error } = await serviceClient
       .from('shared_quizzes')
-      .insert({ title: 'Integration Test Quiz', questions: [{ q: 'X?', a: 'A', b: 'B', c: 'C', d: 'D', correct: 'A' }], is_active: true })
+      .insert({ title: 'Integration Test Quiz', questions: [{ question: 'X?', options: { A: 'a', B: 'b', C: 'c', D: 'd' }, reponse_correcte: 'A', justification: 'parce que' }], is_active: true })
       .select()
       .single();
     if (error) throw error;
@@ -99,5 +99,71 @@ describe('Live Quiz Integration', () => {
       expect(row.session_id).toBe(sessionId);
       expect(['waiting','active']).toContain(row.status);
     }
+  });
+
+  describe('Sécurité (client anonyme)', () => {
+    it('get_public_quiz ne renvoie ni reponse_correcte ni justification', async () => {
+      if (!anonClient || !shareCode) return;
+      const { data, error } = await anonClient.rpc('get_public_quiz', { p_share_code: shareCode });
+      expect(error).toBeNull();
+      expect(data.questions).toHaveLength(1);
+      expect(JSON.stringify(data)).not.toMatch(/reponse_correcte|justification/);
+    });
+
+    it('lecture directe de shared_quizzes refusée (aucune ligne)', async () => {
+      if (!anonClient || !shareCode) return;
+      const { data } = await anonClient.from('shared_quizzes').select('id').eq('share_code', shareCode);
+      expect(data ?? []).toHaveLength(0);
+    });
+
+    it('insertion directe dans live_answers / session_participants refusée', async () => {
+      if (!anonClient || !sessionId) return;
+      const ans = await anonClient.from('live_answers').insert({
+        session_id: sessionId,
+        participant_id: '00000000-0000-0000-0000-000000000000',
+        question_index: 0,
+        answer: 'A',
+        is_correct: true,
+      });
+      expect(ans.error).not.toBeNull();
+      const part = await anonClient.from('session_participants').insert({ session_id: sessionId, nickname: 'Hacker' });
+      expect(part.error).not.toBeNull();
+    });
+
+    it('join_session + submit_live_answer : correction côté base, jeton obligatoire', async () => {
+      if (!anonClient || !sessionId) return;
+      const { data: joined, error: joinErr } = await anonClient.rpc('join_session', {
+        p_session_id: sessionId,
+        p_nickname: 'EleveAnon',
+      });
+      expect(joinErr).toBeNull();
+      expect(joined.token).toBeTruthy();
+
+      const bad = await anonClient.rpc('submit_live_answer', {
+        p_participant_id: joined.id,
+        p_token: '00000000-0000-0000-0000-000000000000',
+        p_question_index: 0,
+        p_answer: 'A',
+      });
+      expect(bad.error).not.toBeNull();
+
+      const good = await anonClient.rpc('submit_live_answer', {
+        p_participant_id: joined.id,
+        p_token: joined.token,
+        p_question_index: 0,
+        p_answer: 'B',
+      });
+      expect(good.error).toBeNull();
+      expect(good.data.is_correct).toBe(false);
+      expect(good.data.correct_answer).toBe('A');
+
+      const again = await anonClient.rpc('submit_live_answer', {
+        p_participant_id: joined.id,
+        p_token: joined.token,
+        p_question_index: 0,
+        p_answer: 'A',
+      });
+      expect(again.error).not.toBeNull(); // une seule réponse par question
+    });
   });
 });

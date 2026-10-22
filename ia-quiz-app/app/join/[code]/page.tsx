@@ -8,7 +8,7 @@ import {
   getActiveSessionByShareCode,
   joinSession,
   submitLiveAnswer,
-  type SharedQuiz,
+  type PublicQuiz,
   type QuizSession,
   type SessionParticipant,
 } from '@/lib/liveQuiz';
@@ -17,8 +17,6 @@ import { motion, AnimatePresence } from 'framer-motion';
 type QuizQuestion = {
   question: string;
   options: { [key: string]: string };
-  reponse_correcte: string;
-  justification?: string;
 };
 
 export default function JoinCodePage() {
@@ -29,9 +27,9 @@ export default function JoinCodePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   
-  const [quiz, setQuiz] = useState<SharedQuiz | null>(null);
+  const [quiz, setQuiz] = useState<PublicQuiz | null>(null);
   const [session, setSession] = useState<QuizSession | null>(null);
-  const [participant, setParticipant] = useState<SessionParticipant | null>(null);
+  const [participant, setParticipant] = useState<(SessionParticipant & { token: string }) | null>(null);
   
   const [nickname, setNickname] = useState('');
   const [hasJoined, setHasJoined] = useState(false);
@@ -40,6 +38,7 @@ export default function JoinCodePage() {
   const [selectedAnswers, setSelectedAnswers] = useState<{ [key: number]: string }>({});
   const [quizFinished, setQuizFinished] = useState(false);
   const [score, setScore] = useState(0);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   // Charger le quiz et la session
   useEffect(() => {
@@ -124,66 +123,49 @@ export default function JoinCodePage() {
   const questions = useMemo(() => (quiz?.questions as QuizQuestion[]) || [], [quiz]);
   const currentQuestion = questions[currentQuestionIndex];
 
-  const normalizeLetter = (val: string): string => {
-    const s = (val ?? '').toString().trim().toUpperCase();
-    const m = s.match(/^[\s\(\[]*([ABCD])/);
-    return m ? m[1] : s;
-  };
-
   const handleSelectAnswer = useCallback(
     async (optionKey: string) => {
       if (!participant || !session || selectedAnswers[currentQuestionIndex]) return;
 
-      const newAnswers = {
-        ...selectedAnswers,
-        [currentQuestionIndex]: optionKey,
-      };
-      setSelectedAnswers(newAnswers);
+      setSubmitError(null);
+      setSelectedAnswers((prev) => ({ ...prev, [currentQuestionIndex]: optionKey }));
 
-      // Soumettre la réponse
-      const correctAnswer = currentQuestion.reponse_correcte;
-      const isCorrect = normalizeLetter(optionKey) === normalizeLetter(correctAnswer);
-
+      // La correction est calculée côté base : le client ne connaît pas la bonne réponse.
+      let isCorrect = false;
       try {
-        await submitLiveAnswer(supabase, {
-          sessionId: session.id,
+        const result = await submitLiveAnswer(supabase, {
           participantId: participant.id,
+          token: participant.token,
           questionIndex: currentQuestionIndex,
           answer: optionKey,
-          answerText: currentQuestion.options[optionKey] || null,
-          isCorrect,
         });
+        isCorrect = result.is_correct;
       } catch (err) {
         console.error('Erreur soumission réponse:', err);
+        setSelectedAnswers((prev) => {
+          const next = { ...prev };
+          delete next[currentQuestionIndex];
+          return next;
+        });
+        setSubmitError(
+          "Réponse non enregistrée. Le quiz n'est peut-être pas (ou plus) actif : réessayez."
+        );
+        return;
       }
+
+      const newScore = score + (isCorrect ? 1 : 0);
+      setScore(newScore);
 
       // Passer à la question suivante
       setTimeout(() => {
         if (currentQuestionIndex < questions.length - 1) {
           setCurrentQuestionIndex(currentQuestionIndex + 1);
         } else {
-          // Quiz terminé
-          let finalScore = 0;
-          questions.forEach((q, idx) => {
-            const userAnswer = newAnswers[idx];
-            if (userAnswer && normalizeLetter(userAnswer) === normalizeLetter(q.reponse_correcte)) {
-              finalScore++;
-            }
-          });
-          setScore(finalScore);
           setQuizFinished(true);
         }
       }, 500);
     },
-    [
-      participant,
-      session,
-      selectedAnswers,
-      currentQuestionIndex,
-      currentQuestion,
-      questions,
-      supabase,
-    ]
+    [participant, session, selectedAnswers, currentQuestionIndex, questions, score, supabase]
   );
 
   if (loading) {
@@ -310,6 +292,10 @@ export default function JoinCodePage() {
           </div>
 
           <p className="text-lg text-gray-800 mb-6">{currentQuestion.question}</p>
+
+          {submitError && (
+            <p className="mb-4 p-2 bg-red-100 text-red-700 rounded-md text-sm">{submitError}</p>
+          )}
 
           <AnimatePresence mode="wait">
             <motion.div

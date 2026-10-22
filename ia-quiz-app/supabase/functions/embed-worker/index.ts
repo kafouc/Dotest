@@ -10,6 +10,20 @@ interface WebhookPayload {
   filePath: string;
   documentId: number;
 }
+
+function json(body: unknown, status: number) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { "Content-Type": "application/json" },
+  });
+}
+
+function createServiceClient() {
+  return createClient(
+    Deno.env.get("SUPABASE_URL")!,
+    Deno.env.get("SERVICE_ROLE_KEY")!
+  );
+}
 const CHUNK_STORAGE_BUCKET = 'chunks'; // Bucket pour stocker temporairement les fichiers JSON
 
 // --- NOTRE PROPRE FONCTION DE DÉCOUPAGE ---
@@ -37,10 +51,7 @@ async function preparePdfForEmbedding(payload: WebhookPayload) {
     const { filePath, documentId } = payload;
     
     // Initialise le client Supabase (Service Role Key)
-    const supabaseClient = createClient(
-        Deno.env.get("SUPABASE_URL")!,
-        Deno.env.get("SERVICE_ROLE_KEY")! 
-    );
+    const supabaseClient = createServiceClient();
     
     // Fonction utilitaire pour mettre à jour le statut
     const updateDocumentStatus = async (status: 'processing' | 'failed', message?: string) => {
@@ -52,6 +63,13 @@ async function preparePdfForEmbedding(payload: WebhookPayload) {
 
     try {
         await updateDocumentStatus('processing'); // Statut: "En cours de traitement"
+
+        // Idempotence : un retraitement ne doit pas dupliquer les sections existantes
+        const { error: cleanupError } = await supabaseClient
+            .from('document_sections')
+            .delete()
+            .eq('document_path', filePath);
+        if (cleanupError) throw new Error(`Erreur nettoyage sections: ${cleanupError.message}`);
 
         // 1. Télécharge le fichier PDF depuis Storage
         const { data: fileData, error: downloadError } = await supabaseClient.storage
@@ -110,24 +128,38 @@ async function preparePdfForEmbedding(payload: WebhookPayload) {
 serve(async (req) => {
     // S'assure que seule la méthode POST est utilisée
     if (req.method !== "POST") {
-        return new Response(JSON.stringify({ error: "Méthode non autorisée" }), {
-            status: 405, headers: { "Content-Type": "application/json" },
-        });
+        return json({ error: "Méthode non autorisée" }, 405);
     }
     try {
+        // 1. Authentification : JWT de l'utilisateur appelant
+        const token = (req.headers.get("Authorization") ?? "").replace(/^Bearer\s+/i, "");
+        if (!token) return json({ error: "Non autorisé" }, 401);
+
+        const supabaseClient = createServiceClient();
+        const { data: { user }, error: authError } = await supabaseClient.auth.getUser(token);
+        if (authError || !user) return json({ error: "Non autorisé" }, 401);
+
+        // 2. Autorisation : le document doit appartenir à l'appelant et correspondre au chemin fourni
         const payload: WebhookPayload = await req.json();
-        
+        if (!payload?.documentId || !payload?.filePath) {
+            return json({ error: "Paramètres manquants" }, 400);
+        }
+        const { data: doc } = await supabaseClient
+            .from("documents")
+            .select("id")
+            .eq("id", payload.documentId)
+            .eq("user_id", user.id)
+            .eq("file_path", payload.filePath)
+            .maybeSingle();
+        if (!doc) return json({ error: "Document introuvable" }, 404);
+
         // Lance la préparation SANS 'await' pour répondre immédiatement
-        preparePdfForEmbedding(payload); 
-        
+        preparePdfForEmbedding(payload);
+
         // Réponse HTTP immédiate (Résout l'erreur de timeout 504/500)
-        return new Response(JSON.stringify({ message: "Préparation de l'analyse démarrée." }), {
-            status: 200, headers: { "Content-Type": "application/json" },
-        });
+        return json({ message: "Préparation de l'analyse démarrée." }, 200);
     } catch (error) {
         console.error("Erreur de Webhook (embed-worker):", error);
-        return new Response(JSON.stringify({ error: "Erreur interne." }), {
-            status: 500, headers: { "Content-Type": "application/json" },
-        });
+        return json({ error: "Erreur interne." }, 500);
     }
 });
