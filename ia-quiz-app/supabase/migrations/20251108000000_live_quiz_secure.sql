@@ -38,35 +38,95 @@ alter table public.session_participants
   add column if not exists token_hash text;
 
 -- ------------------------------------------------------------
--- 3) Policies : suppression des accès publics / anonymes
+-- 3) Policies : on repart d'un état propre (indépendant des noms existants,
+--    y compris les policies "debug" / en français laissées par d'anciennes migrations)
 -- ------------------------------------------------------------
-drop policy if exists sq_public_read on public.shared_quizzes;          -- exposait les bonnes réponses
-drop policy if exists sp_public_join on public.session_participants;    -- with check (true)
-drop policy if exists sp_public_read on public.session_participants;    -- using (true)
-drop policy if exists sp_creator_read on public.session_participants;
-drop policy if exists la_participant_own on public.live_answers;        -- auth.uid() is null => tout le monde
-drop policy if exists la_creator_read on public.live_answers;
-drop policy if exists qs_participant_read on public.quiz_sessions;      -- auth.uid() is null => tout le monde
-drop policy if exists qs_creator_select on public.quiz_sessions;
+do $$
+declare
+  r record;
+begin
+  for r in
+    select schemaname, tablename, policyname
+    from pg_policies
+    where schemaname = 'public'
+      and tablename in ('shared_quizzes', 'quiz_sessions', 'session_participants', 'live_answers')
+  loop
+    execute format('drop policy if exists %I on %I.%I', r.policyname, r.schemaname, r.tablename);
+  end loop;
+end $$;
 
--- Le créateur lit les participants et réponses de ses sessions (lecture seule : l'écriture passe par les RPC)
-create policy sp_creator_read
-  on public.session_participants
-  for select
-  using (public.is_session_creator(session_id));
+-- shared_quizzes : le créateur uniquement (plus de lecture publique : elle exposait les bonnes réponses)
+create policy sq_creator_select on public.shared_quizzes
+  for select using (creator_id = auth.uid());
+create policy sq_creator_insert on public.shared_quizzes
+  for insert with check (creator_id = auth.uid());
+create policy sq_creator_update on public.shared_quizzes
+  for update using (creator_id = auth.uid()) with check (creator_id = auth.uid());
+create policy sq_creator_delete on public.shared_quizzes
+  for delete using (creator_id = auth.uid());
 
-create policy la_creator_read
-  on public.live_answers
-  for select
-  using (public.is_session_creator(session_id));
+-- quiz_sessions : le créateur gère ; lecture publique limitée aux quiz actifs
+-- (nécessaire au Realtime des élèves ; la table ne contient que statut et dates)
+create policy qs_public_select on public.quiz_sessions
+  for select using (public.is_shared_quiz_active(shared_quiz_id));
+create policy qs_creator_select on public.quiz_sessions
+  for select using (public.is_quiz_creator(shared_quiz_id, auth.uid()));
+create policy qs_creator_insert on public.quiz_sessions
+  for insert with check (public.is_quiz_creator(shared_quiz_id, auth.uid()));
+create policy qs_creator_update on public.quiz_sessions
+  for update using (public.is_quiz_creator(shared_quiz_id, auth.uid()))
+  with check (public.is_quiz_creator(shared_quiz_id, auth.uid()));
+create policy qs_creator_delete on public.quiz_sessions
+  for delete using (public.is_quiz_creator(shared_quiz_id, auth.uid()));
 
--- Le créateur voit ses sessions même si le quiz n'est plus actif.
--- (La lecture publique de quiz_sessions reste nécessaire au Realtime des élèves ;
---  la table ne contient que statut et dates.)
-create policy qs_creator_select
-  on public.quiz_sessions
-  for select
-  using (public.is_quiz_creator(shared_quiz_id, auth.uid()));
+-- session_participants / live_answers : lecture par le créateur uniquement.
+-- Toute écriture passe par les RPC join_session / submit_live_answer.
+create policy sp_creator_read on public.session_participants
+  for select using (public.is_session_creator(session_id));
+create policy la_creator_read on public.live_answers
+  for select using (public.is_session_creator(session_id));
+
+-- ------------------------------------------------------------
+-- 3 bis) RPC list_active_session (utilisée par la page /join ; absente de certaines bases)
+-- ------------------------------------------------------------
+create or replace function public.list_active_session(p_share_code text)
+returns table (
+  session_id uuid,
+  share_code text,
+  title text,
+  status text,
+  started_at timestamptz,
+  expires_at timestamptz,
+  questions_count int
+)
+language sql
+security definer
+set search_path = public, pg_temp
+as $$
+  select
+    qs.id as session_id,
+    sq.share_code,
+    sq.title,
+    coalesce(qs.status, 'waiting') as status,
+    qs.started_at,
+    sq.expires_at,
+    jsonb_array_length(sq.questions) as questions_count
+  from public.shared_quizzes sq
+  left join public.quiz_sessions qs on qs.shared_quiz_id = sq.id
+  where sq.share_code = upper(p_share_code)
+    and sq.is_active = true
+    and (sq.expires_at is null or sq.expires_at > now())
+    and (qs.status in ('waiting','active') or qs.id is null)
+  order by
+    case when qs.status = 'active' then 0
+         when qs.status = 'waiting' then 1
+         else 2 end,
+    qs.created_at desc nulls last
+  limit 1;
+$$;
+
+revoke all on function public.list_active_session(text) from public;
+grant execute on function public.list_active_session(text) to anon, authenticated;
 
 -- ------------------------------------------------------------
 -- 4) RPC : quiz public SANS bonnes réponses

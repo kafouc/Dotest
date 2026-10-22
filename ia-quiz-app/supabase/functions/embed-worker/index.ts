@@ -4,11 +4,14 @@
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.44.0"; 
 import { extractText } from "unpdf"; // Utilise l'alias 'unpdf' pour l'extraction PDF
+import mammoth from "npm:mammoth"; // Extraction DOCX
+import JSZip from "npm:jszip"; // Lecture PPTX (ZIP)
 
 // --- TYPES ET CONFIGURATION ---
 interface WebhookPayload {
-  filePath: string;
+  filePath: string; // ex: user/123-file.docx
   documentId: number;
+  mimeType?: string; // peut être vide côté navigateur
 }
 
 function json(body: unknown, status: number) {
@@ -47,8 +50,8 @@ function createChunks(text: string, chunkSize: number, chunkOverlap: number): st
 }
 
 // --- FONCTION PRINCIPALE (PRÉPARATION) ---
-async function preparePdfForEmbedding(payload: WebhookPayload) {
-    const { filePath, documentId } = payload;
+async function prepareFileForEmbedding(payload: WebhookPayload) {
+    const { filePath, documentId, mimeType } = payload;
     
     // Initialise le client Supabase (Service Role Key)
     const supabaseClient = createServiceClient();
@@ -71,7 +74,7 @@ async function preparePdfForEmbedding(payload: WebhookPayload) {
             .eq('document_path', filePath);
         if (cleanupError) throw new Error(`Erreur nettoyage sections: ${cleanupError.message}`);
 
-        // 1. Télécharge le fichier PDF depuis Storage
+        // 1. Télécharge le fichier depuis Storage
         const { data: fileData, error: downloadError } = await supabaseClient.storage
             .from('pdfs')
             .download(filePath);
@@ -80,12 +83,90 @@ async function preparePdfForEmbedding(payload: WebhookPayload) {
         const buffer = await fileData.arrayBuffer();
         const uint8array = new Uint8Array(buffer); 
 
-        // 2. Lit et découpe le texte
-        const { text: textPages } = await extractText(uint8array); 
-        const text = textPages.join('\n\n'); 
+        // 2. Lit et extrait le texte selon le type
+        // Détermine le type via mimeType OU extension du chemin si manquant
+        const lowerPath = (filePath || '').toLowerCase();
+        let type = (mimeType ?? '').toLowerCase();
+        if (!type) {
+          if (lowerPath.endsWith('.pdf')) type = 'application/pdf';
+          else if (lowerPath.endsWith('.docx')) type = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+          else if (lowerPath.endsWith('.pptx')) type = 'application/vnd.openxmlformats-officedocument.presentationml.presentation';
+        }
+        if (!type) {
+          throw new Error(`Type de fichier indéterminé pour ${filePath}`);
+        }
+        let text = '';
+        if (type === 'application/pdf') {
+          const { text: textPages } = await extractText(uint8array);
+          text = textPages.join('\n\n');
+        } else if (type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
+          // DOCX: tente mammoth, puis fallback JSZip si mammoth échoue ou renvoie vide
+          try {
+            const result = await mammoth.extractRawText({ arrayBuffer: buffer });
+            text = (result.value ?? '').toString();
+          } catch (e) {
+            console.warn('mammoth a échoué, fallback JSZip pour DOCX:', e);
+            text = '';
+          }
+          if (!text || text.trim().length === 0) {
+            const zip = await JSZip.loadAsync(buffer);
+            const docXml = zip.file('word/document.xml');
+            const bodies: string[] = [];
+            if (docXml) {
+              const xml = await docXml.async('string');
+              const plain = xml
+                .replace(/<w:t[^>]*>/g, ' ')
+                .replace(/<\/w:t>/g, ' ')
+                .replace(/<[^>]+>/g, ' ')
+                .replace(/\s+/g, ' ')
+                .trim();
+              if (plain) bodies.push(plain);
+            }
+            // Inclure entêtes/pieds si présents
+            for (const name of Object.keys(zip.files)) {
+              if (/word\/(header\d+|footer\d+)\.xml$/.test(name)) {
+                const file = zip.file(name);
+                if (!file) continue;
+                const xml = await file.async('string');
+                const plain = xml
+                  .replace(/<w:t[^>]*>/g, ' ')
+                  .replace(/<\/w:t>/g, ' ')
+                  .replace(/<[^>]+>/g, ' ')
+                  .replace(/\s+/g, ' ')
+                  .trim();
+                if (plain) bodies.push(plain);
+              }
+            }
+            text = bodies.join('\n\n');
+          }
+        } else if (type === 'application/vnd.openxmlformats-officedocument.presentationml.presentation') {
+          const zip = await JSZip.loadAsync(buffer);
+          const slidesFolder = zip.folder('ppt/slides');
+          const slideFiles = slidesFolder ? Object.keys(slidesFolder.files).filter((f) => f.endsWith('.xml')) : [];
+          const texts: string[] = [];
+          for (const f of slideFiles) {
+            const file = slidesFolder!.file(f);
+            if (!file) continue;
+            const xml = await file.async('string');
+            const plain = xml
+              .replace(/<a:t[^>]*>/g, ' ')
+              .replace(/<\/a:t>/g, ' ')
+              .replace(/<[^>]+>/g, ' ')
+              .replace(/\s+/g, ' ')
+              .trim();
+            if (plain) texts.push(plain);
+          }
+          text = texts.join('\n\n');
+        } else {
+          throw new Error(`Type de fichier non pris en charge: ${type}`);
+        }
+
+        if (!text || text.trim().length === 0) {
+          throw new Error('Extraction du texte vide ou impossible.');
+        }
         
         const chunksToEmbed = createChunks(text, 500, 50);
-        console.log(`[+] (Prepare) Document ${documentId}: ${chunksToEmbed.length} chunks créés.`);
+        console.log(`[+] (Prepare) Document ${documentId}: ${chunksToEmbed.length} chunks créés (type: ${type}).`);
 
         // 3. Crée le fichier JSON des chunks
         const chunkJson = JSON.stringify(chunksToEmbed);
@@ -116,7 +197,7 @@ async function preparePdfForEmbedding(payload: WebhookPayload) {
 
     } catch (error: any) {
         // En cas de crash, on met à jour le statut en 'failed' (très important pour le feedback utilisateur)
-        const errorMessage = `Échec de la PRÉPARATION du PDF (ID: ${documentId}): ${error.message}`;
+        const errorMessage = `Échec de la PRÉPARATION du fichier (ID: ${documentId}): ${error.message}`;
         console.error(errorMessage);
         await updateDocumentStatus('failed', errorMessage); 
         return { success: false, error: errorMessage };
@@ -154,7 +235,7 @@ serve(async (req) => {
         if (!doc) return json({ error: "Document introuvable" }, 404);
 
         // Lance la préparation SANS 'await' pour répondre immédiatement
-        preparePdfForEmbedding(payload);
+        prepareFileForEmbedding(payload);
 
         // Réponse HTTP immédiate (Résout l'erreur de timeout 504/500)
         return json({ message: "Préparation de l'analyse démarrée." }, 200);
