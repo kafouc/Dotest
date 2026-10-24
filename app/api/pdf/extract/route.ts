@@ -326,6 +326,17 @@ export async function POST(req: Request) {
     }
     
     // 11. Déclencher le traitement optimisé par batch des embeddings
+    // Retraitement idempotent : on retire les segments d'une analyse précédente (échouée ou
+    // interrompue) pour ne pas indexer deux fois le même contenu.
+    const { error: purgeError } = await supabaseAdmin
+      .from('document_sections')
+      .delete()
+      .eq('document_path', storageFilePath)
+      .eq('user_id', docData.user_id);
+    if (purgeError) {
+      throw new Error(`Purge des anciens segments impossible: ${purgeError.message}`);
+    }
+
     await updateDocumentStatus('processing', 'Génération des embeddings (0%)...');
     
     // Lancer le traitement en arrière-plan via le handler interne

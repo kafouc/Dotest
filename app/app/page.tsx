@@ -23,6 +23,7 @@ import { useDocumentTabs } from '@/hooks/useDocumentTabs';
 import { useUserPlan } from '@/hooks/useUserPlan';
 import { useUserStreak } from '@/hooks/useUserStreak';
 import { trackPageView } from '@/lib/trackPageView';
+import type { DocumentInfo } from '@/lib/types';
 
 const fadeIn = {
   initial: { opacity: 0, y: 20 },
@@ -40,7 +41,7 @@ function AppHomeContent() {
   const { notice: checkoutNotice, dismiss: dismissCheckoutNotice } = useCheckoutNotice();
   const userPlan = useUserPlan(supabase, session, checkoutNotice);
   const { streak, refreshStreak } = useUserStreak(supabase, userId);
-  const { documents, isLoadingDocs, fetchDocuments, deleteDocument, deletingPath } = useDocuments(supabase, session);
+  const { documents, isLoadingDocs, fetchDocuments, deleteDocument, deletingPath, retryDocument } = useDocuments(supabase, session);
   const tabs = useDocumentTabs(fetchDocuments);
 
   const [isSidebarMinimized, setIsSidebarMinimized] = useState(false);
@@ -69,6 +70,11 @@ function AppHomeContent() {
     } else {
       showToast(result.message, 'error');
     }
+  };
+
+  const handleRetryDocument = async (doc: DocumentInfo) => {
+    const result = await retryDocument(doc);
+    showToast(result.ok ? "Analyse relancée." : result.message, result.ok ? 'success' : 'error');
   };
 
   if (isCheckingAuth) {
@@ -167,6 +173,7 @@ function AppHomeContent() {
                       isLoadingDocs={isLoadingDocs}
                       deletingPath={deletingPath}
                       onDelete={handleDeleteDocument}
+                      onRetry={handleRetryDocument}
                       onActivity={refreshStreak}
                     />
                   )}

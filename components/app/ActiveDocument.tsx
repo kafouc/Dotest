@@ -1,7 +1,7 @@
 'use client';
 
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { FaSpinner, FaCheckCircle, FaTimesCircle, FaTrash } from 'react-icons/fa';
+import { FaSpinner, FaCheckCircle, FaTimesCircle, FaTrash, FaRedo } from 'react-icons/fa';
 import ProgressTracker from '@/components/ProgressTracker';
 import QuizGenerator from '@/components/QuizGenerator';
 import RevisionSheet from '@/components/RevisionSheet';
@@ -15,6 +15,7 @@ type Props = {
   isLoadingDocs: boolean;
   deletingPath: string | null;
   onDelete: (documentPath: string) => void;
+  onRetry: (doc: DocumentInfo) => void;
   onActivity: () => void;
 };
 
@@ -39,7 +40,7 @@ function formatDate(dateString: string) {
 }
 
 /** En-tête du document actif (statut, suppression) et outils : suivi, quiz, fiche de révision. */
-export default function ActiveDocument({ supabase, document: doc, documents, isLoadingDocs, deletingPath, onDelete, onActivity }: Props) {
+export default function ActiveDocument({ supabase, document: doc, documents, isLoadingDocs, deletingPath, onDelete, onRetry, onActivity }: Props) {
   const isDeleting = deletingPath === doc.path;
 
   return (
@@ -61,7 +62,22 @@ export default function ActiveDocument({ supabase, document: doc, documents, isL
                 <span>{formatDate(doc.created_at)}</span>
               </span>
             </div>
+            {doc.status === DOCUMENT_STATUS.FAILED && (
+              <p className="mt-2 text-sm text-red-700" role="alert">
+                {doc.status_message || "L'analyse de ce document a échoué."}
+              </p>
+            )}
           </div>
+          {doc.status === DOCUMENT_STATUS.FAILED && (
+            <button
+              onClick={() => onRetry(doc)}
+              className="flex items-center gap-2 px-4 py-2 bg-brand-yellow hover:bg-brand-yellow-dark text-brand-dark font-semibold rounded-full transition-colors"
+              title="Relancer l'analyse du document"
+            >
+              <FaRedo className="w-4 h-4" aria-hidden="true" />
+              <span>Relancer l&apos;analyse</span>
+            </button>
+          )}
           <button
             onClick={() => onDelete(doc.path)}
             disabled={isDeleting || deletingPath !== null}

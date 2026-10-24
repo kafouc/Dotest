@@ -29,7 +29,7 @@ export function useDocuments(supabase: SupabaseClient, session: Session | null) 
 
       const { data: docs, error } = await supabase
         .from('documents')
-        .select('file_name, file_path, created_at, status, status_message')
+        .select('id, file_name, file_path, created_at, status, status_message')
         .eq('user_id', userId)
         .order('created_at', { ascending: false })
         .limit(100);
@@ -42,6 +42,7 @@ export function useDocuments(supabase: SupabaseClient, session: Session | null) 
 
       const list: DocumentInfo[] =
         docs?.map((doc) => ({
+          id: doc.id,
           name: doc.file_name,
           path: doc.file_path,
           created_at: doc.created_at,
@@ -96,5 +97,30 @@ export function useDocuments(supabase: SupabaseClient, session: Session | null) 
     [supabase, fetchDocuments]
   );
 
-  return { documents, isLoadingDocs, fetchDocuments, deleteDocument, deletingPath };
+  /** Relance l'analyse d'un document en échec (le serveur purge les segments déjà indexés). */
+  const retryDocument = useCallback(
+    async (doc: DocumentInfo): Promise<{ ok: true } | { ok: false; message: string }> => {
+      if (doc.id === undefined) return { ok: false, message: 'Document introuvable, rechargez la page.' };
+      try {
+        const response = await fetch('/api/process-file', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ filePath: doc.path, documentId: doc.id }),
+        });
+        if (!response.ok) {
+          const data = (await response.json().catch(() => null)) as { error?: string } | null;
+          return { ok: false, message: data?.error || "Impossible de relancer l'analyse." };
+        }
+        return { ok: true };
+      } catch (err) {
+        logger.error('Relance du document échouée', err instanceof Error ? err : { err: String(err) });
+        return { ok: false, message: "Impossible de relancer l'analyse." };
+      } finally {
+        await fetchDocuments(false);
+      }
+    },
+    [fetchDocuments]
+  );
+
+  return { documents, isLoadingDocs, fetchDocuments, deleteDocument, deletingPath, retryDocument };
 }
