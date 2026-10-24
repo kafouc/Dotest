@@ -4,6 +4,7 @@ import { createServerClient } from '@supabase/ssr';
 import { logPageView } from '@/lib/metricsLogger';
 import type { PageViewEvent } from '@/lib/metricsLogger';
 import { createHash } from 'node:crypto';
+import { enforceIpRateLimit, rateLimitErrorResponse } from '@/lib/rateLimit';
 
 export const runtime = 'nodejs';
 
@@ -13,6 +14,14 @@ const supabaseAnon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 export async function POST(req: Request) {
   if (!supabaseUrl || !supabaseAnon) {
     return NextResponse.json({ error: 'Supabase non configuré' }, { status: 503 });
+  }
+
+  try {
+    await enforceIpRateLimit(req, 'page-view');
+  } catch (error) {
+    const limited = rateLimitErrorResponse(error);
+    if (limited) return limited;
+    throw error;
   }
 
   try {

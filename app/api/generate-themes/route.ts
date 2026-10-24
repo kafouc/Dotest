@@ -5,6 +5,7 @@ import Groq from 'groq-sdk';
 import { THEME_GENERATION_CONFIG } from '@/lib/constants';
 import { recordAiUsage } from '@/lib/metricsLogger';
 import { extractGroqUsage, estimateGroqCost } from '@/lib/aiUsage';
+import { enforceRateLimit, rateLimitErrorResponse } from '@/lib/rateLimit';
 
 type PageRange = {
   start?: number | null;
@@ -81,6 +82,7 @@ export async function POST(req: Request) {
     if (!user) {
       return NextResponse.json({ error: 'Non autorisé' }, { status: 401 });
     }
+    await enforceRateLimit(supabase, user.id, 'generate-themes');
 
     const groqKey = process.env.GROQ_API_KEY;
     if (!groqKey) {
@@ -231,6 +233,8 @@ ${context}
 
     return NextResponse.json({ themes }, { status: 200 });
   } catch (error: unknown) {
+    const limited = rateLimitErrorResponse(error);
+    if (limited) return limited;
     console.error('Erreur API Generate Themes:', error);
     let message = 'Erreur inconnue';
     let status = 500;

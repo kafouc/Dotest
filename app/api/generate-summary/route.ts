@@ -7,6 +7,7 @@ import { recordAiUsage } from '@/lib/metricsLogger';
 import { touchUserStreak } from '@/lib/streaks';
 import { extractEmbeddingUsage, extractGroqUsage, estimateGroqCost, estimateEmbeddingCost } from '@/lib/aiUsage';
 import { ensureRevisionQuota, QuotaError } from '@/lib/quota';
+import { enforceRateLimit, rateLimitErrorResponse } from '@/lib/rateLimit';
 import { logExportEvent } from '@/lib/exportEvents';
 import { createJinaEmbeddings, extractEmbeddingsFromResponse, formatJinaError } from '@/lib/jinaClient';
 
@@ -62,6 +63,7 @@ export async function POST(req: Request) {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 });
 
+    await enforceRateLimit(supabase, user.id, 'generate-summary');
     await ensureRevisionQuota(supabase, user.id);
 
     if (!process.env.JINA_API_KEY) {
@@ -268,6 +270,8 @@ ${context}
 
     return NextResponse.json(result, { status: 200 });
   } catch (error: unknown) {
+    const limited = rateLimitErrorResponse(error);
+    if (limited) return limited;
     if (error instanceof QuotaError) {
       return NextResponse.json({
         error: error.message,

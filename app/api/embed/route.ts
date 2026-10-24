@@ -6,6 +6,7 @@ import { EMBEDDING_CONFIG, AI_MODELS } from '@/lib/constants';
 import { recordAiUsage } from '@/lib/metricsLogger';
 import { extractEmbeddingUsage, estimateEmbeddingCost } from '@/lib/aiUsage';
 import { createJinaEmbeddings, extractEmbeddingsFromResponse, formatJinaError } from '@/lib/jinaClient';
+import { enforceRateLimit, rateLimitErrorResponse } from '@/lib/rateLimit';
 
 // --- Fonction de découpage personnalisée ---
 function createChunks(
@@ -64,6 +65,7 @@ export async function POST(req: Request) {
     if (!user) {
       return NextResponse.json({ error: 'Non autorisé' }, { status: 401 });
     }
+    await enforceRateLimit(supabase, user.id, 'embed');
 
     // 3. Télécharge le fichier PDF
     const { data: fileData, error: downloadError } = await supabase.storage
@@ -144,7 +146,8 @@ export async function POST(req: Request) {
       { status: 200 }
     );
   } catch (error: unknown) {
-    // 'any' corrigé en 'unknown'
+    const limited = rateLimitErrorResponse(error);
+    if (limited) return limited;
     console.error('Erreur API Embed:', error);
     const errorMessage =
       error instanceof Error ? formatJinaError(error) : 'Erreur inconnue';

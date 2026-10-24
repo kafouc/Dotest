@@ -7,6 +7,7 @@ import { recordAiUsage } from '@/lib/metricsLogger';
 import { touchUserStreak } from '@/lib/streaks';
 import { extractEmbeddingUsage, extractGroqUsage, estimateGroqCost, estimateEmbeddingCost } from '@/lib/aiUsage';
 import { ensureQuizQuota, QuotaError } from '@/lib/quota';
+import { enforceRateLimit, rateLimitErrorResponse } from '@/lib/rateLimit';
 import { logExportEvent } from '@/lib/exportEvents';
 import { createJinaEmbeddings, extractEmbeddingsFromResponse, formatJinaError } from '@/lib/jinaClient';
 
@@ -92,6 +93,9 @@ export async function POST(req: Request) {
         { status: 400 }
       );
     }
+    if (userQuery.length > 500 || (theme && theme.length > 120)) {
+      return NextResponse.json({ error: 'Requête ou thème trop long.' }, { status: 400 });
+    }
 
     // 1. Client Supabase
     const supabase = createServerClient(
@@ -120,6 +124,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Non autorisé' }, { status: 401 });
     }
 
+    await enforceRateLimit(supabase, user.id, 'generate-quiz');
     await ensureQuizQuota(supabase, user.id, documentPath ?? null);
 
     // 3. Générer le vecteur de la question avec Jina
@@ -306,6 +311,8 @@ export async function POST(req: Request) {
     // 10. Renvoyer le quiz
     return NextResponse.json({ quiz: quizData.quiz }, { status: 200 });
   } catch (error: unknown) {
+    const limited = rateLimitErrorResponse(error);
+    if (limited) return limited;
     if (error instanceof QuotaError) {
       return NextResponse.json({
         error: error.message,

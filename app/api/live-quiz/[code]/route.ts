@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { enforceIpRateLimit, rateLimitErrorResponse } from '@/lib/rateLimit';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 
 type RpcActiveSessionRow = {
@@ -66,9 +67,17 @@ function getAdminClient(): SupabaseClient | null {
 }
 
 export async function GET(
-  _request: Request,
+  request: Request,
   { params }: { params: { code: string } }
 ) {
+  try {
+    await enforceIpRateLimit(request, 'live-quiz-read');
+  } catch (error) {
+    const limited = rateLimitErrorResponse(error);
+    if (limited) return limited;
+    throw error;
+  }
+
   const adminClient = getAdminClient();
 
   if (!adminClient) {

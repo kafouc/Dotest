@@ -86,6 +86,27 @@ export const PLAN_LIMITS = {
   },
 } as const;
 
+/**
+ * Limitation de débit par utilisateur pour les routes qui appellent des services payants.
+ * `perMinute` freine les rafales ; `perDay` plafonne le coût selon le plan.
+ * Valeurs de départ à ajuster d'après metrics_ai_usage_events.
+ */
+export const RATE_LIMITS = {
+  'generate-quiz': { perMinute: 5, perDay: { freemium: 20, partial: 100, pro: 300 } },
+  'generate-summary': { perMinute: 3, perDay: { freemium: 5, partial: 30, pro: 100 } },
+  'generate-themes': { perMinute: 5, perDay: { freemium: 30, partial: 100, pro: 300 } },
+  embed: { perMinute: 3, perDay: { freemium: 20, partial: 100, pro: 300 } },
+  'document-process': { perMinute: 5, perDay: { freemium: 10, partial: 50, pro: 200 } },
+  'flashcards-generate': { perMinute: 10, perDay: { freemium: 100, partial: 300, pro: 1000 } },
+  challenge: { perMinute: 10, perDay: { freemium: 50, partial: 200, pro: 500 } },
+  // Routes publiques (limitées par IP, palier freemium)
+  'challenge-read': { perMinute: 30, perDay: { freemium: 1000, partial: 1000, pro: 1000 } },
+  'live-quiz-read': { perMinute: 30, perDay: { freemium: 1000, partial: 1000, pro: 1000 } },
+  'page-view': { perMinute: 60, perDay: { freemium: 2000, partial: 2000, pro: 2000 } },
+} as const;
+
+export type RateLimitRoute = keyof typeof RATE_LIMITS;
+
 // Types de statut de document
 export const DOCUMENT_STATUS = {
   PENDING: 'pending',
