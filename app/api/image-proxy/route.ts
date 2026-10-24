@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { clientIp, rateLimit } from '@/lib/rateLimit';
+import { clientIp, rateLimit } from '@/lib/memoryRateLimit';
 
 // Simple image proxy for ibb.co page URLs -> resolves og:image (i.ibb.co direct image)
 export async function GET(req: Request) {

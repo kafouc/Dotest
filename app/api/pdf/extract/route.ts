@@ -10,6 +10,7 @@ import mammoth from 'mammoth';
 import JSZip from 'jszip';
 import PPT from 'ppt';
 import { INTERNAL_AUTH_HEADER, signInternalRequest } from '@/lib/internalAuth';
+import { enforceRateLimit, rateLimitErrorResponse } from '@/lib/rateLimit';
 import { read as readCFB } from 'cfb';
 import { EMBEDDING_CONFIG } from '@/lib/constants';
 import { internalError } from '@/lib/apiError';
@@ -298,6 +299,21 @@ export async function POST(req: Request) {
     
     if (docData.user_id !== authenticatedUserId) {
       return NextResponse.json({ error: 'Accès refusé' }, { status: 403 });
+    }
+
+    // Limitation de débit : au-delà, le document est marqué en échec avec un message clair
+    // (sinon il resterait « en attente » indéfiniment côté interface).
+    try {
+      await enforceRateLimit(supabase, authenticatedUserId, 'document-process');
+    } catch (limitError) {
+      const limited = rateLimitErrorResponse(limitError);
+      if (!limited) throw limitError;
+      const message = limitError instanceof Error ? limitError.message : 'Limite atteinte.';
+      await supabaseAdmin
+        .from('documents')
+        .update({ status: 'failed', status_message: message })
+        .eq('id', documentId);
+      return limited;
     }
     
     const storageFilePath = docData.file_path;

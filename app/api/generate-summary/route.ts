@@ -10,6 +10,7 @@ import { logExportEvent } from '@/lib/exportEvents';
 import { parseJsonBody, generateSummarySchema } from '@/lib/validation';
 import { createJinaEmbeddings, extractEmbeddingsFromResponse } from '@/lib/jinaClient';
 import { internalError } from '@/lib/apiError';
+import { enforceRateLimit, rateLimitErrorResponse } from '@/lib/rateLimit';
 
 type SectionRow = {
   content: string;
@@ -37,6 +38,7 @@ export async function POST(req: Request) {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 });
 
+    await enforceRateLimit(supabase, user.id, 'generate-summary');
     await ensureRevisionQuota(supabase, user.id);
 
     if (!process.env.JINA_API_KEY) {
@@ -243,6 +245,8 @@ ${context}
 
     return NextResponse.json(result, { status: 200 });
   } catch (error: unknown) {
+    const limited = rateLimitErrorResponse(error);
+    if (limited) return limited;
     if (error instanceof QuotaError) {
       return NextResponse.json({
         error: error.message,

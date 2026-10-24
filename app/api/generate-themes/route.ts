@@ -6,6 +6,7 @@ import { recordAiUsage } from '@/lib/metricsLogger';
 import { extractGroqUsage, estimateGroqCost } from '@/lib/aiUsage';
 import { parseJsonBody, generateThemesSchema } from '@/lib/validation';
 import { logger } from '@/lib/logger';
+import { enforceRateLimit, rateLimitErrorResponse } from '@/lib/rateLimit';
 
 type SectionRow = {
   content: string;
@@ -60,6 +61,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Non autorisé' }, { status: 401 });
     }
 
+    await enforceRateLimit(supabase, user.id, 'generate-themes');
     const groqKey = process.env.GROQ_API_KEY;
     if (!groqKey) {
       return NextResponse.json(
@@ -209,6 +211,8 @@ ${context}
 
     return NextResponse.json({ themes }, { status: 200 });
   } catch (error: unknown) {
+    const limited = rateLimitErrorResponse(error);
+    if (limited) return limited;
     logger.error('Erreur API Generate Themes:', error);
     let message = 'Erreur inconnue';
     let status = 500;

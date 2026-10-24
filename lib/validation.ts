@@ -50,12 +50,12 @@ export const pageRangeSchema = z
 // ---------- Routes de génération ----------
 
 export const generateQuizSchema = z.object({
-  query: z.string().trim().min(1, 'Question manquante').max(2_000),
+  query: z.string().trim().min(1, 'Question manquante').max(500),
   documentPath: documentPath.optional(),
   // Valeur arrondie ensuite à 5 / 7 / 10 par la route
   numQuestions: z.number().int().min(1).max(50).optional(),
   mode: z.enum(['qcu', 'qcm', 'vf']).default('qcu'),
-  theme: z.string().trim().max(200).optional(),
+  theme: z.string().trim().max(120).optional(),
   pageRange: pageRangeSchema,
 });
 

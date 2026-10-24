@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { clientIp, rateLimit } from '@/lib/rateLimit';
+import { enforceIpRateLimit, rateLimitErrorResponse } from '@/lib/rateLimit';
 import { parseJsonBody, challengeSchema } from '@/lib/validation';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { logger } from '@/lib/logger';
@@ -9,8 +9,12 @@ function getAdminClient() {
 }
 
 export async function POST(request: Request) {
-  if (!rateLimit(`challenge:${clientIp(request)}`, 10, 60 * 60_000)) {
-    return NextResponse.json({ error: 'Trop de requêtes, réessayez plus tard.' }, { status: 429 });
+  try {
+    await enforceIpRateLimit(request, 'challenge');
+  } catch (error) {
+    const limited = rateLimitErrorResponse(error);
+    if (limited) return limited;
+    throw error;
   }
 
   const client = getAdminClient();

@@ -4,7 +4,7 @@ import { createSupabaseServerClient } from '@/lib/supabaseServerClient';
 import { logPageView } from '@/lib/metricsLogger';
 import type { PageViewEvent } from '@/lib/metricsLogger';
 import { createHash } from 'node:crypto';
-import { clientIp, rateLimit } from '@/lib/rateLimit';
+import { enforceIpRateLimit, rateLimitErrorResponse } from '@/lib/rateLimit';
 import { logger } from '@/lib/logger';
 
 export const runtime = 'nodejs';
@@ -17,8 +17,12 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Supabase non configuré' }, { status: 503 });
   }
 
-  if (!rateLimit(`page-view:${clientIp(req)}`, 120, 60_000)) {
-    return NextResponse.json({ error: 'Trop de requêtes' }, { status: 429 });
+  try {
+    await enforceIpRateLimit(req, 'page-view');
+  } catch (error) {
+    const limited = rateLimitErrorResponse(error);
+    if (limited) return limited;
+    throw error;
   }
 
   try {

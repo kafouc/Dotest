@@ -3,6 +3,7 @@ import { createSupabaseServerClient } from '@/lib/supabaseServerClient';
 import { touchUserStreak } from '@/lib/streaks';
 import { parseJsonBody, flashcardsGenerateSchema } from '@/lib/validation';
 import { internalError } from '@/lib/apiError';
+import { enforceRateLimit, rateLimitErrorResponse } from '@/lib/rateLimit';
 
 export async function POST(req: Request) {
   try {
@@ -15,6 +16,7 @@ export async function POST(req: Request) {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return NextResponse.json({ error: 'Non authentifié' }, { status: 401 });
 
+    await enforceRateLimit(supabase, user.id, 'flashcards-generate');
     // Récupère quelques sections du document pour fabriquer des cartes simples
     const { data: sections, error: secErr } = await supabase
       .from('document_sections')
@@ -68,6 +70,8 @@ export async function POST(req: Request) {
 
     return NextResponse.json({ created: count ?? rows.length }, { status: 200 });
   } catch (e: unknown) {
+    const limited = rateLimitErrorResponse(e);
+    if (limited) return limited;
     const msg = e instanceof Error ? e.message : 'Erreur';
     const lower = (msg || '').toLowerCase();
     if ((lower.includes('does not exist') || lower.includes('relation')) && lower.includes('flashcards')) {

@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { clientIp, rateLimit } from '@/lib/rateLimit';
+import { enforceIpRateLimit, rateLimitErrorResponse } from '@/lib/rateLimit';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { logger } from '@/lib/logger';
 
@@ -11,8 +11,12 @@ export async function GET(
   request: Request,
   { params }: { params: { code: string } }
 ) {
-  if (!rateLimit(`challenge-get:${clientIp(request)}`, 60, 60_000)) {
-    return NextResponse.json({ error: 'Trop de requêtes' }, { status: 429 });
+  try {
+    await enforceIpRateLimit(request, 'challenge-read');
+  } catch (error) {
+    const limited = rateLimitErrorResponse(error);
+    if (limited) return limited;
+    throw error;
   }
 
   const client = getAdminClient();

@@ -66,7 +66,15 @@ export async function POST(req: Request) {
     });
 
     if (!extractResponse.ok) {
-      const errorData = await extractResponse.json();
+      const errorData = await extractResponse.json().catch(() => ({} as { error?: string }));
+      // Limitation de débit / limiteur indisponible : on transmet le statut au client
+      if (extractResponse.status === 429 || extractResponse.status === 503) {
+        const retryAfter = extractResponse.headers.get('Retry-After');
+        return NextResponse.json(errorData, {
+          status: extractResponse.status,
+          headers: retryAfter ? { 'Retry-After': retryAfter } : undefined,
+        });
+      }
       throw new Error(
         errorData.error || `Échec de l'extraction. Statut: ${extractResponse.status}`
       );

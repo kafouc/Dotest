@@ -11,6 +11,7 @@ import { parseJsonBody, generateQuizSchema, validateModelQuiz } from '@/lib/vali
 import { createJinaEmbeddings, extractEmbeddingsFromResponse } from '@/lib/jinaClient';
 import { internalError } from '@/lib/apiError';
 import { logger } from '@/lib/logger';
+import { enforceRateLimit, rateLimitErrorResponse } from '@/lib/rateLimit';
 
 type SectionRow = {
   content: string;
@@ -80,6 +81,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Non autorisé' }, { status: 401 });
     }
 
+    await enforceRateLimit(supabase, user.id, 'generate-quiz');
     await ensureQuizQuota(supabase, user.id, documentPath ?? null);
 
     // 3. Générer le vecteur de la question avec Jina
@@ -270,6 +272,8 @@ export async function POST(req: Request) {
     // 10. Renvoyer le quiz
     return NextResponse.json({ quiz: quizData.quiz }, { status: 200 });
   } catch (error: unknown) {
+    const limited = rateLimitErrorResponse(error);
+    if (limited) return limited;
     if (error instanceof QuotaError) {
       return NextResponse.json({
         error: error.message,
