@@ -61,3 +61,11 @@ npm start
 ## Notes
 - Le traitement des documents se fait via /api/process-file → /api/pdf/extract → /api/pdf/embed-batch-optimized.
 - Les plans sont appliqués via la table user_plans et RPC set_user_plan.
+
+## Documentation
+- `docs/` : guides de setup (Stripe, VAPID, PWA, live quiz, RAG), notes de migration et de dépannage.
+- `docs/sql/` : scripts SQL de diagnostic et d'installation manuelle. Ce ne sont pas des migrations ; la source de vérité du schéma est `supabase/migrations/`.
+
+## Qualité
+- `npm run lint`, `npx tsc --noEmit`, `npm run test:run`, `npm run build` sont exécutés par la CI (`.github/workflows/ci.yml`).
+- Les tests d'intégration de sécurité sont ignorés sans environnement Supabase de test.
