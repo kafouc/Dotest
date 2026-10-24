@@ -11,7 +11,7 @@ import { ensureQuizQuota, QuotaError } from '@/lib/quota';
 import { logExportEvent } from '@/lib/exportEvents';
 import { parseJsonBody, generateQuizSchema } from '@/lib/validation';
 import { createQueryEmbedding } from '@/lib/jinaClient';
-import { internalError } from '@/lib/apiError';
+import { internalError, providerBusyResponse } from '@/lib/apiError';
 import { handleModelFailure } from '@/lib/opsAlerts';
 import { enforceRateLimit, rateLimitErrorResponse } from '@/lib/rateLimit';
 
@@ -199,6 +199,8 @@ export async function POST(req: Request) {
         upgrade: true,
       }, { status: 402 });
     }
+    const busy = providerBusyResponse(error);
+    if (busy) return busy;
     if (await handleModelFailure('generate-quiz', AI_MODELS.QUIZ_GENERATION, error)) {
       return NextResponse.json(
         { error: 'Le service de génération est momentanément indisponible. Nous avons été prévenus.' },

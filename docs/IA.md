@@ -17,6 +17,23 @@ les modèles que l'application utilisait : toute génération échouait. Pour qu
   `ai_model_unavailable` est enregistrée dans `ops_alerts` (envoyée au webhook s'il est configuré).
 - Tarifs pour le « coût estimé » de l'admin : `GROQ_PRICES_PER_MILLION` dans `lib/aiUsage.ts` (à tenir à jour).
 
+**Comparaison réelle du 24/10/2026** (`npm run eval:quiz`, 3 textes de référence, prompt v2) :
+
+| Modèle | Quiz valides / demandés | Coût par quiz | Durée | Remarques |
+|---|---|---|---|---|
+| `openai/gpt-oss-120b` | 27/28 (96 %) | ≈ 0,0007 $ | 2 s | Fiable ; 1 question écartée (citation introuvable) ; instructions cachées ignorées |
+| `openai/gpt-oss-20b` | 32/42 (76 %) avec schéma strict ; 18/28 sans | ≈ 0,0003 $ | 1 s | Erreurs `json_validate_failed` et 1 réponse mal formée ; retenu pour les **thèmes** seulement (5/5 valides) |
+| `qwen/qwen3.8-27b` (aperçu) | 5/14 | plus cher (0,80 $ / 4,00 $ par M) | 2 s | Dépasse la limite de 1 000 jetons de sortie/min du palier gratuit : inutilisable |
+
+Choix : **120b pour les quiz et les fiches** (le plus puissant disponible, et déjà le moins cher de sa catégorie : 0,15 $ / 0,60 $ par million de jetons),
+**20b pour les thèmes**. Un quiz coûte moins d'un millième de dollar : la qualité prime sur le coût.
+
+## Limites du palier gratuit de Groq (à connaître)
+- **8 000 jetons par minute** et **1 000 requêtes par jour** par modèle, pour *tous* les utilisateurs de l'application réunis : environ 3 quiz par minute.
+- Au-delà, Groq répond 429. L'application attend si le délai est court (≤ 12 s) puis réessaie une fois ; sinon l'utilisateur voit
+  « Le service de génération est très sollicité. Réessayez dans N s » (code `ai-busy`).
+- Le palier « Developer » de Groq (paiement à l'usage) lève ces plafonds : voir `docs/PLAN_PRO.md`.
+
 Les modèles `openai/gpt-oss-*` sont des modèles de raisonnement : on règle `reasoning_effort: 'low'`, le raisonnement est exclu de la
 réponse, et `max_completion_tokens` borne le coût (`AI_OUTPUT_LIMITS`). Le raisonnement compte dans ces jetons.
 
@@ -29,6 +46,8 @@ Le mode utilisé (`hybrid+rerank`, `hybrid`, `vector+rerank`, `vector`) est enre
 
 ## Génération des quiz (lib/quizGeneration.ts)
 - Passages **numérotés avec leurs pages** ; le modèle indique pour chaque question le passage (`source`) et une **citation copiée mot pour mot** (`citation`).
+- Les modèles gpt-oss reçoivent un **schéma JSON strict** (`quizResponseFormat`) : la sortie est garantie conforme ; si Groq refuse quand même un JSON invalide
+  (`json_validate_failed`), la génération est relancée.
 - Contrôles côté serveur : citation retrouvée dans les passages (exacte, ou ≥ 85 % des mots dans l'ordre), bonne réponse désignant bien une proposition,
   doublons écartés, propositions **mélangées** (les modèles placent la bonne réponse en A ou B trop souvent).
 - Une question dont la citation est introuvable est **écartée** : mieux vaut 4 questions vérifiables que 5 dont une inventée.

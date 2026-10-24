@@ -233,3 +233,63 @@ describe('modèles et coûts', () => {
     expect(estimateGroqCost(1_000_000, 1_000_000, 'modele-inconnu')).toBe(0);
   });
 });
+
+describe('limites et erreurs du fournisseur', () => {
+  it('lit le délai conseillé par Groq', async () => {
+    const { parseRetryAfterSeconds, isRateLimitError, isJsonValidateFailure } = await import('@/lib/groqParams');
+    expect(parseRetryAfterSeconds({ message: 'Rate limit reached ... Please try again in 8.4525s. Need more' })).toBeCloseTo(8.4525);
+    expect(parseRetryAfterSeconds({ message: 'try again in 1m2.5s' })).toBeCloseTo(62.5);
+    expect(parseRetryAfterSeconds({ headers: { 'retry-after': '17' }, message: '' })).toBe(17);
+    expect(parseRetryAfterSeconds({ message: 'autre erreur' })).toBeNull();
+    expect(isRateLimitError({ status: 429 })).toBe(true);
+    expect(isRateLimitError({ status: 500 })).toBe(false);
+    expect(isJsonValidateFailure({ status: 400, code: 'json_validate_failed' })).toBe(true);
+    expect(isJsonValidateFailure({ status: 400, message: 'Failed to generate JSON. Please adjust' })).toBe(true);
+    expect(isJsonValidateFailure({ status: 500 })).toBe(false);
+  });
+
+  it('attend puis réessaie une fois quand le délai est court', async () => {
+    vi.useFakeTimers();
+    try {
+      const { withRateLimitRetry } = await import('@/lib/groqParams');
+      const call = vi.fn()
+        .mockRejectedValueOnce({ status: 429, message: 'Please try again in 2s.' })
+        .mockResolvedValueOnce('ok');
+      const pending = withRateLimitRetry(call);
+      await vi.advanceTimersByTimeAsync(3000);
+      await expect(pending).resolves.toBe('ok');
+      expect(call).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('signale un service saturé, avec le délai, quand l’attente est trop longue', async () => {
+    const { withRateLimitRetry, ProviderBusyError } = await import('@/lib/groqParams');
+    const call = vi.fn().mockRejectedValue({ status: 429, message: 'Please try again in 45s.' });
+    const error = await withRateLimitRetry(call).catch((e) => e);
+    expect(error).toBeInstanceOf(ProviderBusyError);
+    expect(error.retryAfterSeconds).toBe(45);
+    expect(call).toHaveBeenCalledTimes(1);
+  });
+
+  it('impose un schéma JSON strict aux modèles gpt-oss, propre à chaque mode', async () => {
+    const { quizResponseFormat } = await import('@/lib/quizGeneration');
+    const qcm = quizResponseFormat('qcm').json_schema.schema as { properties: { quiz: { items: { required: string[]; properties: Record<string, unknown> } } } };
+    expect(quizResponseFormat('qcu').json_schema.strict).toBe(true);
+    expect(qcm.properties.quiz.items.required).toEqual(expect.arrayContaining(['question', 'options', 'reponses_correctes', 'source', 'citation']));
+    expect(Object.keys(qcm.properties.quiz.items.properties)).not.toContain('reponse_correcte');
+  });
+
+  it('réessaie quand Groq refuse un JSON invalide', async () => {
+    const create = vi.fn()
+      .mockRejectedValueOnce({ status: 400, code: 'json_validate_failed', message: 'Failed to generate JSON' })
+      .mockResolvedValueOnce({
+        choices: [{ message: { content: JSON.stringify({ quiz: [raw()] }) } }],
+        usage: { prompt_tokens: 10, completion_tokens: 5 }, model: 'openai/gpt-oss-120b',
+      });
+    const out = await generateQuiz({ groq: { chat: { completions: { create } } } as unknown as Groq, passages, count: 1, mode: 'qcu', rng: seeded(1) });
+    expect(create).toHaveBeenCalledTimes(2);
+    expect(out.questions).toHaveLength(1);
+  });
+});

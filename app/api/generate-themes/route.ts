@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { createSupabaseServerClient } from '@/lib/supabaseServerClient';
 import Groq from 'groq-sdk';
 import { THEME_GENERATION_CONFIG, AI_MODELS, AI_OUTPUT_LIMITS } from '@/lib/constants';
-import { reasoningParams } from '@/lib/groqParams';
+import { isJsonValidateFailure, reasoningParams } from '@/lib/groqParams';
 import { handleModelFailure } from '@/lib/opsAlerts';
 import { recordAiUsage } from '@/lib/metricsLogger';
 import { extractGroqUsage, estimateGroqCost } from '@/lib/aiUsage';
@@ -191,6 +191,10 @@ ${context}
         const status = (typeof err === 'object' && err && 'status' in err)
           ? (err as { status?: number }).status
           : undefined;
+        if (isJsonValidateFailure(err) && retries < 1) {
+          retries++; // JSON refusé par Groq : un nouvel essai suffit généralement
+          continue;
+        }
         if (status === 429 && retries < maxRetries) {
           // Rate limit atteint, attendre avant de réessayer
           const waitTime = Math.min(1000 * Math.pow(2, retries), 30000); // Max 30 secondes

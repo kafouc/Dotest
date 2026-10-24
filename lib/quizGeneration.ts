@@ -1,6 +1,6 @@
 import type Groq from 'groq-sdk';
 import { AI_MODELS, AI_OUTPUT_LIMITS } from '@/lib/constants';
-import { reasoningParams } from '@/lib/groqParams';
+import { isJsonValidateFailure, reasoningParams, supportsStrictSchema, withRateLimitRetry } from '@/lib/groqParams';
 import { buildNumberedContext, type Passage } from '@/lib/retrieval';
 import { normalizeLetter, normalizeQuiz } from '@/lib/utils';
 import { validateModelQuiz } from '@/lib/validation';
@@ -248,6 +248,42 @@ const MODE_LABEL: Record<QuizMode, string> = {
   vf: 'affirmations vrai/faux',
 };
 
+/** Schéma JSON strict envoyé aux modèles qui le supportent : plus de réponse mal formée. */
+export function quizResponseFormat(mode: QuizMode) {
+  const text = { type: 'string' };
+  const options =
+    mode === 'vf'
+      ? { type: 'object', properties: { VRAI: text, FAUX: text }, required: ['VRAI', 'FAUX'], additionalProperties: false }
+      : { type: 'object', properties: { A: text, B: text, C: text, D: text }, required: ['A', 'B', 'C', 'D'], additionalProperties: false };
+  const answer =
+    mode === 'vf'
+      ? { reponse_correcte: { type: 'string', enum: ['VRAI', 'FAUX'] } }
+      : mode === 'qcm'
+      ? { reponses_correctes: { type: 'array', items: { type: 'string', enum: ['A', 'B', 'C', 'D'] } } }
+      : { reponse_correcte: { type: 'string', enum: ['A', 'B', 'C', 'D'] } };
+  const properties = {
+    question: text,
+    options,
+    ...answer,
+    justification: text,
+    source: { type: 'integer' },
+    citation: text,
+  };
+  return {
+    type: 'json_schema' as const,
+    json_schema: {
+      name: 'quiz',
+      strict: true,
+      schema: {
+        type: 'object',
+        properties: { quiz: { type: 'array', items: { type: 'object', properties, required: Object.keys(properties), additionalProperties: false } } },
+        required: ['quiz'],
+        additionalProperties: false,
+      },
+    },
+  };
+}
+
 export function buildQuizPrompt(args: {
   passages: Passage[];
   count: number;
@@ -330,17 +366,33 @@ export async function generateQuiz(args: {
     });
 
     const startedAt = Date.now();
-    const completion = await groq.chat.completions.create({
-      messages: [
-        { role: 'system', content: 'Tu réponds uniquement avec un objet JSON valide.' },
-        { role: 'user', content: prompt },
-      ],
-      model,
-      temperature: attempt === 1 ? 0.2 : 0.5,
-      max_completion_tokens: AI_OUTPUT_LIMITS.QUIZ_TOKENS,
-      response_format: { type: 'json_object' },
-      ...reasoningParams(model, 'low'),
-    });
+    let completion;
+    try {
+      completion = await withRateLimitRetry(() =>
+        groq.chat.completions.create({
+          messages: [
+            { role: 'system', content: 'Tu réponds uniquement avec un objet JSON valide.' },
+            { role: 'user', content: prompt },
+          ],
+          model,
+          temperature: attempt === 1 ? 0.2 : 0.5,
+          max_completion_tokens: AI_OUTPUT_LIMITS.QUIZ_TOKENS,
+          response_format: supportsStrictSchema(model) ? quizResponseFormat(mode) : { type: 'json_object' },
+          ...reasoningParams(model, 'low'),
+        })
+      );
+    } catch (error) {
+      // JSON invalide côté Groq : on réessaie ; toute autre erreur est remontée
+      if (!isJsonValidateFailure(error) || attempt === attempts) {
+        if (isJsonValidateFailure(error)) {
+          throw new QuizGenerationError('bad-json', "L'IA a renvoyé une réponse JSON mal formée.", totals);
+        }
+        throw error;
+      }
+      logger.warn('[quiz] JSON invalide refusé par Groq, nouvel essai', { attempt, model });
+      lastError = new QuizGenerationError('bad-json', "L'IA a renvoyé une réponse JSON mal formée.");
+      continue;
+    }
     calls.push({
       model: completion.model ?? model,
       promptTokens: completion.usage?.prompt_tokens ?? 0,

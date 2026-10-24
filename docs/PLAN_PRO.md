@@ -25,6 +25,12 @@ ou pas prudent avec ces forfaits, et ce qui change quand on passe à un forfait 
 | **Usage commercial** | Les conditions du forfait Hobby limitent l'usage à du non commercial : **à revoir dès que l'abonnement Stripe est vendu**. |
 | **Protection du déploiement (mots de passe, SSO)** sur les prévisualisations | Utile pour la préproduction. |
 
+## Groq (IA) : palier Developer
+| Amélioration | Pourquoi |
+|---|---|
+| **Plafonds relevés** | Palier gratuit : 8 000 jetons/min et 1 000 requêtes/jour *au total* (≈ 3 quiz/min tous utilisateurs confondus). Le palier Developer (paiement à l'usage, quelques centimes par centaine de quiz) lève ces limites. À prévoir **avant** d'ouvrir à une classe entière : 30 élèves qui génèrent en même temps saturent le palier gratuit. |
+| **Modèles plus gros** | Certains modèles (aperçus) ne sont accessibles qu'au-delà du palier gratuit. |
+
 ## À faire dès maintenant, sans payer (palliatifs)
 - Sauvegarde hebdomadaire chiffrée : `.github/workflows/db-backup.yml` + stockage S3 gratuit (voir `docs/OPERATIONS.md`).
 - Contrôle des mots de passe compromis à l'inscription (API Pwned Passwords en k-anonymat) dans `components/AuthForm.tsx`.

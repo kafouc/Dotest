@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { createSupabaseServerClient } from '@/lib/supabaseServerClient';
 import Groq from 'groq-sdk';
 import { EMBEDDING_CONFIG, AI_MODELS, AI_OUTPUT_LIMITS, RETRIEVAL_CONFIG } from '@/lib/constants';
-import { reasoningParams } from '@/lib/groqParams';
+import { reasoningParams, withJsonRetry, withRateLimitRetry } from '@/lib/groqParams';
 import { retrievePassages, buildNumberedContext, summarizePages } from '@/lib/retrieval';
 import { handleModelFailure } from '@/lib/opsAlerts';
 import { recordAiUsage } from '@/lib/metricsLogger';
@@ -12,7 +12,7 @@ import { ensureRevisionQuota, QuotaError } from '@/lib/quota';
 import { logExportEvent } from '@/lib/exportEvents';
 import { parseJsonBody, generateSummarySchema } from '@/lib/validation';
 import { createQueryEmbedding } from '@/lib/jinaClient';
-import { internalError } from '@/lib/apiError';
+import { internalError, providerBusyResponse } from '@/lib/apiError';
 import { enforceRateLimit, rateLimitErrorResponse } from '@/lib/rateLimit';
 
 if (!process.env.GROQ_API_KEY) {
@@ -114,17 +114,19 @@ ${context}
 `.trim();
 
     const groqStartedAt = Date.now();
-    const completion = await groq.chat.completions.create({
-      messages: [
-        { role: 'system', content: 'Tu réponds uniquement avec un JSON valide.' },
-        { role: 'user', content: prompt },
-      ],
-      model: SUMMARY_MODEL,
-      temperature: 0.2,
-      max_completion_tokens: AI_OUTPUT_LIMITS.SUMMARY_TOKENS,
-      response_format: { type: 'json_object' },
-      ...reasoningParams(SUMMARY_MODEL, 'low'),
-    });
+    const completion = await withJsonRetry(() =>
+      withRateLimitRetry(() => groq.chat.completions.create({
+        messages: [
+          { role: 'system', content: 'Tu réponds uniquement avec un JSON valide.' },
+          { role: 'user', content: prompt },
+        ],
+        model: SUMMARY_MODEL,
+        temperature: 0.2,
+        max_completion_tokens: AI_OUTPUT_LIMITS.SUMMARY_TOKENS,
+        response_format: { type: 'json_object' },
+        ...reasoningParams(SUMMARY_MODEL, 'low'),
+      }))
+    );
 
     const groqLatencyMs = Date.now() - groqStartedAt;
     const groqUsage = extractGroqUsage(completion.usage);
@@ -240,6 +242,8 @@ ${context}
         upgrade: true,
       }, { status: 402 });
     }
+    const busy = providerBusyResponse(error);
+    if (busy) return busy;
     if (await handleModelFailure('generate-summary', SUMMARY_MODEL, error)) {
       return NextResponse.json(
         { error: 'Le service de génération est momentanément indisponible. Nous avons été prévenus.' },
