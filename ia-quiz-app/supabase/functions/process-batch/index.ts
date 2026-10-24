@@ -132,22 +132,35 @@ async function processBatch(payload: WebhookPayload) {
   }
 }
 
-// --- GESTION DES REQUÊTES HTTP (Inchangé) ---
+// --- GESTION DES REQUÊTES HTTP ---
+// Fonction interne : appelée uniquement par embed-worker / elle-même avec la clé service_role.
+function json(body: unknown, status: number) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { 'Content-Type': 'application/json' },
+  });
+}
+
 serve(async (req) => {
   if (req.method !== 'POST') {
-    /* ... */
+    return json({ error: 'Méthode non autorisée' }, 405);
   }
+
+  const token = (req.headers.get('Authorization') ?? '').replace(/^Bearer\s+/i, '');
+  const serviceKey = Deno.env.get('SERVICE_ROLE_KEY');
+  if (!serviceKey || token !== serviceKey) {
+    return json({ error: 'Non autorisé' }, 401);
+  }
+
   try {
     const payload: WebhookPayload = await req.json();
+    if (!payload?.documentId || !payload?.chunkFilePath) {
+      return json({ error: 'Paramètres manquants' }, 400);
+    }
     processBatch(payload); // Lance SANS 'await'
-    return new Response(
-      JSON.stringify({ message: 'Traitement du lot démarré.' }),
-      {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
-      }
-    );
+    return json({ message: 'Traitement du lot démarré.' }, 200);
   } catch (error) {
-    /* ... */
+    console.error('Erreur de Webhook (process-batch):', error);
+    return json({ error: 'Erreur interne.' }, 500);
   }
 });
