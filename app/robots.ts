@@ -14,6 +14,8 @@ export default function robots(): MetadataRoute.Robots {
           '/live-dashboard/',
           '/api/',
           '/flashcards/',
+          '/review/',
+          '/classes/',
         ],
       },
     ],

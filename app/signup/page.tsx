@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { createSupabaseBrowserClient } from '@/lib/supabaseClient';
 import AuthForm from '@/components/AuthForm';
 import type { Session } from '@supabase/supabase-js';
@@ -46,8 +47,15 @@ export default function SignupPage() {
   }
 
   return (
-    <div className="flex justify-center items-center min-h-screen p-4 bg-gradient-to-br from-brand-yellow-light via-white to-brand-teal-light">
+    <div className="flex min-h-screen flex-col items-center justify-center gap-4 p-4 bg-gradient-to-br from-brand-yellow-light via-white to-brand-teal-light">
       <AuthForm supabase={supabase} view="sign_up" showBackButton={true} backHref="/app" />
+      <p className="max-w-sm text-center text-xs text-gray-600">
+        En créant un compte, vous reconnaissez avoir lu notre{' '}
+        <Link href="/confidentialite" className="underline">
+          politique de confidentialité
+        </Link>
+        . Vous pourrez exporter ou supprimer vos données à tout moment.
+      </p>
     </div>
   );
 }

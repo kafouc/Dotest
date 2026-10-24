@@ -1,5 +1,6 @@
 const STORAGE_KEY_PREFIX = 'sop-page-view:';
 import { logger } from './logger';
+import { hasAnalyticsConsent } from './consent';
 const SESSION_STORAGE_KEY = 'sop-session-id';
 
 function getOrCreateSessionId(): string | null {
@@ -17,6 +18,8 @@ function getOrCreateSessionId(): string | null {
 
 export async function trackPageView(route: string, metadata?: Record<string, unknown>): Promise<void> {
   if (typeof window === 'undefined') return;
+  // Mesure d'audience : uniquement avec le consentement de l'utilisateur
+  if (!hasAnalyticsConsent()) return;
   try {
     const cacheKey = `${STORAGE_KEY_PREFIX}${route}`;
     if (window.sessionStorage.getItem(cacheKey)) {

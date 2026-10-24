@@ -1,5 +1,6 @@
 "use client";
 
+import DataPrivacySection from '@/components/settings/DataPrivacySection';
 import { useState, useEffect, useCallback, Suspense } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -499,6 +500,8 @@ function SettingsPageContent() {
             </div>
           </div>
         </div>
+
+        {session?.user?.email && <DataPrivacySection supabase={supabase} email={session.user.email} />}
 
         {/* Info FSRS */}
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">

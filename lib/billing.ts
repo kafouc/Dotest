@@ -281,6 +281,27 @@ export async function createCheckoutSession(opts: {
   return { url: session.url };
 }
 
+/**
+ * Résilie immédiatement tous les abonnements d'un client Stripe (suppression de compte).
+ * Le client et ses factures sont conservés chez Stripe : la loi impose de garder les factures 10 ans.
+ */
+export async function cancelStripeSubscriptionsForAccount(customerId: string): Promise<void> {
+  const stripe = getStripe();
+  try {
+    const subscriptions = await stripe.subscriptions.list({ customer: customerId, status: 'all', limit: 100 });
+    for (const subscription of subscriptions.data) {
+      if (subscription.status !== 'canceled' && subscription.status !== 'incomplete_expired') {
+        await stripe.subscriptions.cancel(subscription.id);
+      }
+    }
+    await stripe.customers.update(customerId, { metadata: { account_deleted_at: new Date().toISOString() } });
+  } catch (error) {
+    // Client déjà supprimé côté Stripe : rien à résilier
+    if (isStripeMissingResource(error)) return;
+    throw error;
+  }
+}
+
 export async function createBillingPortalSession(opts: { userId: string; returnUrl: string; email: string | null; }): Promise<{ url: string }>
 {
   const customerRow = await ensureStripeCustomer(opts.userId, opts.email);

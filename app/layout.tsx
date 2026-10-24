@@ -1,6 +1,6 @@
 import type { Metadata, Viewport } from 'next';
-import { Analytics } from '@vercel/analytics/next';
-import { SpeedInsights } from '@vercel/speed-insights/next';
+import AnalyticsGate from '@/components/consent/AnalyticsGate';
+import ConsentBanner from '@/components/consent/ConsentBanner';
 import { Unbounded, Questrial } from 'next/font/google';
 import './globals.css';
 
@@ -166,8 +166,8 @@ export default function RootLayout({
                        min-h-screen text-brand-dark`}
       >
         {children}
-        <Analytics />
-        <SpeedInsights />
+        <AnalyticsGate />
+        <ConsentBanner />
       </body>
     </html>
   );

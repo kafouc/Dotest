@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import Image from 'next/image';
+import ConsentPreferencesButton from '@/components/consent/ConsentPreferencesButton';
 
 export default function Footer() {
   const currentYear = new Date().getFullYear();
@@ -79,6 +80,15 @@ export default function Footer() {
           </div>
         </div>
         <div className="border-t border-gray-700 pt-8 text-center text-gray-400">
+          <p className="mb-2 flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-sm">
+            <Link href="/confidentialite" className="hover:text-white transition-colors">
+              Confidentialité
+            </Link>
+            <Link href="/essai" className="hover:text-white transition-colors">
+              Essayer sans compte
+            </Link>
+            <ConsentPreferencesButton className="text-sm hover:text-white transition-colors underline-offset-2 hover:underline" />
+          </p>
           <p>&copy; {currentYear} Sheet of Paper. Tous droits réservés.</p>
         </div>
       </div>
