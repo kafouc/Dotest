@@ -14,6 +14,26 @@ export type SharedQuiz = {
   created_at: string;
 };
 
+/** Question telle que vue par un élève : sans clés de correction. */
+export type PublicQuizQuestion = {
+  question: string;
+  options: { [key: string]: string };
+};
+
+/** Quiz tel que vu par un élève : sans `reponse_correcte`, `reponses_correctes` ni `justification`. */
+export type PublicQuiz = {
+  id: string;
+  title: string;
+  share_code: string;
+  questions: PublicQuizQuestion[];
+};
+
+export type SubmitAnswerResult = {
+  is_correct: boolean;
+  correct_answer: string;
+  justification: string | null;
+};
+
 export type QuizSession = {
   id: string;
   shared_quiz_id: string;
@@ -100,7 +120,8 @@ export async function createQuizSession(
 }
 
 /**
- * Rejoindre une session avec un pseudo
+ * Rejoindre une session avec un pseudo (RPC : valide l'état de la session).
+ * Le `token` retourné authentifie les réponses suivantes : à garder en mémoire côté élève.
  */
 export async function joinSession(
   supabase: SupabaseClient,
@@ -108,65 +129,62 @@ export async function joinSession(
     sessionId: string;
     nickname: string;
   }
-): Promise<SessionParticipant> {
-  const { data, error } = await supabase
-    .from('session_participants')
-    .insert({
-      session_id: params.sessionId,
-      nickname: params.nickname,
-    })
-    .select()
-    .single();
+): Promise<SessionParticipant & { token: string }> {
+  const { data, error } = await supabase.rpc('join_session', {
+    p_session_id: params.sessionId,
+    p_nickname: params.nickname,
+  });
 
   if (error) throw error;
-  return data;
+  const row = data as { id: string; session_id: string; nickname: string; token: string };
+  const now = new Date().toISOString();
+  return {
+    id: row.id,
+    session_id: row.session_id,
+    nickname: row.nickname,
+    token: row.token,
+    user_id: null,
+    joined_at: now,
+    last_activity_at: now,
+  };
 }
 
 /**
- * Soumettre une réponse
+ * Soumettre une réponse : la correction est calculée côté base.
  */
 export async function submitLiveAnswer(
   supabase: SupabaseClient,
   params: {
-    sessionId: string;
     participantId: string;
+    token: string;
     questionIndex: number;
     answer: string;
-    answerText: string | null;
-    isCorrect: boolean;
   }
-) {
-  const { error } = await supabase.from('live_answers').insert({
-    session_id: params.sessionId,
-    participant_id: params.participantId,
-    question_index: params.questionIndex,
-    answer: params.answer,
-    answer_text: params.answerText,
-    is_correct: params.isCorrect,
+): Promise<SubmitAnswerResult> {
+  const { data, error } = await supabase.rpc('submit_live_answer', {
+    p_participant_id: params.participantId,
+    p_token: params.token,
+    p_question_index: params.questionIndex,
+    p_answer: params.answer,
   });
 
   if (error) throw error;
+  return data as SubmitAnswerResult;
 }
 
 /**
- * Récupérer un quiz partagé par son code
+ * Récupérer un quiz partagé par son code, sans les bonnes réponses (RPC publique)
  */
 export async function getSharedQuizByCode(
   supabase: SupabaseClient,
   shareCode: string
-): Promise<SharedQuiz | null> {
-  const { data, error } = await supabase
-    .from('shared_quizzes')
-    .select('*')
-    .eq('share_code', shareCode.toUpperCase())
-    .eq('is_active', true)
-    .single();
+): Promise<PublicQuiz | null> {
+  const { data, error } = await supabase.rpc('get_public_quiz', {
+    p_share_code: shareCode.toUpperCase(),
+  });
 
-  if (error) {
-    if (error.code === 'PGRST116') return null; // Not found
-    throw error;
-  }
-  return data;
+  if (error) throw error;
+  return (data as PublicQuiz | null) ?? null;
 }
 
 /**

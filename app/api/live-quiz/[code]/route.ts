@@ -11,6 +11,19 @@ type RpcActiveSessionRow = {
   questions_count: number;
 };
 
+const ANSWER_KEYS = ['reponse_correcte', 'reponses_correctes', 'justification'];
+
+/** Retire les clés de correction : l'élève ne doit jamais recevoir les bonnes réponses. */
+function stripAnswers(questions: unknown): unknown[] {
+  if (!Array.isArray(questions)) return [];
+  return questions.map((q) => {
+    if (!q || typeof q !== 'object') return q;
+    const copy = { ...(q as Record<string, unknown>) };
+    for (const key of ANSWER_KEYS) delete copy[key];
+    return copy;
+  });
+}
+
 let cachedAdminClient: SupabaseClient | null = null;
 let adminInitAttempted = false;
 
@@ -83,7 +96,7 @@ export async function GET(
     return NextResponse.json({ error: 'Erreur lors du chargement du quiz.' }, { status: 500 });
   }
 
-  if (!quiz || !quiz.is_active) {
+  if (!quiz || !quiz.is_active || (quiz.expires_at && new Date(quiz.expires_at) <= new Date())) {
     return NextResponse.json({ error: 'Quiz inactif ou expiré.' }, { status: 404 });
   }
 
@@ -141,7 +154,12 @@ export async function GET(
   }
 
   return NextResponse.json({
-    quiz,
+    quiz: {
+      id: quiz.id,
+      title: quiz.title,
+      share_code: quiz.share_code,
+      questions: stripAnswers(quiz.questions),
+    },
     session,
   });
 }

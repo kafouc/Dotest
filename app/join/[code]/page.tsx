@@ -6,14 +6,13 @@ import { createSupabaseBrowserClient } from '@/lib/supabaseClient';
 import {
   joinSession,
   submitLiveAnswer,
-  type SharedQuiz,
+  type PublicQuiz,
+  type PublicQuizQuestion,
   type QuizSession,
   type SessionParticipant,
 } from '@/lib/liveQuiz';
 import { motion, AnimatePresence } from 'framer-motion';
-import type { QuizQuestion } from '@/lib/quiz.types';
 import { QUIZ_CONFIG } from '@/lib/constants';
-import { isAnswerCorrect, calculateQuizScore } from '@/lib/utils';
 import ToastContainer, { useToast } from '@/components/ui/Toast';
 
 export default function JoinCodePage() {
@@ -24,9 +23,9 @@ export default function JoinCodePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   
-  const [quiz, setQuiz] = useState<SharedQuiz | null>(null);
+  const [quiz, setQuiz] = useState<PublicQuiz | null>(null);
   const [session, setSession] = useState<QuizSession | null>(null);
-  const [participant, setParticipant] = useState<SessionParticipant | null>(null);
+  const [participant, setParticipant] = useState<(SessionParticipant & { token: string }) | null>(null);
   
   const [nickname, setNickname] = useState('');
   const [hasJoined, setHasJoined] = useState(false);
@@ -82,7 +81,7 @@ export default function JoinCodePage() {
         }
 
         const payload = (await response.json()) as {
-          quiz: SharedQuiz;
+          quiz: PublicQuiz;
           session: {
             session_id: string | null;
             status: QuizSession['status'];
@@ -172,46 +171,44 @@ export default function JoinCodePage() {
     }
   };
 
-  const questions = useMemo(() => (quiz?.questions as QuizQuestion[]) || [], [quiz]);
+  const questions = useMemo<PublicQuizQuestion[]>(() => quiz?.questions ?? [], [quiz]);
   const currentQuestion = questions[currentQuestionIndex];
 
   const handleSelectAnswer = useCallback(
     async (optionKey: string) => {
       if (!participant || !session || selectedAnswers[currentQuestionIndex]) return;
 
-      const newAnswers = {
-        ...selectedAnswers,
-        [currentQuestionIndex]: optionKey,
-      };
-      setSelectedAnswers(newAnswers);
+      setSelectedAnswers((prev) => ({ ...prev, [currentQuestionIndex]: optionKey }));
 
-      // Soumettre la réponse
-      const correctAnswer = 'reponse_correcte' in currentQuestion 
-        ? currentQuestion.reponse_correcte 
-        : (currentQuestion.reponses_correctes?.[0] ?? 'A');
-      const isCorrect = isAnswerCorrect(optionKey, correctAnswer);
-
+      // La correction est calculée côté base : le navigateur ne connaît pas la bonne réponse.
+      let isCorrect = false;
       try {
-        await submitLiveAnswer(supabase, {
-          sessionId: session.id,
+        const result = await submitLiveAnswer(supabase, {
           participantId: participant.id,
+          token: participant.token,
           questionIndex: currentQuestionIndex,
           answer: optionKey,
-          answerText: (currentQuestion.options as Record<string, string>)[optionKey] || null,
-          isCorrect,
         });
+        isCorrect = result.is_correct;
       } catch (err) {
         console.error('Erreur soumission réponse:', err);
+        setSelectedAnswers((prev) => {
+          const next = { ...prev };
+          delete next[currentQuestionIndex];
+          return next;
+        });
+        showToast("Réponse non enregistrée. Le quiz n'est peut-être pas (ou plus) actif : réessayez.", 'error');
+        return;
       }
+
+      const newScore = score + (isCorrect ? 1 : 0);
+      setScore(newScore);
 
       // Passer à la question suivante
       setTimeout(() => {
         if (currentQuestionIndex < questions.length - 1) {
           setCurrentQuestionIndex(currentQuestionIndex + 1);
         } else {
-          // Quiz terminé
-          const finalScore = calculateQuizScore(questions, newAnswers);
-          setScore(finalScore);
           setQuizFinished(true);
         }
       }, QUIZ_CONFIG.ANSWER_FEEDBACK_DELAY_MS);
@@ -221,9 +218,10 @@ export default function JoinCodePage() {
       session,
       selectedAnswers,
       currentQuestionIndex,
-      currentQuestion,
       questions,
+      score,
       supabase,
+      showToast,
     ]
   );
 
