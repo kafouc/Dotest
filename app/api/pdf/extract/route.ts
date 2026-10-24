@@ -1,0 +1,424 @@
+// app/api/pdf/extract/route.ts
+// Route Next.js serverless pour l'extraction de texte depuis PDF, DOCX, PPTX
+// Remplace: supabase/functions/embed-worker
+
+import { NextResponse } from 'next/server';
+import { createSupabaseServerClient } from '@/lib/supabaseServerClient';
+import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
+import { extractText } from 'unpdf';
+import mammoth from 'mammoth';
+import JSZip from 'jszip';
+import PPT from 'ppt';
+import { INTERNAL_AUTH_HEADER, signInternalRequest } from '@/lib/internalAuth';
+import { enforceRateLimit, rateLimitErrorResponse } from '@/lib/rateLimit';
+import { createChunks, type TextSegment } from '@/lib/chunking';
+import { read as readCFB } from 'cfb';
+import { EMBEDDING_CONFIG } from '@/lib/constants';
+import { internalError } from '@/lib/apiError';
+import { logger } from '@/lib/logger';
+
+// Configuration pour gérer les gros fichiers
+export const runtime = 'nodejs';
+export const maxDuration = 300; // 5 minutes pour les gros fichiers
+export const dynamic = 'force-dynamic';
+
+// Configuration
+const { CHUNK_SIZE, CHUNK_OVERLAP } = EMBEDDING_CONFIG;
+const CHUNK_STORAGE_BUCKET = 'chunks';
+
+// Types
+interface ExtractPayload {
+  filePath?: string;
+  documentId: number;
+  mimeType?: string;
+}
+
+// Fonction pour extraire le texte d'un PDF
+async function extractFromPDF(buffer: ArrayBuffer): Promise<string[]> {
+  const uint8array = new Uint8Array(buffer);
+  const { text: textPages } = await extractText(uint8array, {
+    mergePages: false
+  });
+  return textPages.map((page) => page ?? '');
+}
+
+// Fonction pour extraire le texte d'un DOCX
+async function extractFromDOCX(buffer: ArrayBuffer): Promise<string> {
+  try {
+    const result = await mammoth.extractRawText({ arrayBuffer: buffer });
+    let text = (result.value ?? '').toString();
+    
+    if (!text || text.trim().length === 0) {
+      // Fallback: extraction manuelle via JSZip
+      const zip = await JSZip.loadAsync(buffer);
+      const docXml = zip.file('word/document.xml');
+      const bodies: string[] = [];
+      
+      if (docXml) {
+        const xml = await docXml.async('string');
+        const plain = xml
+          .replace(/<w:t[^>]*>/g, ' ')
+          .replace(/<\/w:t>/g, ' ')
+          .replace(/<[^>]+>/g, ' ')
+          .replace(/\s+/g, ' ')
+          .trim();
+        if (plain) bodies.push(plain);
+      }
+      
+      // Inclure entêtes/pieds
+      for (const name of Object.keys(zip.files)) {
+        if (/word\/(header\d+|footer\d+)\.xml$/.test(name)) {
+          const file = zip.file(name);
+          if (!file) continue;
+          const xml = await file.async('string');
+          const plain = xml
+            .replace(/<w:t[^>]*>/g, ' ')
+            .replace(/<\/w:t>/g, ' ')
+            .replace(/<[^>]+>/g, ' ')
+            .replace(/\s+/g, ' ')
+            .trim();
+          if (plain) bodies.push(plain);
+        }
+      }
+      text = bodies.join('\n\n');
+    }
+    
+    return text;
+  } catch (error) {
+    logger.error('Erreur extraction DOCX:', error);
+    throw new Error('Impossible d\'extraire le texte du fichier DOCX');
+  }
+}
+
+// Fonction pour extraire le texte d'un PPTX
+async function extractFromPPTX(buffer: ArrayBuffer): Promise<string> {
+  const zip = await JSZip.loadAsync(buffer);
+  const slidesFolder = zip.folder('ppt/slides');
+  const slideFiles = slidesFolder 
+    ? Object.keys(slidesFolder.files).filter((f) => f.endsWith('.xml')) 
+    : [];
+  
+  const texts: string[] = [];
+  for (const f of slideFiles) {
+    const file = slidesFolder!.file(f);
+    if (!file) continue;
+    const xml = await file.async('string');
+    const plain = xml
+      .replace(/<a:t[^>]*>/g, ' ')
+      .replace(/<\/a:t>/g, ' ')
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+    if (plain) texts.push(plain);
+  }
+  
+  return texts.join('\n\n');
+}
+
+async function extractFromPPT(buffer: ArrayBuffer): Promise<string[]> {
+  try {
+    const cfb = readCFB(Buffer.from(buffer), { type: 'buffer' });
+    const presentation = PPT.parse_pptcfb(cfb, {});
+    const toText = PPT?.utils && typeof PPT.utils.to_text === 'function'
+      ? PPT.utils.to_text.bind(PPT.utils)
+      : null;
+    const rawSlides = toText ? (toText(presentation) as unknown[]) : [];
+
+    return rawSlides
+      .map((entry) => (typeof entry === 'string' ? entry : ''))
+      .map((text) => text.replace(/\s+/g, ' ').trim())
+      .filter((text) => text.length > 0);
+  } catch (error) {
+    logger.error('Erreur extraction PPT:', error);
+    throw new Error('Impossible d\'extraire le texte du fichier PPT');
+  }
+}
+
+// Handler principal
+export async function POST(req: Request) {
+  let documentId: number | null = null;
+  
+  try {
+    // 1. Vérifier la configuration Supabase
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const supabaseAnon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    const supabaseServiceRole = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    
+    if (!supabaseUrl || !supabaseAnon || !supabaseServiceRole) {
+      return NextResponse.json(
+        { error: 'Configuration Supabase manquante' },
+        { status: 503 }
+      );
+    }
+    
+    // 2. Créer les clients Supabase (session utilisateur + service admin)
+    const supabase = await createSupabaseServerClient();
+    
+    const supabaseAdmin = getSupabaseAdmin('pdf-extract');
+    if (!supabaseAdmin) {
+      return NextResponse.json({ error: 'Configuration Supabase manquante' }, { status: 503 });
+    }
+    
+    // 3. L'utilisateur doit être connecté : cette route utilise la clé service
+    let authenticatedUserId: string | null = null;
+    try {
+      const { data } = await supabase.auth.getUser();
+      authenticatedUserId = data.user?.id ?? null;
+    } catch (authError) {
+      logger.warn('[PDF Extract] Impossible de récupérer la session utilisateur:', authError);
+    }
+    if (!authenticatedUserId) {
+      return NextResponse.json({ error: 'Non autorisé' }, { status: 401 });
+    }
+    
+    // 4. Parser le payload
+    const body: ExtractPayload = await req.json().catch(() => ({} as ExtractPayload));
+    const filePath = typeof body.filePath === 'string' ? body.filePath : undefined;
+    const docId = Number(body.documentId);
+    const mimeType = typeof body.mimeType === 'string' ? body.mimeType : undefined;
+    documentId = docId;
+    
+    if (!Number.isFinite(documentId)) {
+      return NextResponse.json(
+        { error: 'Paramètres manquants (documentId)' },
+        { status: 400 }
+      );
+    }
+    
+    // 5. Vérifier le document ciblé
+    const { data: docData, error: docError } = await supabaseAdmin
+      .from('documents')
+      .select('user_id, file_path')
+      .eq('id', documentId)
+      .single();
+    
+    if (docError || !docData) {
+      return NextResponse.json(
+        { error: `Document introuvable: ${documentId}` },
+        { status: 404 }
+      );
+    }
+    
+    if (docData.user_id !== authenticatedUserId) {
+      return NextResponse.json({ error: 'Accès refusé' }, { status: 403 });
+    }
+
+    // Limitation de débit : au-delà, le document est marqué en échec avec un message clair
+    // (sinon il resterait « en attente » indéfiniment côté interface).
+    try {
+      await enforceRateLimit(supabase, authenticatedUserId, 'document-process');
+    } catch (limitError) {
+      const limited = rateLimitErrorResponse(limitError);
+      if (!limited) throw limitError;
+      const message = limitError instanceof Error ? limitError.message : 'Limite atteinte.';
+      await supabaseAdmin
+        .from('documents')
+        .update({ status: 'failed', status_message: message })
+        .eq('id', documentId);
+      return limited;
+    }
+    
+    const storageFilePath = docData.file_path;
+    if (filePath && storageFilePath !== filePath) {
+      logger.warn(`[PDF Extract] Doc ${documentId}: le chemin fourni (${filePath}) ne correspond pas au fichier enregistré (${storageFilePath}). Utilisation du chemin officiel.`);
+    }
+    
+    // 5. Mettre à jour le statut du document
+    const updateDocumentStatus = async (
+      status: 'processing' | 'completed' | 'failed',
+      message?: string
+    ) => {
+      await supabaseAdmin
+        .from('documents')
+        .update({ status, status_message: message || null })
+        .eq('id', documentId);
+    };
+    
+    await updateDocumentStatus('processing', 'Extraction du texte en cours...');
+    
+    // 6. Télécharger le fichier depuis Storage
+    const { data: fileData, error: downloadError } = await supabaseAdmin.storage
+      .from('pdfs')
+      .download(storageFilePath);
+      
+    if (downloadError) {
+      throw new Error(`Erreur téléchargement: ${downloadError.message}`);
+    }
+    
+    const buffer = await fileData.arrayBuffer();
+    
+    // 7. Déterminer le type de fichier
+    const lowerPath = (storageFilePath || '').toLowerCase();
+    let type = (mimeType ?? '').toLowerCase();
+    
+    if (!type) {
+      if (lowerPath.endsWith('.pdf')) {
+        type = 'application/pdf';
+      } else if (lowerPath.endsWith('.docx')) {
+        type = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+      } else if (lowerPath.endsWith('.pptx')) {
+        type = 'application/vnd.openxmlformats-officedocument.presentationml.presentation';
+      } else if (lowerPath.endsWith('.ppt')) {
+        type = 'application/vnd.ms-powerpoint';
+      }
+    }
+    
+    if (!type) {
+      throw new Error(`Type de fichier indéterminé pour ${storageFilePath}`);
+    }
+    
+    // 8. Extraire le texte selon le type
+    let text = '';
+    
+    await updateDocumentStatus('processing', `Analyse du fichier ${type.split('/')[1] || 'document'}...`);
+    
+    let segments: TextSegment[] = [];
+
+    if (type === 'application/pdf') {
+      const pages = await extractFromPDF(buffer);
+      segments = pages.map((pageText, idx) => ({
+        text: pageText ?? '',
+        page: idx + 1,
+      }));
+    } else if (type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
+      text = await extractFromDOCX(buffer);
+      segments = [{ text, page: null }];
+    } else if (type === 'application/vnd.openxmlformats-officedocument.presentationml.presentation') {
+      text = await extractFromPPTX(buffer);
+      segments = [{ text, page: null }];
+    } else if (
+      type === 'application/vnd.ms-powerpoint' ||
+      type === 'application/mspowerpoint' ||
+      type === 'application/x-mspowerpoint' ||
+      lowerPath.endsWith('.ppt')
+    ) {
+      const slides = await extractFromPPT(buffer);
+      segments = slides.map((slideText, index) => ({
+        text: slideText,
+        page: index + 1,
+      }));
+    } else {
+      throw new Error(`Type de fichier non pris en charge: ${type}`);
+    }
+
+    const aggregated = segments.map((s) => s.text).join('\n');
+    if (!aggregated || aggregated.trim().length === 0) {
+      throw new Error('Extraction du texte vide ou impossible');
+    }
+    
+    // 9. Découper le texte en chunks
+    await updateDocumentStatus('processing', 'Préparation des segments de texte...');
+    const chunks = createChunks(segments, CHUNK_SIZE, CHUNK_OVERLAP);
+    
+    logger.info(`[PDF Extract] Doc ${documentId}: ${chunks.length} chunks créés`);
+    
+    // 10. Sauvegarder les chunks dans le bucket temporaire
+    const chunkFileName = `doc_${documentId}_chunks.json`;
+    const { error: uploadError } = await supabaseAdmin.storage
+      .from(CHUNK_STORAGE_BUCKET)
+      .upload(chunkFileName, JSON.stringify(chunks), {
+        contentType: 'application/json',
+        upsert: true,
+      });
+      
+    if (uploadError) {
+      throw new Error(`Erreur sauvegarde chunks: ${uploadError.message}`);
+    }
+    
+    // 11. Déclencher le traitement optimisé par batch des embeddings
+    // Retraitement idempotent : on retire les segments d'une analyse précédente (échouée ou
+    // interrompue) pour ne pas indexer deux fois le même contenu.
+    const { error: purgeError } = await supabaseAdmin
+      .from('document_sections')
+      .delete()
+      .eq('document_path', storageFilePath)
+      .eq('user_id', docData.user_id);
+    if (purgeError) {
+      throw new Error(`Purge des anciens segments impossible: ${purgeError.message}`);
+    }
+
+    await updateDocumentStatus('processing', 'Génération des embeddings (0%)...');
+    
+    // Lancer le traitement en arrière-plan via le handler interne
+    const baseUrl = process.env.NEXT_PUBLIC_SITE_URL
+      || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null)
+      || new URL(req.url).origin;
+
+    const targetUrl = `${baseUrl}/api/pdf/embed-batch-optimized`;
+
+    fetch(targetUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        [INTERNAL_AUTH_HEADER]: signInternalRequest(`${documentId}:${chunkFileName}`),
+      },
+      body: JSON.stringify({
+        documentId,
+        chunkFilePath: chunkFileName,
+        totalChunks: chunks.length,
+      }),
+    })
+      .then(async (response) => {
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+          logger.error('[PDF Extract] Batch optimized failed:', errorData);
+          throw new Error(`Embedding failed: ${JSON.stringify(errorData)}`);
+        }
+      })
+      .catch(async (err) => {
+        logger.error('[PDF Extract] Erreur déclenchement batch optimisé:', err);
+        // Update document status to failed
+        if (documentId && supabaseAdmin) {
+          try {
+            await supabaseAdmin
+              .from('documents')
+              .update({
+                status: 'failed',
+                status_message: `Erreur embedding: ${err instanceof Error ? err.message : String(err)}`,
+              })
+              .eq('id', documentId);
+            logger.info(`[PDF Extract] Doc ${documentId} marqué comme failed`);
+          } catch (updateErr) {
+            logger.error('[PDF Extract] Erreur mise à jour status:', updateErr);
+          }
+        }
+      });
+    
+    // Logger l'activité pour le dashboard admin
+    const { logActivity } = await import('@/lib/metricsLogger');
+    await logActivity({
+      eventType: 'document_processed',
+      userId: docData.user_id ?? null,
+      eventData: {
+        documentId,
+        filePath: storageFilePath,
+        mimeType: type,
+        chunkCount: chunks.length,
+      },
+    });
+    
+    return NextResponse.json({
+      success: true,
+      message: `Extraction réussie: ${chunks.length} segments créés`,
+      chunks: chunks.length,
+    });
+    
+  } catch (error: unknown) {
+    logger.error('[PDF Extract] Erreur:', error);
+    
+    const errorMessage = error instanceof Error ? error.message : 'Erreur interne';
+    
+    // Mettre à jour le statut du document en cas d'erreur
+    if (documentId) {
+      const supabaseAdmin = getSupabaseAdmin('pdf-extract');
+      if (supabaseAdmin) {
+        await supabaseAdmin
+          .from('documents')
+          .update({ status: 'failed', status_message: errorMessage })
+          .eq('id', documentId);
+      }
+    }
+    
+    return internalError('pdf-extract', error, "L'analyse du document a échoué.");
+  }
+}

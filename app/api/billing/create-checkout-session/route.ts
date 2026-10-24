@@ -1,0 +1,51 @@
+import { NextResponse } from 'next/server';
+import { createSupabaseServerClient } from '@/lib/supabaseServerClient';
+import { createCheckoutSession } from '@/lib/billing';
+import { parseJsonBody, checkoutSchema } from '@/lib/validation';
+import { internalError } from '@/lib/apiError';
+
+function getOrigin(request: Request): string {
+  try {
+    const url = new URL(request.url);
+    return url.origin;
+  } catch {
+    return process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000';
+  }
+}
+
+export async function POST(request: Request) {
+  try {
+    const parsedBody = await parseJsonBody(request, checkoutSchema);
+    if (!parsedBody.ok) return parsedBody.response;
+    const { plan } = parsedBody.data;
+
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const supabaseAnon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    if (!supabaseUrl || !supabaseAnon) {
+      return NextResponse.json({ error: 'Configuration Supabase manquante.' }, { status: 503 });
+    }
+
+    const supabase = await createSupabaseServerClient();
+
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      return NextResponse.json({ error: 'Non autorisé.' }, { status: 401 });
+    }
+
+    const origin = getOrigin(request);
+    const successUrl = `${origin}/app?checkout=${plan}&session_id={CHECKOUT_SESSION_ID}`;
+    const cancelUrl = `${origin}/settings?checkout=cancel`;
+
+    const session = await createCheckoutSession({
+      userId: user.id,
+      plan,
+      email: user.email ?? null,
+      successUrl,
+      cancelUrl,
+    });
+
+    return NextResponse.json({ url: session.url });
+  } catch (error) {
+    return internalError('billing-checkout', error, 'Impossible de contacter le service de paiement. Réessayez dans un instant.');
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "id": "revolution-industrielle",
+  "title": "Cours d'histoire : la révolution industrielle",
+  "mode": "qcm",
+  "count": 5,
+  "passages": [
+    { "pageStart": 1, "pageEnd": 1, "content": "La révolution industrielle débute en Grande-Bretagne vers 1760. Elle désigne le passage d'une économie surtout agricole et artisanale à une économie fondée sur la production mécanisée en usine. Plusieurs facteurs l'expliquent : une agriculture plus productive qui libère de la main-d'œuvre, des réserves de charbon et de fer abondantes, un empire colonial qui fournit des matières premières et des débouchés, et des capitaux disponibles pour investir." },
+    { "pageStart": 2, "pageEnd": 3, "content": "La machine à vapeur, perfectionnée par James Watt dans les années 1770, devient la source d'énergie principale des usines. Elle permet de mécaniser le filage et le tissage du coton, puis de faire circuler des locomotives sur des rails. Le chemin de fer, dont les premières lignes commerciales apparaissent dans les années 1820, réduit fortement le temps et le coût des transports et favorise l'extension des marchés." },
+    { "pageStart": 4, "pageEnd": 4, "content": "L'industrialisation transforme la société. Les villes industrielles, comme Manchester, grossissent très vite à cause de l'exode rural. Les ouvriers y travaillent souvent douze à quatorze heures par jour pour de faibles salaires, y compris les femmes et les enfants, et vivent dans des logements insalubres. Face à ces conditions, des mouvements ouvriers se forment et les premiers syndicats obtiennent progressivement des lois limitant le travail des enfants." },
+    { "pageStart": 5, "pageEnd": 5, "content": "À partir du milieu du XIXe siècle, l'industrialisation gagne le continent européen puis les États-Unis. La France connaît un développement plus progressif, avec un rôle important de l'État et des banques. Une seconde révolution industrielle, à la fin du XIXe siècle, s'appuie sur l'électricité, l'acier, la chimie et le pétrole, et voit naître de grandes entreprises." }
+  ]
+}

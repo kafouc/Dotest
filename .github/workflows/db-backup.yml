@@ -1,0 +1,58 @@
+name: Sauvegarde base de données
+
+# Le forfait Supabase gratuit n'inclut aucune sauvegarde automatique.
+# Ce workflow produit un dump chiffré chaque dimanche et l'envoie vers un stockage compatible S3
+# (Cloudflare R2, Backblaze B2, AWS S3…). Il n'utilise PAS les artefacts GitHub : ce dépôt est public,
+# et un artefact serait téléchargeable par n'importe quel utilisateur GitHub.
+#
+# Secrets requis (Settings > Secrets and variables > Actions) :
+#   SUPABASE_DB_URL, BACKUP_PASSPHRASE, BACKUP_S3_BUCKET, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY
+# Optionnel : BACKUP_S3_ENDPOINT (R2/B2), AWS_DEFAULT_REGION
+
+on:
+  schedule:
+    - cron: '17 3 * * 0'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+      BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+      BACKUP_S3_BUCKET: ${{ secrets.BACKUP_S3_BUCKET }}
+      BACKUP_S3_ENDPOINT: ${{ secrets.BACKUP_S3_ENDPOINT }}
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_DEFAULT_REGION: ${{ secrets.AWS_DEFAULT_REGION }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Vérifier la configuration
+        id: config
+        run: |
+          missing=""
+          for v in SUPABASE_DB_URL BACKUP_PASSPHRASE BACKUP_S3_BUCKET AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY; do
+            [ -z "${!v}" ] && missing="$missing $v"
+          done
+          if [ -n "$missing" ]; then
+            echo "::warning::Sauvegarde ignorée, secrets manquants :$missing"
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Dump chiffré
+        if: steps.config.outputs.ready == 'true'
+        run: ./scripts/backup-db.sh ./out
+
+      - name: Envoi vers le stockage
+        if: steps.config.outputs.ready == 'true'
+        run: |
+          ENDPOINT=()
+          [ -n "$BACKUP_S3_ENDPOINT" ] && ENDPOINT=(--endpoint-url "$BACKUP_S3_ENDPOINT")
+          aws s3 cp ./out/ "s3://${BACKUP_S3_BUCKET}/sheetofpaper/" --recursive "${ENDPOINT[@]}"
