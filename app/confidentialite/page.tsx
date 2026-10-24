@@ -46,7 +46,7 @@ export default function PrivacyPage() {
             ['Forfait, identifiant client Stripe, factures', 'Facturation et obligations comptables', 'Contrat et obligation légale', 'Factures : 10 ans (obligation légale) ; le reste jusqu’à suppression du compte'],
             ['Pseudo et réponses d’une séance en direct', 'Faire jouer la séance, produire les résultats pour l’enseignant', 'Exécution du contrat avec l’enseignant', 'Tant que l’enseignant conserve la séance ; supprimé avec son compte'],
             ['Compteurs d’usage (quiz générés, quotas), journaux techniques', 'Appliquer les limites du forfait, sécurité, prévention des abus', 'Intérêt légitime', 'Jusqu’à 24 mois ; journaux techniques quelques jours'],
-            ['Abonnement aux notifications (appareil)', 'Vous envoyer des rappels de révision que vous avez activés', 'Consentement', 'Jusqu’à désactivation ou suppression du compte'],
+            ['Abonnement aux notifications (appareil), préférences de rappel et fuseau horaire', 'Vous envoyer, à l’heure choisie, les rappels de révision que vous avez activés', 'Consentement', 'Jusqu’à désactivation ou suppression du compte'],
             ['Pages vues, appareil, pays (empreinte de l’adresse IP, jamais l’adresse en clair)', 'Mesurer et améliorer le service', 'Consentement', '13 mois maximum'],
           ]}
         />

@@ -135,6 +135,7 @@ export const RATE_LIMITS = {
   // Essai sans compte : limite par IP puis plafond global (le palier gratuit de Groq est partagé avec les vrais utilisateurs)
   'demo-quiz': { perMinute: 3, perDay: { freemium: 20, partial: 20, pro: 20 } },
   'demo-quiz-global': { perMinute: 15, perDay: { freemium: 150, partial: 150, pro: 150 } },
+  'push-test': { perMinute: 2, perDay: { freemium: 10, partial: 10, pro: 10 } },
   'account-export': { perMinute: 2, perDay: { freemium: 5, partial: 5, pro: 5 } },
   'account-delete': { perMinute: 2, perDay: { freemium: 5, partial: 5, pro: 5 } },
   'onboarding-sample': { perMinute: 2, perDay: { freemium: 3, partial: 3, pro: 3 } },

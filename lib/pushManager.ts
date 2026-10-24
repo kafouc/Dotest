@@ -56,7 +56,7 @@ export async function sendSubscriptionToServer(subscription: PushSubscription) {
   const res = await fetch('/api/push/subscribe', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ subscription }),
+    body: JSON.stringify({ subscription, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone }),
   });
   if (!res.ok) {
     const j = await res.json().catch(() => ({}));

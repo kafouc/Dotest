@@ -19,6 +19,21 @@ function getStripe(): Stripe {
 
 export type BillingPlan = 'freemium' | 'partial' | 'pro';
 
+/**
+ * Événements Stripe que le webhook /api/billing/webhook sait traiter. Ils doivent tous être activés sur le point de terminaison
+ * dans Stripe (Développeurs > Webhooks) : `npm run stripe:webhook-events` vérifie et, avec --apply, complète la liste.
+ */
+export const STRIPE_WEBHOOK_EVENTS = [
+  'checkout.session.completed',
+  'checkout.session.async_payment_succeeded',
+  'customer.subscription.created',
+  'customer.subscription.updated',
+  'customer.subscription.deleted',
+  'invoice.paid',
+  'invoice.payment_succeeded',
+  'invoice.payment_failed',
+] as const;
+
 type BillingCustomerRow = {
   user_id: string;
   stripe_customer_id: string;

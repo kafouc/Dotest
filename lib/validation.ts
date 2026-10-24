@@ -85,6 +85,8 @@ export const flashcardsReviewSchema = z.object({
 // ---------- Autres routes ----------
 
 export const pushSubscribeSchema = z.object({
+  /** Fuseau horaire du navigateur (IANA), pour envoyer les rappels à la bonne heure locale */
+  timezone: z.string().trim().max(64).optional(),
   subscription: z.object({
     endpoint: z.string().trim().url().max(2_000),
     expirationTime: z.number().nullish(),
@@ -94,6 +96,8 @@ export const pushSubscribeSchema = z.object({
     }),
   }),
 });
+
+export const pushUnsubscribeSchema = z.object({ endpoint: z.string().trim().url().max(2_000) });
 
 export const ACTIVITY_EVENT_TYPES = [
   'document_uploaded',

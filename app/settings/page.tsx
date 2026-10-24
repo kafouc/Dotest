@@ -1,6 +1,7 @@
 "use client";
 
 import DataPrivacySection from '@/components/settings/DataPrivacySection';
+import NotificationPreferences from '@/components/settings/NotificationPreferences';
 import { useState, useEffect, useCallback, Suspense } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -217,6 +218,12 @@ function SettingsPageContent() {
       const subscription = await registration.pushManager.getSubscription();
       
       if (subscription) {
+        // Retire l'appareil de la base AVANT de se désabonner : sinon le serveur continuerait d'essayer d'écrire à cet appareil
+        await fetch('/api/push/subscribe', {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ endpoint: subscription.endpoint }),
+        }).catch(() => undefined);
         await subscription.unsubscribe();
         setNotificationsEnabled(false);
           showToast('Notifications désactivées.', 'info');
@@ -387,6 +394,8 @@ function SettingsPageContent() {
                   </button>
                 )}
               </div>
+
+              {notificationsEnabled && <NotificationPreferences supabase={supabase} />}
 
               {notificationStatus === 'denied' && (
                 <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-md">

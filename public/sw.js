@@ -103,6 +103,7 @@ self.addEventListener('push', function(event) {
       icon,
       badge: '/icons/icon-72x72.png',
       tag,
+      renotify: true,
       vibrate: [200, 100, 200],
       data: { url },
       actions: [
@@ -113,21 +114,30 @@ self.addEventListener('push', function(event) {
   );
 });
 
-// Gestion du clic sur les notifications
+// Gestion du clic sur les notifications : réutilise un onglet de l'application déjà ouvert
 self.addEventListener('notificationclick', function(event) {
   event.notification.close();
-  
+
   if (event.action === 'close') {
     return;
   }
-  
-  const url = (event.notification && event.notification.data && event.notification.data.url) || '/app';
+
+  const target = new URL(
+    (event.notification && event.notification.data && event.notification.data.url) || '/app',
+    self.location.origin
+  ).href;
+
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function(clientList) {
       for (const client of clientList) {
-        if (client.url === url && 'focus' in client) return client.focus();
+        if (client.url.startsWith(self.location.origin) && 'focus' in client) {
+          if ('navigate' in client && client.url !== target) {
+            return client.navigate(target).then(function(c) { return c && c.focus(); });
+          }
+          return client.focus();
+        }
       }
-      if (clients.openWindow) return clients.openWindow(url);
+      if (clients.openWindow) return clients.openWindow(target);
     })
   );
 });

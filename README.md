@@ -63,7 +63,7 @@ npm start
 - Les plans sont appliqués via la table user_plans et RPC set_user_plan.
 
 ## Documentation
-- `docs/` : guides de setup (Stripe, VAPID, PWA, live quiz, RAG), notes de migration et de dépannage.
+- `docs/` : guides de setup (Stripe, PWA, live quiz, RAG), notes de migration et de dépannage. Références à jour : `NOTIFICATIONS.md`, `FACTURATION.md`, `OPERATIONS.md`, `IA.md`, `PRODUIT.md`.
 - `docs/sql/` : scripts SQL de diagnostic et d'installation manuelle. Ce ne sont pas des migrations ; la source de vérité du schéma est `supabase/migrations/`.
 
 ## Qualité
