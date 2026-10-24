@@ -21,7 +21,7 @@ export async function DELETE(req: Request) {
     const parsed = await parseJsonBody(req, deleteSchema);
     if (!parsed.ok) return parsed.response;
 
-    const supabase = createSupabaseServerClient();
+    const supabase = await createSupabaseServerClient();
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 });
 

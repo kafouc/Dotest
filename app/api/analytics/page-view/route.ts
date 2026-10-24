@@ -33,7 +33,7 @@ export async function POST(req: Request) {
       payload = {};
     }
 
-    const requestHeaders = headers();
+    const requestHeaders = await headers();
     const referrer = requestHeaders.get('referer') ?? payload.referrer ?? null;
     const userAgent = requestHeaders.get('user-agent') ?? null;
     const country = requestHeaders.get('x-vercel-ip-country') ?? null;
@@ -42,7 +42,7 @@ export async function POST(req: Request) {
     const ip = forwardedFor.split(',')[0]?.trim() || requestHeaders.get('x-real-ip') || null;
     const ipHash = ip ? createHash('sha256').update(ip).digest('hex') : null;
 
-    const supabase = createSupabaseServerClient();
+    const supabase = await createSupabaseServerClient();
 
     const { data: { user } } = await supabase.auth.getUser();
 

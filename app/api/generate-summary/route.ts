@@ -33,7 +33,7 @@ export async function POST(req: Request) {
     const pageEnd = pageRange?.end ?? null;
 
 
-    const supabase = createSupabaseServerClient();
+    const supabase = await createSupabaseServerClient();
 
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 });

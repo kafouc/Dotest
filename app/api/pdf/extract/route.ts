@@ -152,7 +152,7 @@ export async function POST(req: Request) {
     }
     
     // 2. Créer les clients Supabase (session utilisateur + service admin)
-    const supabase = createSupabaseServerClient();
+    const supabase = await createSupabaseServerClient();
     
     const supabaseAdmin = getSupabaseAdmin('pdf-extract');
     if (!supabaseAdmin) {

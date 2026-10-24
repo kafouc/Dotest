@@ -10,7 +10,7 @@ export async function POST(req: Request) {
     if (!parsedBody.ok) return parsedBody.response;
     const { flashcardId, grade } = parsedBody.data; // grade : échelle SM-2 (0 à 5)
 
-    const supabase = createSupabaseServerClient();
+    const supabase = await createSupabaseServerClient();
 
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return NextResponse.json({ error: 'Non authentifié' }, { status: 401 });

@@ -9,7 +9,7 @@ function getAdminClient() {
 
 export async function GET(
   request: Request,
-  { params }: { params: { code: string } }
+  { params }: { params: Promise<{ code: string }> }
 ) {
   try {
     await enforceIpRateLimit(request, 'challenge-read');
@@ -24,7 +24,7 @@ export async function GET(
     return NextResponse.json({ error: 'Supabase non configuré' }, { status: 500 });
   }
 
-  const shareCode = (params.code ?? '').trim().toUpperCase();
+  const shareCode = ((await params).code ?? '').trim().toUpperCase();
   if (!shareCode) {
     return NextResponse.json({ error: 'Code manquant' }, { status: 400 });
   }

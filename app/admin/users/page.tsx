@@ -46,7 +46,7 @@ const numberFormatter = new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 
 const dateFormatter = new Intl.DateTimeFormat('fr-FR', { dateStyle: 'medium' });
 
 export default async function AdminUsersPage() {
-  const supabase = createSupabaseServerClient();
+  const supabase = await createSupabaseServerClient();
   const { data: { user } } = await supabase.auth.getUser();
 
   if (!user) {

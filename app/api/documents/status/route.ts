@@ -25,7 +25,7 @@ export async function GET(req: Request) {
       );
     }
 
-    const supabase = createSupabaseServerClient();
+    const supabase = await createSupabaseServerClient();
 
     // 2. Vérifier l'authentification
     const { data: { user } } = await supabase.auth.getUser();

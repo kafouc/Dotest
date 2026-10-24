@@ -6,7 +6,7 @@ import { createSupabaseServerClient } from '@/lib/supabaseServerClient';
 const DAYS_WINDOW = 30;
 
 export default async function AdminDashboard() {
-  const supabase = createSupabaseServerClient();
+  const supabase = await createSupabaseServerClient();
 
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) {

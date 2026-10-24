@@ -10,7 +10,7 @@ export const dynamic = 'force-dynamic';
 /** GET /api/account/export : télécharge toutes les données personnelles de l'utilisateur connecté (JSON). */
 export async function GET() {
   try {
-    const supabase = createSupabaseServerClient();
+    const supabase = await createSupabaseServerClient();
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 });
 

@@ -23,7 +23,7 @@ export async function POST(req: Request) {
     }
 
     // 1. Crée un client Supabase
-    const supabase = createSupabaseServerClient();
+    const supabase = await createSupabaseServerClient();
 
     // 2. Vérifie l'utilisateur
     const {

@@ -11,7 +11,7 @@ export async function POST(req: Request) {
     if (!parsedBody.ok) return parsedBody.response;
     const { documentPath, limit } = parsedBody.data;
 
-    const supabase = createSupabaseServerClient();
+    const supabase = await createSupabaseServerClient();
 
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return NextResponse.json({ error: 'Non authentifié' }, { status: 401 });

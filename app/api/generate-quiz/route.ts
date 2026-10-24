@@ -67,7 +67,7 @@ export async function POST(req: Request) {
     const count = allowedCounts.includes(numQuestions) ? numQuestions : nearestAllowed;
 
     // 1. Client Supabase
-    const supabase = createSupabaseServerClient();
+    const supabase = await createSupabaseServerClient();
 
     // 2. Vérifier l'utilisateur
     const {

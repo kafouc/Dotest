@@ -10,7 +10,7 @@ export async function POST(req: Request) {
     const { subscription } = parsedBody.data;
     const endpoint = subscription.endpoint;
 
-    const supabase = createSupabaseServerClient();
+    const supabase = await createSupabaseServerClient();
 
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 });

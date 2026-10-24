@@ -127,6 +127,20 @@ test.describe('accès et erreurs', () => {
     }
   });
 
+  test('les formulaires de connexion et d’inscription s’affichent (bibliothèque d’authentification)', async ({ page }) => {
+    await page.addInitScript(() => {
+      window.localStorage.setItem('sop-consent-v1', JSON.stringify({ analytics: false, decidedAt: new Date().toISOString() }));
+    });
+    await page.goto('/login');
+    await expect(page.getByRole('heading', { name: 'Se connecter' })).toBeVisible();
+    await expect(page.getByLabel(/adresse e-mail|email/i).first()).toBeVisible();
+    await expect(page.getByRole('button', { name: /^se connecter$/i })).toBeVisible();
+
+    await page.goto('/signup');
+    await expect(page.getByRole('heading', { name: "S'inscrire" })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'politique de confidentialité' })).toBeVisible();
+  });
+
   test('une page inconnue affiche la page 404 du site', async ({ page }) => {
     const response = await page.goto('/cette-page-n-existe-pas');
     expect(response?.status()).toBe(404);
