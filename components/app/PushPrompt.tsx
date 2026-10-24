@@ -1,8 +1,9 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { usePushNotifications } from '@/hooks/usePushNotifications';
+import { wantsReminders } from '@/lib/consent';
 import { derivePushPromptState, readSnoozeUntil, snoozePushPrompt } from '@/lib/pushPrompt';
 
 type Props = {
@@ -31,6 +32,17 @@ export default function PushPrompt({ hasContent }: Props) {
     const timer = setTimeout(() => setFeedback(null), 7000);
     return () => clearTimeout(timer);
   }, [feedback]);
+
+  // Rappels demandés depuis le bandeau et autorisation déjà accordée : on finit l'abonnement sans nouveau clic
+  const autoTried = useRef(false);
+  const { ready, supported, permission, subscribed, enable } = push;
+  useEffect(() => {
+    if (autoTried.current || !hasContent || !ready || !supported || subscribed || permission !== 'granted' || !wantsReminders()) return;
+    autoTried.current = true;
+    void enable().then((result) => {
+      if (result.ok) setFeedback({ tone: 'ok', text: 'ok' });
+    });
+  }, [hasContent, ready, supported, subscribed, permission, enable]);
 
   if (!push.ready || now === 0) return null;
 

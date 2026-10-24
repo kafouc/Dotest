@@ -98,6 +98,22 @@ test.describe('consentement et vie privée', () => {
     expect(stored).toMatchObject({ analytics: false });
   });
 
+  test('la case « Rappels de révision » est facultative, décochée par défaut et mémorisée à part', async ({ page, browserName }) => {
+    test.skip(browserName !== 'chromium', 'Notifications web testées sur Chromium');
+    // Chromium sans interface refuse les notifications d'office, ce qui masque la case
+    await page.addInitScript(() => {
+      Object.defineProperty(Notification, 'permission', { get: () => 'default' });
+    });
+    await page.goto('/confidentialite');
+    const banner = page.getByRole('dialog', { name: 'Mesure d\'audience' });
+    const box = banner.getByRole('checkbox', { name: /Rappels de révision/ });
+    await expect(box).not.toBeChecked();
+    await box.check();
+    await banner.getByRole('button', { name: 'Refuser' }).click();
+    const stored = await page.evaluate(() => JSON.parse(window.localStorage.getItem('sop-consent-v1') ?? 'null'));
+    expect(stored).toMatchObject({ analytics: false, reminders: true });
+  });
+
   test('aucune mesure d’audience n’est envoyée avant le consentement', async ({ page }) => {
     const analyticsRequests: string[] = [];
     page.on('request', (request) => {
