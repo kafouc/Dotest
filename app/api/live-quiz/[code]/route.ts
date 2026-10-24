@@ -13,7 +13,7 @@ type RpcActiveSessionRow = {
   questions_count: number;
 };
 
-const ANSWER_KEYS = ['reponse_correcte', 'reponses_correctes', 'justification'];
+const ANSWER_KEYS = ['reponse_correcte', 'reponses_correctes', 'justification', 'evidence'];
 
 /** Retire les clés de correction : l'élève ne doit jamais recevoir les bonnes réponses. */
 function stripAnswers(questions: unknown): unknown[] {

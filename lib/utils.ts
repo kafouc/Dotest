@@ -1,4 +1,4 @@
-import type { QuizQuestion, RawQuizQuestion, QuizMode } from './quiz.types';
+import type { QuizQuestion, RawQuizQuestion, QuizMode, QuizSource } from './quiz.types';
 import { QUIZ_CONFIG } from './constants';
 
 export { cn } from './cn';
@@ -9,6 +9,20 @@ export function normalizeLetter(val: string): string {
   if (m) return m[1];
   if (QUIZ_CONFIG.OPTION_LETTERS.includes(s as 'A' | 'B' | 'C' | 'D')) return s;
   return s;
+}
+
+/** Extrait `evidence` et `source` d'une question brute (présents sur les quiz générés avec citations). */
+function extractExtras(q: RawQuizQuestion): { evidence?: string; source?: QuizSource | null } {
+  const extras: { evidence?: string; source?: QuizSource | null } = {};
+  if (typeof q.evidence === 'string' && q.evidence.trim()) extras.evidence = q.evidence.trim();
+  const src = q.source as Partial<QuizSource> | null | undefined;
+  if (src && typeof src === 'object') {
+    const toPage = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) && v > 0 ? v : null);
+    const pageStart = toPage(src.pageStart);
+    const pageEnd = toPage(src.pageEnd);
+    if (pageStart !== null || pageEnd !== null) extras.source = { pageStart, pageEnd };
+  }
+  return extras;
 }
 
 export function indexToLetter(index: number): 'A' | 'B' | 'C' | 'D' {
@@ -25,6 +39,7 @@ export function normalizeQuiz(rawQuiz: RawQuizQuestion[], mode: QuizMode = 'qcu'
         options: { VRAI: 'Vrai', FAUX: 'Faux' },
         reponse_correcte: rc as 'VRAI' | 'FAUX',
         justification: (q.justification ?? undefined) as string | undefined,
+        ...extractExtras(q),
       } as QuizQuestion;
     });
   }
@@ -76,6 +91,7 @@ export function normalizeQuiz(rawQuiz: RawQuizQuestion[], mode: QuizMode = 'qcu'
         options: mappedOptions,
         reponses_correctes: Array.from(new Set(rcs)),
         justification: (q.justification ?? undefined) as string | undefined,
+        ...extractExtras(q),
       } as QuizQuestion;
     }
 
@@ -90,6 +106,7 @@ export function normalizeQuiz(rawQuiz: RawQuizQuestion[], mode: QuizMode = 'qcu'
       options: mappedOptions,
       reponse_correcte: rc,
       justification: (q.justification ?? undefined) as string | undefined,
+      ...extractExtras(q),
     } as QuizQuestion;
   });
 }

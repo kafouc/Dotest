@@ -1,5 +1,6 @@
 'use client';
 
+import { formatSource } from '@/lib/sourceLabel';
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { createSupabaseBrowserClient } from '@/lib/supabaseClient';
@@ -387,6 +388,12 @@ export default function QuizAttempt({
                 {q.justification && (
                   <p className="text-xs italic text-gray-600 mt-1">
                     Justification : {q.justification}
+                  </p>
+                )}
+                {(q.evidence || formatSource(q.source)) && (
+                  <p className="text-xs text-gray-500 mt-1">
+                    <span className="font-medium">Source{formatSource(q.source) ? ` (${formatSource(q.source)})` : ''} :</span>
+                    {q.evidence ? <> «&nbsp;{q.evidence}&nbsp;»</> : null}
                   </p>
                 )}
               </div>

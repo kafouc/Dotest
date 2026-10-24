@@ -35,6 +35,8 @@ type RevisionData = {
   pitfalls: string[];
   tips: string[];
   self_test: string[];
+  /** Pages du document utilisées pour la fiche, ex. « 3-4, 7, 12-15 » */
+  sources?: string;
 };
 
 type Props = {
@@ -116,7 +118,9 @@ function buildRevisionExportHtml({ data, sections, documentName, generatedLabel 
   ].join('');
 
   const summaryHtml = data.summary
-    ? `<section class="export-section"><h2>Résumé essentiel</h2><p>${escapeHtml(data.summary)}</p></section>`
+    ? `<section class="export-section"><h2>Résumé essentiel</h2><p>${escapeHtml(data.summary)}</p>${
+        data.sources ? `<p><em>Fiche établie d'après les pages : ${escapeHtml(data.sources)}</em></p>` : ''
+      }</section>`
     : '';
 
   const sectionsHtml = sections
@@ -422,6 +426,9 @@ export default function RevisionSheet({ documentPath, onActivity }: Props) {
             <section className="bg-gray-50 border border-gray-200 rounded-lg p-4">
               <h3 className="text-lg font-heading font-semibold text-brand-dark mb-2">Résumé essentiel</h3>
               <p className="text-sm text-gray-700 leading-relaxed">{data.summary}</p>
+              {data.sources && (
+                <p className="mt-3 text-xs text-gray-500">Fiche établie d&apos;après les pages : {data.sources}</p>
+              )}
             </section>
           )}
 

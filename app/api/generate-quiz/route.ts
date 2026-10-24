@@ -2,22 +2,18 @@ import { NextResponse } from 'next/server';
 import { createSupabaseServerClient } from '@/lib/supabaseServerClient';
 import Groq from 'groq-sdk';
 import { EMBEDDING_CONFIG, AI_MODELS, QUIZ_LIMITS } from '@/lib/constants';
+import { retrievePassages } from '@/lib/retrieval';
+import { generateQuiz, QuizGenerationError, QUIZ_PROMPT_VERSION } from '@/lib/quizGeneration';
 import { recordAiUsage } from '@/lib/metricsLogger';
 import { touchUserStreak } from '@/lib/streaks';
-import { extractEmbeddingUsage, extractGroqUsage, estimateGroqCost, estimateEmbeddingCost } from '@/lib/aiUsage';
+import { extractEmbeddingUsage, estimateGroqCost, estimateEmbeddingCost } from '@/lib/aiUsage';
 import { ensureQuizQuota, QuotaError } from '@/lib/quota';
 import { logExportEvent } from '@/lib/exportEvents';
-import { parseJsonBody, generateQuizSchema, validateModelQuiz } from '@/lib/validation';
-import { createJinaEmbeddings, extractEmbeddingsFromResponse } from '@/lib/jinaClient';
+import { parseJsonBody, generateQuizSchema } from '@/lib/validation';
+import { createQueryEmbedding } from '@/lib/jinaClient';
 import { internalError } from '@/lib/apiError';
-import { logger } from '@/lib/logger';
+import { handleModelFailure } from '@/lib/opsAlerts';
 import { enforceRateLimit, rateLimitErrorResponse } from '@/lib/rateLimit';
-
-type SectionRow = {
-  content: string;
-  page_start?: number | null;
-  page_end?: number | null;
-};
 
 // Initialisation déplacée dans le handler pour gérer proprement l'absence de config
 
@@ -84,57 +80,53 @@ export async function POST(req: Request) {
     await enforceRateLimit(supabase, user.id, 'generate-quiz');
     await ensureQuizQuota(supabase, user.id, documentPath ?? null);
 
-    // 3. Générer le vecteur de la question avec Jina
+    // 3. Vecteur de la question (avec cache mémoire : un même thème rouvert ne repaie pas Jina)
     const embedStartedAt = Date.now();
-    const embedResponse = await createJinaEmbeddings([userQuery], AI_MODELS.EMBEDDING);
-
-    const rawEmbedding = extractEmbeddingsFromResponse(embedResponse)[0];
-    if (!Array.isArray(rawEmbedding) || rawEmbedding.length === 0) {
-      throw new Error("Jina n'a pas retourné d'embedding pour la question.");
-    }
-    if (rawEmbedding.length !== EMBEDDING_CONFIG.EMBEDDING_DIMENSION) {
+    const query = await createQueryEmbedding(userQuery, AI_MODELS.EMBEDDING);
+    if (query.embedding.length !== EMBEDDING_CONFIG.EMBEDDING_DIMENSION) {
       throw new Error(
-        `Dimension d'embedding Jina inattendue: ${rawEmbedding.length} (attendu: ${EMBEDDING_CONFIG.EMBEDDING_DIMENSION}).`
+        `Dimension d'embedding Jina inattendue: ${query.embedding.length} (attendu: ${EMBEDDING_CONFIG.EMBEDDING_DIMENSION}).`
       );
     }
-    const queryEmbedding = rawEmbedding as number[];
-
-    const embedLatencyMs = Date.now() - embedStartedAt;
-    const embedUsage = extractEmbeddingUsage(embedResponse);
-    await recordAiUsage({
-      provider: 'jina',
-      model: AI_MODELS.EMBEDDING,
-      promptTokens: embedUsage.promptTokens,
-      completionTokens: 0,
-      totalTokens: embedUsage.totalTokens,
-      latencyMs: embedLatencyMs,
-      cost: estimateEmbeddingCost(embedUsage.totalTokens),
-      metadata: {
-        route: 'generate-quiz',
-        stage: 'embedding',
-        hasDocument: Boolean(documentPath),
-      },
-      userId: user.id,
-    });
-
-    // 4. Appel de la fonction SQL (RAG)
-    const { data: sections, error: matchError } = await supabase.rpc(
-      'match_document_sections',
-      {
-        query_embedding: queryEmbedding,
-        match_threshold: EMBEDDING_CONFIG.MATCH_THRESHOLD,
-        match_count: EMBEDDING_CONFIG.MATCH_COUNT,
-        p_user_id: user.id,
-        p_document_path: documentPath,
-        p_page_start: pageStart,
-        p_page_end: pageEnd,
-      }
-    );
-
-    if (matchError) {
-      throw new Error(matchError.message);
+    if (query.response) {
+      const embedUsage = extractEmbeddingUsage(query.response);
+      await recordAiUsage({
+        provider: 'jina',
+        model: AI_MODELS.EMBEDDING,
+        promptTokens: embedUsage.promptTokens,
+        completionTokens: 0,
+        totalTokens: embedUsage.totalTokens,
+        latencyMs: Date.now() - embedStartedAt,
+        cost: estimateEmbeddingCost(embedUsage.totalTokens),
+        metadata: { route: 'generate-quiz', stage: 'embedding', hasDocument: Boolean(documentPath) },
+        userId: user.id,
+      });
     }
-    if (!sections || sections.length === 0) {
+
+    // 4. Passages pertinents : recherche hybride (vecteurs + mots-clés) puis reclassement
+    const retrievalStartedAt = Date.now();
+    const retrieval = await retrievePassages(supabase, {
+      userId: user.id,
+      queryText: [userQuery, theme].filter(Boolean).join(' — '),
+      queryEmbedding: query.embedding,
+      documentPath,
+      pageStart,
+      pageEnd,
+    });
+    if (retrieval.rerankTokens > 0) {
+      await recordAiUsage({
+        provider: 'jina',
+        model: AI_MODELS.RERANKER,
+        promptTokens: retrieval.rerankTokens,
+        completionTokens: 0,
+        totalTokens: retrieval.rerankTokens,
+        latencyMs: Date.now() - retrievalStartedAt,
+        cost: estimateEmbeddingCost(retrieval.rerankTokens),
+        metadata: { route: 'generate-quiz', stage: 'rerank', mode: retrieval.mode },
+        userId: user.id,
+      });
+    }
+    if (retrieval.passages.length === 0) {
       return NextResponse.json(
         {
           error:
@@ -144,104 +136,30 @@ export async function POST(req: Request) {
       );
     }
 
-    // 5. Contexte (Type 'any' corrigé en 'unknown' puis vérifié)
-    const context = (sections as SectionRow[])
-      .map((section) => {
-        const start = section.page_start ?? null;
-        const end = section.page_end ?? null;
-        if (start || end) {
-          const label = start && end && start !== end
-            ? `Pages ${start}-${end}`
-            : `Page ${start ?? end}`;
-          return `${label} :\n${section.content}`;
-        }
-        return section.content;
-      })
-      .join('\n\n---\n\n');
-
-    // 6. Prompt pour Groq
-    const formatInstructions =
-      mode === 'vf'
-        ? `Pour chaque question:\n- "question"\n- "options": {"VRAI": "Vrai", "FAUX": "Faux"}\n- "reponse_correcte": "VRAI" ou "FAUX"\n- "justification"`
-        : mode === 'qcm'
-        ? `Pour chaque question:\n- "question"\n- "options": {"A": "...", "B": "...", "C": "...", "D": "..."}\n- "reponses_correctes": ["A","C"] (une ou plusieurs lettres)\n- "justification"`
-        : `Pour chaque question:\n- "question"\n- "options": {"A": "...", "B": "...", "C": "...", "D": "..."}\n- "reponse_correcte": "A" | "B" | "C" | "D"\n- "justification"`;
-
-    const prompt = `
-      Tu es un assistant pédagogique extrêmement rigoureux.
-      CONTEXTE: """ ${context} """
-      INSTRUCTIONS:
-      1. Basé exclusivement sur le CONTEXTE, génère ${count} questions ${mode.toUpperCase()}.
-         ${theme ? `Thème ciblé: "${theme.replace(/"/g, '\\"')}".` : ''}
-      2. ${formatInstructions}
-      3. Format de réponse: JSON { "quiz": [...] }
-      Réponds **uniquement** avec l'objet JSON valide.
-    `;
-
-    // 7. Appel Groq
-    const groqStartedAt = Date.now();
-    const chatCompletion = await groq.chat.completions.create({
-      messages: [
-        {
-          role: 'system',
-          content: 'Tu réponds uniquement en format JSON valide.',
+    // 5-8. Génération, vérification des citations, dédoublonnage, mélange des propositions
+    const generation = await generateQuiz({ groq, passages: retrieval.passages, count, mode, theme });
+    for (const call of generation.calls) {
+      await recordAiUsage({
+        provider: 'groq',
+        model: call.model,
+        promptTokens: call.promptTokens,
+        completionTokens: call.completionTokens,
+        totalTokens: call.promptTokens + call.completionTokens,
+        latencyMs: call.latencyMs,
+        cost: estimateGroqCost(call.promptTokens, call.completionTokens, call.model),
+        metadata: {
+          route: 'generate-quiz',
+          mode,
+          questionCount: count,
+          produced: generation.questions.length,
+          retrieval: retrieval.mode,
+          promptVersion: QUIZ_PROMPT_VERSION,
+          ...generation.stats,
         },
-        { role: 'user', content: prompt },
-      ],
-      model: AI_MODELS.QUIZ_GENERATION,
-      temperature: 0.1,
-      response_format: { type: 'json_object' },
-    });
-
-    const text = chatCompletion.choices[0]?.message?.content;
-    if (!text) {
-      throw new Error("L'IA n'a pas renvoyé de réponse.");
+        userId: user.id,
+      });
     }
-
-    const groqLatencyMs = Date.now() - groqStartedAt;
-    const groqUsage = extractGroqUsage(chatCompletion.usage);
-    await recordAiUsage({
-      provider: 'groq',
-      model: chatCompletion.model ?? AI_MODELS.QUIZ_GENERATION,
-      promptTokens: groqUsage.promptTokens,
-      completionTokens: groqUsage.completionTokens,
-      totalTokens: groqUsage.totalTokens,
-      latencyMs: groqLatencyMs,
-      cost: estimateGroqCost(groqUsage.promptTokens, groqUsage.completionTokens),
-      metadata: {
-        route: 'generate-quiz',
-        mode,
-        questionCount: count,
-      },
-      userId: user.id,
-    });
-
-    // 8. Parser la réponse
-    let quizData: { quiz: unknown[] };
-    try {
-      const checked = validateModelQuiz(JSON.parse(text));
-      if (!checked || checked.valid.length === 0) {
-        throw new Error(
-          "Le JSON reçu n'a pas la structure attendue { quiz: [...] } ou ne contient aucune question exploitable."
-        );
-      }
-      if (checked.dropped > 0) {
-        logger.warn(`[generate-quiz] ${checked.dropped} question(s) invalide(s) ignorée(s).`);
-      }
-      quizData = { quiz: checked.valid };
-    } catch (parseError) {
-      // 'parseError' est maintenant utilisé
-      logger.error(
-        'Erreur de parsing du JSON de Groq:',
-        parseError,
-        'Texte reçu:',
-        text
-      );
-      // On lance une nouvelle erreur qui inclut le message d'origine
-      throw new Error(
-        `L'IA a renvoyé une réponse JSON mal formatée. Erreur: ${parseError instanceof Error ? parseError.message : String(parseError)}`
-      );
-    }
+    const quizData = { quiz: generation.questions };
 
     // 9. Enregistrer la progression utilisateur (flamme)
     await touchUserStreak(supabase, user.id);
@@ -280,6 +198,22 @@ export async function POST(req: Request) {
         code: error.code,
         upgrade: true,
       }, { status: 402 });
+    }
+    if (await handleModelFailure('generate-quiz', AI_MODELS.QUIZ_GENERATION, error)) {
+      return NextResponse.json(
+        { error: 'Le service de génération est momentanément indisponible. Nous avons été prévenus.' },
+        { status: 503, headers: { 'Retry-After': '300' } }
+      );
+    }
+    if (error instanceof QuizGenerationError && error.code === 'no-valid-questions') {
+      return NextResponse.json(
+        {
+          error:
+            "Je n'ai pas pu écrire de questions fiables à partir des passages trouvés. Essayez un autre thème, une autre formulation ou une plage de pages différente.",
+          code: 'no-valid-questions',
+        },
+        { status: 422 }
+      );
     }
     return internalError('generate-quiz', error, 'La génération du quiz a échoué. Réessayez dans un instant.');
   }

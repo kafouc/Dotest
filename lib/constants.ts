@@ -48,9 +48,35 @@ export const QUIZ_CONFIG = {
 } as const;
 
 // Modèles IA
+/**
+ * Modèles utilisés. Les modèles Groq sont remplaçables par variable d'environnement (Vercel) sans
+ * redéploiement de code : Groq retire régulièrement des modèles (qwen/qwen3-32b a été arrêté le
+ * 17/07/2026, llama-3.1-8b-instant le 16/08/2026). Voir scripts/check-models.mjs, exécuté chaque
+ * semaine par la CI, qui prévient avant qu'un modèle configuré disparaisse.
+ *
+ * Changer EMBEDDING impose de ré-indexer tous les documents (espaces vectoriels incompatibles).
+ */
 export const AI_MODELS = {
   EMBEDDING: 'jina-embeddings-v3',
-  QUIZ_GENERATION: 'qwen/qwen3-32b',
+  RERANKER: process.env.JINA_RERANK_MODEL ?? 'jina-reranker-v2-base-multilingual',
+  QUIZ_GENERATION: process.env.GROQ_MODEL_QUIZ ?? 'openai/gpt-oss-120b',
+  SUMMARY_GENERATION: process.env.GROQ_MODEL_SUMMARY ?? 'openai/gpt-oss-120b',
+  THEME_GENERATION: process.env.GROQ_MODEL_THEMES ?? 'openai/gpt-oss-20b',
+} as const;
+
+/** Plafonds de sortie (raisonnement inclus pour les modèles gpt-oss) : bornent le coût par appel. */
+export const AI_OUTPUT_LIMITS = {
+  QUIZ_TOKENS: 6_000,
+  SUMMARY_TOKENS: 4_000,
+  THEME_TOKENS: 1_500,
+} as const;
+
+/** Recherche dans les documents : candidats récupérés puis passages gardés après reclassement. */
+export const RETRIEVAL_CONFIG = {
+  CANDIDATES: 24,
+  FINAL_PASSAGES: 8,
+  SUMMARY_PASSAGES: 20,
+  VECTOR_THRESHOLD: 0.2,
 } as const;
 
 export const THEME_GENERATION_CONFIG = {

@@ -1,0 +1,12 @@
+{
+  "id": "combustion",
+  "title": "Cours de chimie : les combustions",
+  "mode": "qcu",
+  "count": 5,
+  "passages": [
+    { "pageStart": 2, "pageEnd": 2, "content": "Une combustion est une réaction chimique entre un combustible et un comburant, généralement le dioxygène de l'air. Elle libère de l'énergie sous forme de chaleur et de lumière. Pour qu'une combustion ait lieu, il faut réunir trois éléments : un combustible, un comburant et une énergie d'activation, par exemple une flamme ou une étincelle. C'est le triangle du feu : si l'on supprime un seul des trois éléments, la combustion s'arrête." },
+    { "pageStart": 3, "pageEnd": 3, "content": "La combustion complète d'un hydrocarbure comme le méthane, de formule CH4, produit du dioxyde de carbone et de l'eau. L'équation bilan s'écrit : CH4 + 2 O2 donne CO2 + 2 H2O. Lorsque le dioxygène est en quantité insuffisante, la combustion est incomplète : elle produit du monoxyde de carbone, un gaz toxique et inodore, ou des particules de carbone sous forme de suie." },
+    { "pageStart": 4, "pageEnd": 5, "content": "Le monoxyde de carbone est dangereux car il se fixe sur l'hémoglobine du sang à la place du dioxygène. Chaque année, des intoxications surviennent à cause de chaudières mal entretenues ou de pièces mal ventilées. Pour limiter les risques, il faut aérer régulièrement les logements, faire entretenir les appareils à combustion et ne jamais utiliser un barbecue ou un brasero à l'intérieur." },
+    { "pageStart": 6, "pageEnd": 6, "content": "Pour éteindre un feu, on agit sur l'un des côtés du triangle du feu. On peut priver le feu de comburant en l'étouffant avec une couverture ou avec du dioxyde de carbone, retirer le combustible en coupant l'arrivée de gaz, ou refroidir le foyer avec de l'eau. L'eau ne doit jamais être utilisée sur un feu d'huile ou sur un feu d'origine électrique, car elle propage l'huile enflammée et conduit le courant." }
+  ]
+}

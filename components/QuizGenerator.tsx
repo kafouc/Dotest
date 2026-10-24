@@ -1,5 +1,6 @@
 "use client";
 
+import { formatSource } from '@/lib/sourceLabel';
 import React, { useEffect, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import QuizAttempt from './QuizAttempt'; 
@@ -110,12 +111,20 @@ function buildQuizExportHtml(quizQuestions: QuizQuestion[], meta: QuizExportMeta
         ? `<p class="quiz-justification"><strong>Justification :</strong> ${escapeHtml(question.justification)}</p>`
         : '';
 
+      const sourceLabel = formatSource(question.source);
+      const sourceHtml = sourceLabel || question.evidence
+        ? `<p class="quiz-justification"><strong>Source${sourceLabel ? ` (${escapeHtml(sourceLabel)})` : ''} :</strong>${
+            question.evidence ? ` « ${escapeHtml(question.evidence)} »` : ''
+          }</p>`
+        : '';
+
       return `
         <section class="export-section quiz-question">
           <h2>Question ${index + 1}</h2>
           <p class="quiz-question-text">${escapeHtml(question.question)}</p>
           <ul class="quiz-options">${optionsHtml}</ul>
           ${justificationHtml}
+          ${sourceHtml}
         </section>
       `;
     })

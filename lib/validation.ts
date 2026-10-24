@@ -134,6 +134,9 @@ export const storedQuizQuestionSchema = z
     reponse_correcte: z.string().trim().max(10).optional(),
     reponses_correctes: z.array(z.string().trim().max(10)).max(6).optional(),
     justification: z.string().max(3_000).nullish(),
+    source: z
+      .object({ pageStart: z.number().int().min(1).max(100_000).nullable(), pageEnd: z.number().int().min(1).max(100_000).nullable() })
+      .nullish(),
   })
   .refine((q) => q.reponse_correcte !== undefined || (q.reponses_correctes?.length ?? 0) > 0, {
     message: 'Réponse correcte manquante',

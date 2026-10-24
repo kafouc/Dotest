@@ -1,10 +1,13 @@
 import { NextResponse } from 'next/server';
 import { createSupabaseServerClient } from '@/lib/supabaseServerClient';
 import Groq from 'groq-sdk';
-import { THEME_GENERATION_CONFIG } from '@/lib/constants';
+import { THEME_GENERATION_CONFIG, AI_MODELS, AI_OUTPUT_LIMITS } from '@/lib/constants';
+import { reasoningParams } from '@/lib/groqParams';
+import { handleModelFailure } from '@/lib/opsAlerts';
 import { recordAiUsage } from '@/lib/metricsLogger';
 import { extractGroqUsage, estimateGroqCost } from '@/lib/aiUsage';
 import { parseJsonBody, generateThemesSchema } from '@/lib/validation';
+import { internalError } from '@/lib/apiError';
 import { logger } from '@/lib/logger';
 import { enforceRateLimit, rateLimitErrorResponse } from '@/lib/rateLimit';
 
@@ -16,6 +19,12 @@ type SectionRow = {
 
 // Mini-verrou en mémoire pour éviter les appels concurrents sur le même document
 // Note: in-memory, non partagé entre instances (suffisant pour un mini-verrou local)
+const THEME_MODEL = AI_MODELS.THEME_GENERATION;
+
+// Cache mémoire des thèmes (par instance) : rouvrir un document ne repaie pas une génération.
+const THEME_CACHE_TTL_MS = 30 * 60 * 1000;
+const THEME_CACHE_MAX = 200;
+const themeCache = new Map<string, { themes: string[]; expiresAt: number }>();
 const inFlightByDoc = new Map<string, number>(); // value: timestamp de début
 const LOCK_TTL_MS = 30_000; // 30s de TTL de sécurité
 
@@ -59,6 +68,14 @@ export async function POST(req: Request) {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
       return NextResponse.json({ error: 'Non autorisé' }, { status: 401 });
+    }
+
+    const cacheKey = documentPath ? `${user.id}|${documentPath}|${pageStart ?? ''}|${pageEnd ?? ''}` : null;
+    if (cacheKey) {
+      const hit = themeCache.get(cacheKey);
+      if (hit && hit.expiresAt > Date.now()) {
+        return NextResponse.json({ themes: hit.themes, cached: true }, { status: 200 });
+      }
     }
 
     await enforceRateLimit(supabase, user.id, 'generate-themes');
@@ -144,9 +161,11 @@ ${context}
             { role: 'system', content: 'Tu réponds uniquement avec un JSON valide.' },
             { role: 'user', content: prompt },
           ],
-          model: 'llama-3.1-8b-instant',
+          model: THEME_MODEL,
           temperature: 0.2,
+          max_completion_tokens: AI_OUTPUT_LIMITS.THEME_TOKENS,
           response_format: { type: 'json_object' },
+          ...reasoningParams(THEME_MODEL, 'low'),
         });
         completion = localCompletion;
 
@@ -154,12 +173,12 @@ ${context}
         const groqUsage = extractGroqUsage(localCompletion.usage);
         await recordAiUsage({
           provider: 'groq',
-          model: localCompletion.model ?? 'llama-3.1-8b-instant',
+          model: localCompletion.model ?? THEME_MODEL,
           promptTokens: groqUsage.promptTokens,
           completionTokens: groqUsage.completionTokens,
           totalTokens: groqUsage.totalTokens,
           latencyMs: groqLatencyMs,
-          cost: estimateGroqCost(groqUsage.promptTokens, groqUsage.completionTokens),
+          cost: estimateGroqCost(groqUsage.promptTokens, groqUsage.completionTokens, localCompletion.model ?? THEME_MODEL),
           metadata: {
             route: 'generate-themes',
             sections: Array.isArray(sections) ? sections.length : null,
@@ -209,24 +228,32 @@ ${context}
       }
     }
 
+    if (cacheKey && themes.length > 0) {
+      themeCache.set(cacheKey, { themes, expiresAt: Date.now() + THEME_CACHE_TTL_MS });
+      if (themeCache.size > THEME_CACHE_MAX) {
+        const oldest = themeCache.keys().next().value;
+        if (oldest !== undefined) themeCache.delete(oldest);
+      }
+    }
+
     return NextResponse.json({ themes }, { status: 200 });
   } catch (error: unknown) {
     const limited = rateLimitErrorResponse(error);
     if (limited) return limited;
-    logger.error('Erreur API Generate Themes:', error);
-    let message = 'Erreur inconnue';
-    let status = 500;
-    
-    if (error instanceof Error) {
-      message = error.message;
-      // Détecter les rate limits pour donner un message plus clair
-      if (message.includes('Rate limit') || message.includes('429')) {
-        message = 'Le service est temporairement surchargé. Veuillez réessayer dans quelques secondes.';
-        status = 429;
-      }
+    if (await handleModelFailure('generate-themes', THEME_MODEL, error)) {
+      return NextResponse.json(
+        { error: 'Le service de génération est momentanément indisponible. Nous avons été prévenus.' },
+        { status: 503, headers: { 'Retry-After': '300' } }
+      );
     }
-    
-    return NextResponse.json({ error: message }, { status });
+    const upstreamStatus = (typeof error === 'object' && error && 'status' in error) ? (error as { status?: number }).status : undefined;
+    if (upstreamStatus === 429 || (error instanceof Error && /rate limit/i.test(error.message))) {
+      return NextResponse.json(
+        { error: 'Le service est temporairement surchargé. Veuillez réessayer dans quelques secondes.' },
+        { status: 429 }
+      );
+    }
+    return internalError('generate-themes', error, 'La génération des thèmes a échoué. Réessayez dans un instant.');
   }
   finally {
     if (docKey) inFlightByDoc.delete(docKey);

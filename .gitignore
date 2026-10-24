@@ -38,3 +38,6 @@ next-env.d.ts
 
 # logs exportés (contiennent des données de production)
 logs_result*.json
+
+# résultats d'évaluation IA (générés)
+evals/results/

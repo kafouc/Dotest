@@ -91,7 +91,13 @@ export async function createSharedQuiz(
     .from('shared_quizzes')
     .insert({
       title: params.title,
-      questions: params.questions,
+      // `evidence` (citation qui contient la réponse) ne doit jamais être stockée dans un quiz partagé
+      questions: params.questions.map((q) => {
+        if (!q || typeof q !== 'object') return q;
+        const copy = { ...(q as Record<string, unknown>) };
+        delete copy.evidence;
+        return copy;
+      }),
       max_participants: limits.liveParticipants,
       is_active: true,
     })
