@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createSupabaseServerClient } from '@/lib/supabaseServerClient';
 import { parseJsonBody, pushSubscribeSchema } from '@/lib/validation';
+import { internalError } from '@/lib/apiError';
 
 export async function POST(req: Request) {
   try {
@@ -29,8 +30,6 @@ export async function POST(req: Request) {
 
     return NextResponse.json({ ok: true }, { status: 200 });
   } catch (e: unknown) {
-    const msg = e instanceof Error ? e.message : 'Erreur inconnue';
-    console.error('Push subscribe error:', e);
-    return NextResponse.json({ error: msg }, { status: 500 });
+    return internalError('push-subscribe', e);
   }
 }

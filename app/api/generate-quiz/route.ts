@@ -8,7 +8,9 @@ import { extractEmbeddingUsage, extractGroqUsage, estimateGroqCost, estimateEmbe
 import { ensureQuizQuota, QuotaError } from '@/lib/quota';
 import { logExportEvent } from '@/lib/exportEvents';
 import { parseJsonBody, generateQuizSchema, validateModelQuiz } from '@/lib/validation';
-import { createJinaEmbeddings, extractEmbeddingsFromResponse, formatJinaError } from '@/lib/jinaClient';
+import { createJinaEmbeddings, extractEmbeddingsFromResponse } from '@/lib/jinaClient';
+import { internalError } from '@/lib/apiError';
+import { logger } from '@/lib/logger';
 
 type SectionRow = {
   content: string;
@@ -222,12 +224,12 @@ export async function POST(req: Request) {
         );
       }
       if (checked.dropped > 0) {
-        console.warn(`[generate-quiz] ${checked.dropped} question(s) invalide(s) ignorée(s).`);
+        logger.warn(`[generate-quiz] ${checked.dropped} question(s) invalide(s) ignorée(s).`);
       }
       quizData = { quiz: checked.valid };
     } catch (parseError) {
       // 'parseError' est maintenant utilisé
-      console.error(
+      logger.error(
         'Erreur de parsing du JSON de Groq:',
         parseError,
         'Texte reçu:',
@@ -275,9 +277,6 @@ export async function POST(req: Request) {
         upgrade: true,
       }, { status: 402 });
     }
-    console.error('Erreur API Generate Quiz:', error);
-    const errorMessage =
-      error instanceof Error ? formatJinaError(error) : 'Erreur inconnue';
-    return NextResponse.json({ error: errorMessage }, { status: 500 });
+    return internalError('generate-quiz', error, 'La génération du quiz a échoué. Réessayez dans un instant.');
   }
 }

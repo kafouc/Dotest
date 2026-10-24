@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
+import { logger } from './logger';
 
 export type SubscriptionPlan = 'freemium' | 'partial' | 'pro';
 
@@ -27,7 +28,7 @@ export async function fetchUserPlan(supabase: SupabaseClient): Promise<UserPlan 
     if (error.code === 'PGRST116' || error.code === '406' || error.code === 'PGRST205') {
       return null;
     }
-    console.warn('[subscriptions] fetchUserPlan failed:', error);
+    logger.warn('[subscriptions] fetchUserPlan failed:', error);
     return null;
   }
 
@@ -64,7 +65,7 @@ export async function setUserPlanAdmin(
   });
 
   if (error) {
-    console.warn('[subscriptions] setUserPlanAdmin failed:', error);
+    logger.warn('[subscriptions] setUserPlanAdmin failed:', error);
     return null;
   }
 

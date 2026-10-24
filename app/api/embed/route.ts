@@ -4,7 +4,8 @@ import { extractText } from 'unpdf';
 import { EMBEDDING_CONFIG, AI_MODELS } from '@/lib/constants';
 import { recordAiUsage } from '@/lib/metricsLogger';
 import { extractEmbeddingUsage, estimateEmbeddingCost } from '@/lib/aiUsage';
-import { createJinaEmbeddings, extractEmbeddingsFromResponse, formatJinaError } from '@/lib/jinaClient';
+import { createJinaEmbeddings, extractEmbeddingsFromResponse } from '@/lib/jinaClient';
+import { internalError } from '@/lib/apiError';
 
 // --- Fonction de découpage personnalisée ---
 function createChunks(
@@ -127,10 +128,6 @@ export async function POST(req: Request) {
       { status: 200 }
     );
   } catch (error: unknown) {
-    // 'any' corrigé en 'unknown'
-    console.error('Erreur API Embed:', error);
-    const errorMessage =
-      error instanceof Error ? formatJinaError(error) : 'Erreur inconnue';
-    return NextResponse.json({ error: errorMessage }, { status: 500 });
+    return internalError('embed', error);
   }
 }

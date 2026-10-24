@@ -1,4 +1,5 @@
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
+import { logger } from './logger';
 
 function getAdminClient() {
   return getSupabaseAdmin('metrics-logger');
@@ -55,7 +56,7 @@ export async function logPageView(event: PageViewEvent): Promise<void> {
       metadata: event.metadata ?? null,
     });
   } catch (error) {
-    console.warn('[metricsLogger] Échec insertion page_view:', error);
+    logger.warn('[metricsLogger] Échec insertion page_view:', error);
   }
 }
 
@@ -87,7 +88,7 @@ export async function recordAiUsage(event: AiUsageEvent): Promise<void> {
       occurred_at: occurredAt,
     });
   } catch (error) {
-    console.warn('[metricsLogger] Échec insertion metrics_ai_usage_events:', error);
+    logger.warn('[metricsLogger] Échec insertion metrics_ai_usage_events:', error);
   }
 }
 
@@ -114,7 +115,7 @@ export async function logActivity(event: ActivityEvent): Promise<void> {
       occurred_at: occurredAt,
     });
   } catch (error) {
-    console.warn('[metricsLogger] Échec insertion activity_events:', error);
+    logger.warn('[metricsLogger] Échec insertion activity_events:', error);
   }
 }
 
@@ -131,6 +132,6 @@ export async function runDailyAggregation(targetDate?: string | Date): Promise<v
       p_target_date: pTargetDate,
     });
   } catch (error) {
-    console.warn('[metricsLogger] Échec exécution run_daily_metrics_aggregation:', error);
+    logger.warn('[metricsLogger] Échec exécution run_daily_metrics_aggregation:', error);
   }
 }

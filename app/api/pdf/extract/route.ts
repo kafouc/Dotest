@@ -12,6 +12,8 @@ import PPT from 'ppt';
 import { INTERNAL_AUTH_HEADER, signInternalRequest } from '@/lib/internalAuth';
 import { read as readCFB } from 'cfb';
 import { EMBEDDING_CONFIG } from '@/lib/constants';
+import { internalError } from '@/lib/apiError';
+import { logger } from '@/lib/logger';
 
 // Configuration pour gérer les gros fichiers
 export const runtime = 'nodejs';
@@ -180,7 +182,7 @@ async function extractFromDOCX(buffer: ArrayBuffer): Promise<string> {
     
     return text;
   } catch (error) {
-    console.error('Erreur extraction DOCX:', error);
+    logger.error('Erreur extraction DOCX:', error);
     throw new Error('Impossible d\'extraire le texte du fichier DOCX');
   }
 }
@@ -224,7 +226,7 @@ async function extractFromPPT(buffer: ArrayBuffer): Promise<string[]> {
       .map((text) => text.replace(/\s+/g, ' ').trim())
       .filter((text) => text.length > 0);
   } catch (error) {
-    console.error('Erreur extraction PPT:', error);
+    logger.error('Erreur extraction PPT:', error);
     throw new Error('Impossible d\'extraire le texte du fichier PPT');
   }
 }
@@ -260,7 +262,7 @@ export async function POST(req: Request) {
       const { data } = await supabase.auth.getUser();
       authenticatedUserId = data.user?.id ?? null;
     } catch (authError) {
-      console.warn('[PDF Extract] Impossible de récupérer la session utilisateur:', authError);
+      logger.warn('[PDF Extract] Impossible de récupérer la session utilisateur:', authError);
     }
     if (!authenticatedUserId) {
       return NextResponse.json({ error: 'Non autorisé' }, { status: 401 });
@@ -300,7 +302,7 @@ export async function POST(req: Request) {
     
     const storageFilePath = docData.file_path;
     if (filePath && storageFilePath !== filePath) {
-      console.warn(`[PDF Extract] Doc ${documentId}: le chemin fourni (${filePath}) ne correspond pas au fichier enregistré (${storageFilePath}). Utilisation du chemin officiel.`);
+      logger.warn(`[PDF Extract] Doc ${documentId}: le chemin fourni (${filePath}) ne correspond pas au fichier enregistré (${storageFilePath}). Utilisation du chemin officiel.`);
     }
     
     // 5. Mettre à jour le statut du document
@@ -390,7 +392,7 @@ export async function POST(req: Request) {
     await updateDocumentStatus('processing', 'Préparation des segments de texte...');
     const chunks = createChunks(segments, CHUNK_SIZE, CHUNK_OVERLAP);
     
-    console.log(`[PDF Extract] Doc ${documentId}: ${chunks.length} chunks créés`);
+    logger.info(`[PDF Extract] Doc ${documentId}: ${chunks.length} chunks créés`);
     
     // 10. Sauvegarder les chunks dans le bucket temporaire
     const chunkFileName = `doc_${documentId}_chunks.json`;
@@ -430,12 +432,12 @@ export async function POST(req: Request) {
       .then(async (response) => {
         if (!response.ok) {
           const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
-          console.error('[PDF Extract] Batch optimized failed:', errorData);
+          logger.error('[PDF Extract] Batch optimized failed:', errorData);
           throw new Error(`Embedding failed: ${JSON.stringify(errorData)}`);
         }
       })
       .catch(async (err) => {
-        console.error('[PDF Extract] Erreur déclenchement batch optimisé:', err);
+        logger.error('[PDF Extract] Erreur déclenchement batch optimisé:', err);
         // Update document status to failed
         if (documentId && supabaseAdmin) {
           try {
@@ -446,9 +448,9 @@ export async function POST(req: Request) {
                 status_message: `Erreur embedding: ${err instanceof Error ? err.message : String(err)}`,
               })
               .eq('id', documentId);
-            console.log(`[PDF Extract] Doc ${documentId} marqué comme failed`);
+            logger.info(`[PDF Extract] Doc ${documentId} marqué comme failed`);
           } catch (updateErr) {
-            console.error('[PDF Extract] Erreur mise à jour status:', updateErr);
+            logger.error('[PDF Extract] Erreur mise à jour status:', updateErr);
           }
         }
       });
@@ -473,7 +475,7 @@ export async function POST(req: Request) {
     });
     
   } catch (error: unknown) {
-    console.error('[PDF Extract] Erreur:', error);
+    logger.error('[PDF Extract] Erreur:', error);
     
     const errorMessage = error instanceof Error ? error.message : 'Erreur interne';
     
@@ -488,6 +490,6 @@ export async function POST(req: Request) {
       }
     }
     
-    return NextResponse.json({ error: errorMessage }, { status: 500 });
+    return internalError('pdf-extract', error, "L'analyse du document a échoué.");
   }
 }

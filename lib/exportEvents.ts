@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { logger } from './logger';
 
 type ExportKind = 'challenge_share' | 'quiz_export' | 'summary_export' | 'live_recap_export' | 'excel_export';
 
@@ -19,7 +20,7 @@ export async function logExportEvent(
   });
 
   if (error) {
-    console.warn('[exportEvents] logExportEvent failed:', error);
+    logger.warn('[exportEvents] logExportEvent failed:', error);
   }
 }
 
@@ -47,7 +48,7 @@ export async function countExportEvents(
 
   const { count, error } = await query;
   if (error) {
-    console.warn('[exportEvents] countExportEvents failed:', error);
+    logger.warn('[exportEvents] countExportEvents failed:', error);
     return 0;
   }
   return count ?? 0;

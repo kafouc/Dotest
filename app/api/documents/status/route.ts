@@ -4,6 +4,7 @@
 import { NextResponse } from 'next/server';
 import { createSupabaseServerClient } from '@/lib/supabaseServerClient';
 import { parseSearchParams, documentStatusQuerySchema } from '@/lib/validation';
+import { internalError } from '@/lib/apiError';
 
 export const dynamic = 'force-dynamic';
 
@@ -75,9 +76,6 @@ export async function GET(req: Request) {
       created_at: doc.created_at,
     });
   } catch (error: unknown) {
-    console.error('[Document Status] Erreur:', error);
-    const errorMessage =
-      error instanceof Error ? error.message : 'Erreur interne';
-    return NextResponse.json({ error: errorMessage }, { status: 500 });
+    return internalError('document-status', error);
   }
 }

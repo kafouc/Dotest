@@ -23,6 +23,7 @@ import { trackPageView } from '@/lib/trackPageView';
 import { fetchUserStreak, type UserStreak } from '@/lib/streaks';
 import { fetchUserPlan, type SubscriptionPlan } from '@/lib/subscriptions';
 import ToastContainer, { useToast } from '@/components/ui/Toast';
+import { confirmDialog } from '@/components/ui/confirm';
 
 function AppHomeContent() {
   const router = useRouter();
@@ -368,13 +369,13 @@ function AppHomeContent() {
   };
 
   const handleDeleteDocument = useCallback(async (documentPath: string) => {
-    if (
-      !window.confirm(
-        `Êtes-vous sûr de vouloir supprimer ce document et ses données associées ? Cette action est irréversible.`
-      )
-    ) {
-      return;
-    }
+    const confirmed = await confirmDialog({
+      title: 'Supprimer ce document ?',
+      message: 'Le document et ses données associées seront supprimés. Cette action est irréversible.',
+      confirmLabel: 'Supprimer',
+      danger: true,
+    });
+    if (!confirmed) return;
     setDeletingPath(documentPath);
     try {
       // 1. Supprimer les sections

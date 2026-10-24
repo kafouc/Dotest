@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { handleStripeWebhook, syncPlanFromStripe, hasProcessedStripeEvent, markStripeEventProcessed } from '@/lib/billing';
+import { logger } from '@/lib/logger';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -18,7 +19,7 @@ export async function POST(request: Request) {
     await markStripeEventProcessed(event.id);
     return NextResponse.json({ received: true });
   } catch (error) {
-    console.error('[billing] webhook error:', error);
+    logger.error('[billing] webhook error:', error);
     const message = error instanceof Error ? error.message : 'Erreur inconnue';
     return NextResponse.json({ error: message }, { status: 400 });
   }

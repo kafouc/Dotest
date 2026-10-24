@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { clientIp, rateLimit } from '@/lib/rateLimit';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
+import { logger } from '@/lib/logger';
 
 function getAdminClient() {
   return getSupabaseAdmin('challenge-api');
@@ -47,7 +48,7 @@ export async function GET(
       shareCode,
     });
   } catch (err) {
-    console.error('[challenge] Erreur récupération défi:', err);
+    logger.error('[challenge] Erreur récupération défi:', err);
     return NextResponse.json({ error: 'Erreur lors du chargement du défi.' }, { status: 500 });
   }
 }

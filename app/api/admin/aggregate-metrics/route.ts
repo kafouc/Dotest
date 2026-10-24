@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { timingSafeEqual } from 'crypto';
 import { runDailyAggregation } from '@/lib/metricsLogger';
+import { logger } from '@/lib/logger';
 
 const CRON_SECRET = process.env.METRICS_CRON_SECRET;
 
@@ -41,7 +42,7 @@ export async function POST(req: Request) {
  
     return NextResponse.json({ success: true, targetDate: targetDate ?? 'auto' });
   } catch (error) {
-    console.error('[aggregate-metrics] échec agrégation', error);
+    logger.error('[aggregate-metrics] échec agrégation', error);
     return NextResponse.json({ error: 'Agrégation impossible' }, { status: 500 });
   }
 }

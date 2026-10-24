@@ -5,6 +5,7 @@ import { THEME_GENERATION_CONFIG } from '@/lib/constants';
 import { recordAiUsage } from '@/lib/metricsLogger';
 import { extractGroqUsage, estimateGroqCost } from '@/lib/aiUsage';
 import { parseJsonBody, generateThemesSchema } from '@/lib/validation';
+import { logger } from '@/lib/logger';
 
 type SectionRow = {
   content: string;
@@ -172,7 +173,7 @@ ${context}
         if (status === 429 && retries < maxRetries) {
           // Rate limit atteint, attendre avant de réessayer
           const waitTime = Math.min(1000 * Math.pow(2, retries), 30000); // Max 30 secondes
-          console.log(`Rate limit atteint, retry ${retries + 1}/${maxRetries} dans ${waitTime}ms`);
+          logger.info(`Rate limit atteint, retry ${retries + 1}/${maxRetries} dans ${waitTime}ms`);
           await new Promise(resolve => setTimeout(resolve, waitTime));
           retries++;
         } else {
@@ -208,7 +209,7 @@ ${context}
 
     return NextResponse.json({ themes }, { status: 200 });
   } catch (error: unknown) {
-    console.error('Erreur API Generate Themes:', error);
+    logger.error('Erreur API Generate Themes:', error);
     let message = 'Erreur inconnue';
     let status = 500;
     

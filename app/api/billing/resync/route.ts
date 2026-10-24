@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createSupabaseServerClient } from '@/lib/supabaseServerClient';
 import { syncUserPlanFromStripe } from '@/lib/billing';
+import { internalError } from '@/lib/apiError';
 
 export async function POST() {
   try {
@@ -20,8 +21,6 @@ export async function POST() {
     const plan = await syncUserPlanFromStripe(user.id);
     return NextResponse.json({ success: true, plan });
   } catch (error) {
-    console.error('[billing] resync error:', error);
-    const message = error instanceof Error ? error.message : 'Erreur inconnue';
-    return NextResponse.json({ error: message }, { status: 500 });
+    return internalError('billing-resync', error, 'Impossible de contacter le service de paiement. Réessayez dans un instant.');
   }
 }

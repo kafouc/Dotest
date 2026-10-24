@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { createSupabaseServerClient } from '@/lib/supabaseServerClient';
 import { logActivity } from '@/lib/metricsLogger';
 import { parseJsonBody, activityEventSchema } from '@/lib/validation';
+import { internalError } from '@/lib/apiError';
 
 export async function POST(req: Request) {
   try {
@@ -24,10 +25,6 @@ export async function POST(req: Request) {
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error('[Activity API] Erreur:', error);
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Erreur inconnue' },
-      { status: 500 }
-    );
+    return internalError('activity', error);
   }
 }

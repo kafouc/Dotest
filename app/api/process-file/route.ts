@@ -4,6 +4,7 @@
 
 import { NextResponse } from 'next/server';
 import { parseJsonBody, processFileSchema } from '@/lib/validation';
+import { internalError } from '@/lib/apiError';
 
 export async function POST(req: Request) {
   try {
@@ -82,10 +83,6 @@ export async function POST(req: Request) {
       { status: 200 }
     );
   } catch (error: unknown) {
-    console.error('Erreur API Process File:', error);
-    const errorMessage = error instanceof Error 
-      ? error.message 
-      : 'Erreur interne lors du déclenchement de l\'analyse.';
-    return NextResponse.json({ error: errorMessage }, { status: 500 });
+    return internalError('process-file', error, "Erreur interne lors du déclenchement de l'analyse.");
   }
 }

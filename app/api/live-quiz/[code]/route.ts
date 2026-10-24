@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { clientIp, rateLimit } from '@/lib/rateLimit';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
+import { logger } from '@/lib/logger';
 
 type RpcActiveSessionRow = {
   session_id: string | null;
@@ -60,7 +61,7 @@ export async function GET(
       return NextResponse.json({ error: 'Quiz introuvable ou expiré.' }, { status: 404 });
     }
 
-    console.error('[live-quiz] Erreur chargement quiz:', quizError);
+    logger.error('[live-quiz] Erreur chargement quiz:', quizError);
     return NextResponse.json({ error: 'Erreur lors du chargement du quiz.' }, { status: 500 });
   }
 
@@ -89,7 +90,7 @@ export async function GET(
   } catch (rpcError) {
     const err = rpcError as { code?: string };
     if (err?.code !== 'PGRST202') {
-      console.error('[live-quiz] Erreur récupération session:', rpcError);
+      logger.error('[live-quiz] Erreur récupération session:', rpcError);
       return NextResponse.json({ error: 'Erreur lors du chargement du quiz.' }, { status: 500 });
     }
 
@@ -103,7 +104,7 @@ export async function GET(
       .limit(1);
 
     if (directError) {
-      console.error('[live-quiz] Fallback session query failed:', directError);
+      logger.error('[live-quiz] Fallback session query failed:', directError);
       return NextResponse.json({ error: 'Erreur lors du chargement du quiz.' }, { status: 500 });
     }
 

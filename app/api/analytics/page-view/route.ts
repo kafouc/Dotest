@@ -5,6 +5,7 @@ import { logPageView } from '@/lib/metricsLogger';
 import type { PageViewEvent } from '@/lib/metricsLogger';
 import { createHash } from 'node:crypto';
 import { clientIp, rateLimit } from '@/lib/rateLimit';
+import { logger } from '@/lib/logger';
 
 export const runtime = 'nodejs';
 
@@ -55,7 +56,7 @@ export async function POST(req: Request) {
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error('[page-view] erreur instrumentation:', error);
+    logger.error('[page-view] erreur instrumentation:', error);
     return NextResponse.json({ error: 'Instrumentation impossible' }, { status: 500 });
   }
 }

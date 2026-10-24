@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from 'react';
+import { infoDialog } from '@/components/ui/confirm';
 
 type BeforeInstallPromptEvent = Event & {
   prompt: () => void;
@@ -35,9 +36,11 @@ export default function InstallPWAButton({ className = '' }: { className?: strin
       return;
     }
     // Fallback d'instruction quand beforeinstallprompt n'est pas disponible
-    alert(
-      "Pour installer l’application:\n\n• Android/Chrome: Menu ⋮ > Ajouter à l’écran d’accueil\n• iOS/Safari: Bouton Partager > Ajouter à l’écran d’accueil"
-    );
+    await infoDialog({
+      title: 'Installer l’application',
+      message:
+        '• Android/Chrome : Menu ⋮ > Ajouter à l’écran d’accueil\n• iOS/Safari : Bouton Partager > Ajouter à l’écran d’accueil',
+    });
   };
 
   // Afficher le bouton même si canInstall est false (fallback d'instruction),

@@ -11,6 +11,8 @@ import { recordAiUsage } from '@/lib/metricsLogger';
 import { extractEmbeddingUsage, estimateEmbeddingCost } from '@/lib/aiUsage';
 import { createJinaEmbeddings, extractEmbeddingsFromResponse, formatJinaError } from '@/lib/jinaClient';
 import type { ChunkPayload } from '@/app/api/pdf/extract/route';
+import { internalError } from '@/lib/apiError';
+import { logger } from '@/lib/logger';
 
 const EMBED_SLOT_KEY = 'global';
 
@@ -132,7 +134,7 @@ export async function POST(req: Request) {
       );
     }
     
-    console.log(`[Embed Optimized] Doc ${documentId}: Démarrage traitement parallèle`);
+    logger.info(`[Embed Optimized] Doc ${documentId}: Démarrage traitement parallèle`);
     
     // 4. Fonction pour mettre à jour le statut
     const updateDocumentStatus = async (
@@ -202,7 +204,7 @@ export async function POST(req: Request) {
       RATE_LIMIT_DELAY_MS = 4000,
     } = BATCH_CONFIG;
 
-    console.log(`[Embed Optimized] Doc ${documentId}: ${total} chunks à traiter (parallélisme max: ${PARALLEL_BATCHES})`);
+    logger.info(`[Embed Optimized] Doc ${documentId}: ${total} chunks à traiter (parallélisme max: ${PARALLEL_BATCHES})`);
     
     await updateDocumentStatus('processing', `Indexation: 0/${total} chunks (0%)`);
     
@@ -287,11 +289,11 @@ export async function POST(req: Request) {
           const waitMs = baseDelay * (attempt + 1);
 
           if (attempt === retries - 1) {
-            console.error(`[Embed Optimized] Batch ${startIndex}-${startIndex + batchChunks.length} échec après ${retries} tentatives:`, error);
+            logger.error(`[Embed Optimized] Batch ${startIndex}-${startIndex + batchChunks.length} échec après ${retries} tentatives:`, error);
             throw error;
           }
 
-          console.warn(`[Embed Optimized] Batch ${startIndex}: Retry ${attempt + 1}/${retries} dans ${waitMs}ms${statusCode === 429 ? ' (rate limit API)' : ''}`);
+          logger.warn(`[Embed Optimized] Batch ${startIndex}: Retry ${attempt + 1}/${retries} dans ${waitMs}ms${statusCode === 429 ? ' (rate limit API)' : ''}`);
           await new Promise((resolve) => setTimeout(resolve, waitMs));
         }
       }
@@ -332,7 +334,7 @@ export async function POST(req: Request) {
         `Indexation: ${processedCount}/${total} chunks (${progress}%) | ${rate} chunks/min`
       );
 
-      console.log(`[Embed Optimized] Doc ${documentId}: ${processedCount}/${total} (${progress}%) | ${elapsed}s | ${rate} chunks/min`);
+      logger.info(`[Embed Optimized] Doc ${documentId}: ${processedCount}/${total} (${progress}%) | ${elapsed}s | ${rate} chunks/min`);
     }
     
     // 9. Finaliser
@@ -343,7 +345,7 @@ export async function POST(req: Request) {
       throw new Error(`Indexation incomplète: ${processedCount}/${total} segments traités`);
     }
 
-    console.log(`[Embed Optimized] Doc ${documentId}: ✅ Terminé - ${processedCount} chunks en ${totalTime}s (${avgRate} chunks/min)`);
+    logger.info(`[Embed Optimized] Doc ${documentId}: ✅ Terminé - ${processedCount} chunks en ${totalTime}s (${avgRate} chunks/min)`);
     
     await updateDocumentStatus('completed', `Analyse terminée: ${processedCount} segments indexés en ${totalTime}s`);
     
@@ -362,7 +364,7 @@ export async function POST(req: Request) {
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? formatJinaError(error) : 'Erreur interne';
     const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
-    console.error(`[Embed Optimized] Erreur après ${elapsed}s:`, errorMessage);
+    logger.error(`[Embed Optimized] Erreur après ${elapsed}s:`, errorMessage);
     
     // Mettre à jour le statut du document en cas d'erreur
     if (documentId) {
@@ -378,6 +380,6 @@ export async function POST(req: Request) {
       }
     }
     
-    return NextResponse.json({ error: errorMessage }, { status: 500 });
+    return internalError('pdf-embed-batch', error, "L'analyse du document a échoué.");
   }
 }

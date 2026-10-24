@@ -8,7 +8,8 @@ import { extractEmbeddingUsage, extractGroqUsage, estimateGroqCost, estimateEmbe
 import { ensureRevisionQuota, QuotaError } from '@/lib/quota';
 import { logExportEvent } from '@/lib/exportEvents';
 import { parseJsonBody, generateSummarySchema } from '@/lib/validation';
-import { createJinaEmbeddings, extractEmbeddingsFromResponse, formatJinaError } from '@/lib/jinaClient';
+import { createJinaEmbeddings, extractEmbeddingsFromResponse } from '@/lib/jinaClient';
+import { internalError } from '@/lib/apiError';
 
 type SectionRow = {
   content: string;
@@ -249,8 +250,6 @@ ${context}
         upgrade: true,
       }, { status: 402 });
     }
-    console.error('Erreur API Generate Summary:', error);
-    const msg = error instanceof Error ? formatJinaError(error) : 'Erreur inconnue';
-    return NextResponse.json({ error: msg }, { status: 500 });
+    return internalError('generate-summary', error, 'La génération de la fiche a échoué. Réessayez dans un instant.');
   }
 }

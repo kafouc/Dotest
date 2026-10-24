@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { logger } from './logger';
 
 type RpcArgs = {
   p_user_id: string;
@@ -23,10 +24,10 @@ export async function touchUserStreak(
       p_activity_at: iso,
     } satisfies RpcArgs);
     if (error) {
-      console.warn('[streaks] update_user_streak RPC failed:', error);
+      logger.warn('[streaks] update_user_streak RPC failed:', error);
     }
   } catch (err) {
-    console.warn('[streaks] Unexpected error while touching streak:', err);
+    logger.warn('[streaks] Unexpected error while touching streak:', err);
   }
 }
 
@@ -56,12 +57,12 @@ export async function fetchUserStreak(
       if (error.code && ['PGRST116', 'PGRST117', 'PGRST103'].includes(error.code)) {
         return null;
       }
-      console.warn('[streaks] fetchUserStreak error:', error);
+      logger.warn('[streaks] fetchUserStreak error:', error);
       return null;
     }
     return data as unknown as UserStreak;
   } catch (err) {
-    console.warn('[streaks] Unexpected error while fetching streak:', err);
+    logger.warn('[streaks] Unexpected error while fetching streak:', err);
     return null;
   }
 }

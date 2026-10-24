@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { createSupabaseServerClient } from '@/lib/supabaseServerClient';
 import { touchUserStreak } from '@/lib/streaks';
 import { parseJsonBody, flashcardsGenerateSchema } from '@/lib/validation';
+import { internalError } from '@/lib/apiError';
 
 export async function POST(req: Request) {
   try {
@@ -67,7 +68,6 @@ export async function POST(req: Request) {
 
     return NextResponse.json({ created: count ?? rows.length }, { status: 200 });
   } catch (e: unknown) {
-    console.error('Flashcards generate error:', e);
     const msg = e instanceof Error ? e.message : 'Erreur';
     const lower = (msg || '').toLowerCase();
     if ((lower.includes('does not exist') || lower.includes('relation')) && lower.includes('flashcards')) {
@@ -80,6 +80,6 @@ export async function POST(req: Request) {
         error: "DOCUMENT_SECTIONS_MISSING: La table 'document_sections' est absente. Veuillez exécuter les migrations initiales (voir docs/sql/INSTALL_STEP_BY_STEP.sql).",
       }, { status: 400 });
     }
-    return NextResponse.json({ error: msg }, { status: 500 });
+    return internalError('flashcards-generate', e);
   }
 }

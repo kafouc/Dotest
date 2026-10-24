@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { createSupabaseServerClient } from '@/lib/supabaseServerClient';
 import { createCheckoutSession } from '@/lib/billing';
 import { parseJsonBody, checkoutSchema } from '@/lib/validation';
+import { internalError } from '@/lib/apiError';
 
 function getOrigin(request: Request): string {
   try {
@@ -45,8 +46,6 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ url: session.url });
   } catch (error) {
-    console.error('[billing] checkout session error:', error);
-    const message = error instanceof Error ? error.message : 'Erreur inconnue';
-    return NextResponse.json({ error: message }, { status: 500 });
+    return internalError('billing-checkout', error, 'Impossible de contacter le service de paiement. Réessayez dans un instant.');
   }
 }

@@ -1,6 +1,7 @@
 import Stripe from 'stripe';
 import { getSupabaseAdminClient } from './subscriptions';
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { logger } from './logger';
 
 let stripeClient: Stripe | null = null;
 
@@ -83,7 +84,7 @@ export async function resolvePlanFromPrice(priceId: string | null): Promise<Bill
     if (!isStripeMissingResource(error)) {
       throw error;
     }
-    console.warn(`[billing] Impossible de résoudre le plan pour le prix ${priceId}.`, error);
+    logger.warn(`[billing] Impossible de résoudre le plan pour le prix ${priceId}.`, error);
   }
 
   return 'freemium';
@@ -111,12 +112,12 @@ async function resolveStripePriceId(stripe: Stripe, plan: BillingPlan): Promise<
         priceIdCache[plan] = price.id;
         return price.id;
       }
-      console.warn(`[billing] Prix ${config.priceId} inactif pour le plan ${plan}.`);
+      logger.warn(`[billing] Prix ${config.priceId} inactif pour le plan ${plan}.`);
     } catch (error) {
       if (!isStripeMissingResource(error)) {
         throw error;
       }
-      console.warn(`[billing] Prix ${config.priceId} introuvable pour le plan ${plan}, tentative de repli.`, error);
+      logger.warn(`[billing] Prix ${config.priceId} introuvable pour le plan ${plan}, tentative de repli.`, error);
     }
   }
 
@@ -242,7 +243,7 @@ export async function createCheckoutSession(opts: {
     priceId = await resolveStripePriceId(stripe, opts.plan);
   } catch (error) {
     if (fallbackCheckoutUrl) {
-      console.warn('[billing] Fallback vers le lien de checkout préconfiguré pour le plan partiel.', error);
+      logger.warn('[billing] Fallback vers le lien de checkout préconfiguré pour le plan partiel.', error);
       return { url: fallbackCheckoutUrl };
     }
     throw error;

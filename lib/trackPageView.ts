@@ -1,4 +1,5 @@
 const STORAGE_KEY_PREFIX = 'sop-page-view:';
+import { logger } from './logger';
 const SESSION_STORAGE_KEY = 'sop-session-id';
 
 function getOrCreateSessionId(): string | null {
@@ -56,7 +57,7 @@ export async function trackPageView(route: string, metadata?: Record<string, unk
     });
   } catch (error) {
     if (process.env.NODE_ENV !== 'production') {
-      console.warn('[trackPageView] échec envoi', error);
+      logger.warn('[trackPageView] échec envoi', error);
     }
   }
 }

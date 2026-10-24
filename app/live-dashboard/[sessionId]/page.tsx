@@ -17,6 +17,7 @@ import {
 import type { QuizQuestion } from '@/lib/quiz.types';
 import { openPrintableDocument, escapeHtml, formatDateTime, formatDuration, downloadJsonWorkbook } from '@/lib/exporters';
 import ToastContainer, { useToast } from '@/components/ui/Toast';
+import { confirmDialog } from '@/components/ui/confirm';
 
 type ParticipantSummary = {
   id: string;
@@ -571,7 +572,12 @@ export default function LiveDashboardPage() {
 
   const handleDeleteQuestion = async (index: number) => {
     if (!questions[index]) return;
-    const confirmed = typeof window === 'undefined' ? true : window.confirm('Supprimer cette question ?');
+    const confirmed = await confirmDialog({
+      title: 'Supprimer cette question ?',
+      message: 'La question sera retirée du quiz.',
+      confirmLabel: 'Supprimer',
+      danger: true,
+    });
     if (!confirmed) return;
 
     const nextQuestions = questions.filter((_, idx) => idx !== index);

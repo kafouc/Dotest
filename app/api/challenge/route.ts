@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { clientIp, rateLimit } from '@/lib/rateLimit';
 import { parseJsonBody, challengeSchema } from '@/lib/validation';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
+import { logger } from '@/lib/logger';
 
 function getAdminClient() {
   return getSupabaseAdmin('challenge-api');
@@ -56,7 +57,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ shareCode: data.share_code });
   } catch (error) {
-    console.error('[challenge] Erreur création défi:', error);
+    logger.error('[challenge] Erreur création défi:', error);
     return NextResponse.json({ error: 'Impossible de créer le défi.' }, { status: 500 });
   }
 }

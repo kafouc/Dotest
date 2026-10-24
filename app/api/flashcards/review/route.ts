@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { createSupabaseServerClient } from '@/lib/supabaseServerClient';
 import { touchUserStreak } from '@/lib/streaks';
 import { parseJsonBody, flashcardsReviewSchema } from '@/lib/validation';
+import { internalError } from '@/lib/apiError';
 
 export async function POST(req: Request) {
   try {
@@ -64,8 +65,6 @@ export async function POST(req: Request) {
 
     return NextResponse.json({ ok: true, next: dueAt.toISOString() });
   } catch (e: unknown) {
-    console.error('Flashcards review error:', e);
-    const msg = e instanceof Error ? e.message : 'Erreur';
-    return NextResponse.json({ error: msg }, { status: 500 });
+    return internalError('flashcards-review', e);
   }
 }
