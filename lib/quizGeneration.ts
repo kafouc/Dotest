@@ -6,6 +6,7 @@ import { normalizeLetter, normalizeQuiz } from '@/lib/utils';
 import { validateModelQuiz } from '@/lib/validation';
 import type { QuizMode, QuizQuestion, RawQuizQuestion } from '@/lib/quiz.types';
 import { logger } from '@/lib/logger';
+import { detectLanguage, languageInstruction, type LanguageGuess } from '@/lib/language';
 
 /**
  * Génération de quiz à partir de passages numérotés, avec contrôles qualité côté serveur :
@@ -290,8 +291,10 @@ export function buildQuizPrompt(args: {
   mode: QuizMode;
   theme?: string;
   avoid?: string[];
+  language?: LanguageGuess;
 }): string {
   const { passages, count, mode, theme, avoid } = args;
+  const language = args.language ?? detectLanguage(passages.map((p) => p.content).join('\n'));
   const sanitizedTheme = theme?.replace(/[\r\n"]+/g, ' ').trim();
   return [
     `Tu conçois des quiz pour aider des élèves et étudiants à réviser leurs cours.`,
@@ -300,9 +303,10 @@ export function buildQuizPrompt(args: {
     `PASSAGES :`,
     buildNumberedContext(passages),
     ``,
-    `TÂCHE : écris ${count} ${MODE_LABEL[mode]} en français, fondées exclusivement sur les PASSAGES.${
+    `TÂCHE : écris ${count} ${MODE_LABEL[mode]}, fondées exclusivement sur les PASSAGES.${
       sanitizedTheme ? ` Thème visé : ${sanitizedTheme}.` : ''
     }`,
+    languageInstruction(language),
     `RÈGLES :`,
     `1. Toute information nécessaire pour répondre doit figurer dans un passage. Si les passages ne permettent pas ${count} bonnes questions, écris-en moins.`,
     `2. Couvre des passages différents ; aucune question en double ou quasi identique.`,
@@ -348,6 +352,7 @@ export async function generateQuiz(args: {
 }): Promise<{ questions: QuizQuestion[]; stats: QuizStats; calls: GroqCall[] }> {
   const { groq, passages, count, mode, theme } = args;
   const rng = args.rng ?? Math.random;
+  const language = detectLanguage(passages.map((p) => p.content).join('\n'));
   const model = AI_MODELS.QUIZ_GENERATION;
   const calls: GroqCall[] = [];
   const totals = emptyStats();
@@ -362,6 +367,7 @@ export async function generateQuiz(args: {
       count: attempt === 1 ? count : missing,
       mode,
       theme,
+      language,
       avoid: attempt === 1 ? undefined : questions.map((q) => q.question.slice(0, 160)),
     });
 
@@ -431,7 +437,8 @@ export async function generateQuiz(args: {
     throw lastError ?? new QuizGenerationError('no-valid-questions', "Aucune question n'a pu être validée à partir du document.", totals);
   }
 
-  logger.info('[quiz] génération terminée', { requested: count, produced: questions.length, ...totals, calls: calls.length });
+  logger.info('[quiz] génération terminée', { language: language.code, requested: count, produced: questions.length, ...totals, calls: calls.length });
   return { questions, stats: totals, calls };
 }
+
 

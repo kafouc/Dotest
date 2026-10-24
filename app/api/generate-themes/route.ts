@@ -4,6 +4,7 @@ import Groq from 'groq-sdk';
 import { THEME_GENERATION_CONFIG, AI_MODELS, AI_OUTPUT_LIMITS } from '@/lib/constants';
 import { isJsonValidateFailure, reasoningParams } from '@/lib/groqParams';
 import { handleModelFailure } from '@/lib/opsAlerts';
+import { detectLanguage, languageInstruction } from '@/lib/language';
 import { recordAiUsage } from '@/lib/metricsLogger';
 import { extractGroqUsage, estimateGroqCost } from '@/lib/aiUsage';
 import { parseJsonBody, generateThemesSchema } from '@/lib/validation';
@@ -137,6 +138,7 @@ ${section.content}`;
 
     const prompt = `
 Tu es un assistant pédagogique. À partir du CONTEXTE suivant, propose une liste concise de thèmes pertinents pour créer des quiz.
+${languageInstruction(detectLanguage(context))}
 Règles :
   - Propose exactement ${maxThemes} thèmes pertinents, sans doublons.
 - Chaque thème doit être court (3-7 mots) et spécifique au contenu.

@@ -5,6 +5,7 @@ import { EMBEDDING_CONFIG, AI_MODELS, AI_OUTPUT_LIMITS, RETRIEVAL_CONFIG } from 
 import { reasoningParams, withJsonRetry, withRateLimitRetry } from '@/lib/groqParams';
 import { retrievePassages, buildNumberedContext, summarizePages } from '@/lib/retrieval';
 import { handleModelFailure } from '@/lib/opsAlerts';
+import { detectLanguage, languageInstruction } from '@/lib/language';
 import { recordAiUsage } from '@/lib/metricsLogger';
 import { touchUserStreak } from '@/lib/streaks';
 import { extractEmbeddingUsage, extractGroqUsage, estimateGroqCost, estimateEmbeddingCost } from '@/lib/aiUsage';
@@ -88,11 +89,13 @@ export async function POST(req: Request) {
     const passages = [...found].sort((x, y) => (x.pageStart ?? Infinity) - (y.pageStart ?? Infinity) || x.id - y.id);
 
     const context = buildNumberedContext(passages, 12000);
+    const language = detectLanguage(passages.map((p) => p.content).join('\n'));
     const sources = summarizePages(passages);
 
     // 3) Prompt résumé structuré
     const prompt = `
 Tu es un excellent pédagogue. À partir du CONTEXTE ci-dessous, produis une fiche de révision concise et structurée.
+${languageInstruction(language)}
 Règles:
 - Écris un JSON valide: { "summary": string, "key_points": string[], "definitions": string[], "formulas": string[], "pitfalls": string[], "tips": string[], "self_test": string[] }
 - "summary": 120-200 mots maximum, sans redondance.

@@ -267,7 +267,7 @@ describe('limites et erreurs du fournisseur', () => {
   it('signale un service saturé, avec le délai, quand l’attente est trop longue', async () => {
     const { withRateLimitRetry, ProviderBusyError } = await import('@/lib/groqParams');
     const call = vi.fn().mockRejectedValue({ status: 429, message: 'Please try again in 45s.' });
-    const error = await withRateLimitRetry(call).catch((e) => e);
+    const error = (await withRateLimitRetry(call).catch((e) => e)) as InstanceType<typeof ProviderBusyError>;
     expect(error).toBeInstanceOf(ProviderBusyError);
     expect(error.retryAfterSeconds).toBe(45);
     expect(call).toHaveBeenCalledTimes(1);
