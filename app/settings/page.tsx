@@ -7,12 +7,7 @@ import type { Session } from '@supabase/supabase-js';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { createSupabaseBrowserClient } from '@/lib/supabaseClient';
 import { FaBell, FaBellSlash, FaArrowLeft, FaCheck, FaTimes } from 'react-icons/fa';
-import {
-  ensureNotificationPermission,
-  registerServiceWorker,
-  subscribePush,
-  sendSubscriptionToServer,
-} from '@/lib/pushManager';
+import { usePushNotifications } from '@/hooks/usePushNotifications';
 import { fetchUserPlan, type SubscriptionPlan } from '@/lib/subscriptions';
 import ToastContainer, { useToast } from '@/components/ui/Toast';
 
@@ -21,9 +16,11 @@ function SettingsPageContent() {
   const [supabase] = useState(() => createSupabaseBrowserClient());
   const [session, setSession] = useState<Session | null>(null);
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
-  const [notificationsEnabled, setNotificationsEnabled] = useState(false);
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [notificationStatus, setNotificationStatus] = useState<'default' | 'granted' | 'denied'>('default');
+  // Notifications push : même logique que la carte « Activer les rappels » de l'application
+  const push = usePushNotifications();
+  const notificationsEnabled = push.subscribed;
+  const isProcessing = push.busy;
+  const notificationStatus: 'default' | 'granted' | 'denied' = push.permission === 'unsupported' ? 'default' : push.permission;
   const [plan, setPlan] = useState<SubscriptionPlan>('freemium');
   const [isPlanLoading, setIsPlanLoading] = useState(true);
   const [billingError, setBillingError] = useState<string | null>(null);
@@ -144,96 +141,18 @@ function SettingsPageContent() {
     return () => clearTimeout(timer);
   }, [checkoutNotice]);
 
-  // Vérifier l'état des notifications au chargement
-  useEffect(() => {
-    if (typeof window !== 'undefined' && 'Notification' in window) {
-      setNotificationStatus(Notification.permission);
-      checkNotificationSubscription();
-    }
-  }, []);
-
-  const checkNotificationSubscription = async () => {
-    try {
-      if (!('serviceWorker' in navigator)) return;
-      
-      const registration = await navigator.serviceWorker.ready;
-      const subscription = await registration.pushManager.getSubscription();
-      setNotificationsEnabled(!!subscription);
-    } catch (error) {
-      console.error('Erreur vérification abonnement:', error);
-    }
-  };
-
   const handleEnableNotifications = async () => {
-      setIsProcessing(true);
-    try {
-      const permitted = await ensureNotificationPermission();
-      if (!permitted || permitted === 'denied') {
-          showToast('Autorisez les notifications pour activer cette fonctionnalité.', 'warning');
-        setIsProcessing(false);
-        return;
-      }
-
-      const reg = await registerServiceWorker('/sw.js');
-      if (!reg) {
-        throw new Error('Échec enregistrement Service Worker');
-      }
-
-      // Attendre un peu pour s'assurer que le SW est bien actif
-      await new Promise(resolve => setTimeout(resolve, 500));
-
-      const vapid = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
-      if (!vapid) {
-        throw new Error('VAPID public key manquante');
-      }
-
-      const sub = await subscribePush(reg, vapid);
-      await sendSubscriptionToServer(sub);
-      
-      setNotificationsEnabled(true);
-      setNotificationStatus('granted');
+    const result = await push.enable();
+    if (result.ok) {
       showToast('Notifications activées avec succès !', 'success');
-    } catch (e) {
-      console.error(e);
-      const errorMessage = e instanceof Error ? e.message : 'Erreur activation des notifications';
-      
-      if (errorMessage.includes('Service Worker non actif')) {
-        showToast('Le Service Worker finit de s\'initialiser, réessayez dans quelques secondes.', 'info');
-      } else {
-        showToast(errorMessage, 'error');
-      }
-    } finally {
-      setIsProcessing(false);
+    } else {
+      showToast(result.message, result.reason === 'denied' || result.reason === 'not-ready' ? 'warning' : 'error');
     }
   };
 
   const handleDisableNotifications = async () => {
-      setIsProcessing(true);
-    try {
-      if (!('serviceWorker' in navigator)) {
-        throw new Error('Service Worker non supporté');
-      }
-
-      const registration = await navigator.serviceWorker.ready;
-      const subscription = await registration.pushManager.getSubscription();
-      
-      if (subscription) {
-        // Retire l'appareil de la base AVANT de se désabonner : sinon le serveur continuerait d'essayer d'écrire à cet appareil
-        await fetch('/api/push/subscribe', {
-          method: 'DELETE',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ endpoint: subscription.endpoint }),
-        }).catch(() => undefined);
-        await subscription.unsubscribe();
-        setNotificationsEnabled(false);
-          showToast('Notifications désactivées.', 'info');
-      }
-    } catch (e) {
-      console.error(e);
-        showToast(e instanceof Error ? e.message : 'Erreur désactivation des notifications', 'error');
-    } finally {
-      setIsProcessing(false);
-    }
+    const ok = await push.disable();
+    showToast(ok ? 'Notifications désactivées.' : 'Erreur désactivation des notifications', ok ? 'info' : 'error');
   };
 
   if (isCheckingAuth) {

@@ -58,11 +58,12 @@ export async function sendSubscriptionToServer(subscription: PushSubscription) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ subscription, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone }),
   });
+  const body = (await res.json().catch(() => ({}))) as { error?: string; welcomed?: boolean };
   if (!res.ok) {
-    const j = await res.json().catch(() => ({}));
-    throw new Error(j.error || 'Échec enregistrement subscription');
+    throw new Error(body.error || 'Échec enregistrement subscription');
   }
-  return true;
+  // `welcomed` : la notification de bienvenue vient d'être envoyée à cet appareil
+  return { welcomed: Boolean(body.welcomed) };
 }
 
 function urlBase64ToUint8Array(base64String: string) {
