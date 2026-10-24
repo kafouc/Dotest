@@ -4,20 +4,15 @@
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { createServerClient } from '@supabase/ssr';
+import { parseSearchParams, documentStatusQuerySchema } from '@/lib/validation';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(req: Request) {
   try {
-    const { searchParams } = new URL(req.url);
-    const documentId = searchParams.get('id');
-
-    if (!documentId) {
-      return NextResponse.json(
-        { error: 'ID de document manquant' },
-        { status: 400 }
-      );
-    }
+    const parsedQuery = parseSearchParams(req, documentStatusQuerySchema);
+    if (!parsedQuery.ok) return parsedQuery.response;
+    const documentId = parsedQuery.data.id;
 
     // 1. Créer le client Supabase
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;

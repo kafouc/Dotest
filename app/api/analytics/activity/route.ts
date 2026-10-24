@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { createServerClient } from '@supabase/ssr';
 import { logActivity } from '@/lib/metricsLogger';
+import { parseJsonBody, activityEventSchema } from '@/lib/validation';
 
 export async function POST(req: Request) {
   try {
@@ -28,11 +29,9 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Non authentifié' }, { status: 401 });
     }
 
-    const { eventType, eventData } = await req.json();
-
-    if (!eventType || typeof eventType !== 'string') {
-      return NextResponse.json({ error: 'eventType requis' }, { status: 400 });
-    }
+    const parsedBody = await parseJsonBody(req, activityEventSchema);
+    if (!parsedBody.ok) return parsedBody.response;
+    const { eventType, eventData } = parsedBody.data;
 
     await logActivity({
       eventType,

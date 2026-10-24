@@ -8,12 +8,8 @@ import { touchUserStreak } from '@/lib/streaks';
 import { extractEmbeddingUsage, extractGroqUsage, estimateGroqCost, estimateEmbeddingCost } from '@/lib/aiUsage';
 import { ensureRevisionQuota, QuotaError } from '@/lib/quota';
 import { logExportEvent } from '@/lib/exportEvents';
+import { parseJsonBody, generateSummarySchema } from '@/lib/validation';
 import { createJinaEmbeddings, extractEmbeddingsFromResponse, formatJinaError } from '@/lib/jinaClient';
-
-type PageRange = {
-  start?: number | null;
-  end?: number | null;
-};
 
 type SectionRow = {
   content: string;
@@ -28,14 +24,9 @@ const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
 export async function POST(req: Request) {
   try {
-    const body = await req.json();
-    const { documentPath, pageRange } = (body || {}) as {
-      documentPath?: string;
-      pageRange?: PageRange | null;
-    };
-    if (!documentPath) {
-      return NextResponse.json({ error: 'documentPath requis' }, { status: 400 });
-    }
+    const parsedBody = await parseJsonBody(req, generateSummarySchema);
+    if (!parsedBody.ok) return parsedBody.response;
+    const { documentPath, pageRange } = parsedBody.data;
 
     const pageStart = pageRange?.start ?? null;
     const pageEnd = pageRange?.end ?? null;

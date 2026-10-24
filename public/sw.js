@@ -1,11 +1,22 @@
-const CACHE_NAME = 'sheet-of-paper-v3';
-const urlsToCache = [
-  '/',
-  '/app',
-  '/settings',
-  '/manifest.json',
-  '/offline.html',
-];
+const CACHE_NAME = 'sheet-of-paper-v4';
+
+// On ne précache que des ressources publiques et identiques pour tout le monde.
+// Les pages applicatives (/app, /settings) et les réponses d'API sont propres à
+// chaque utilisateur : elles ne doivent jamais être stockées sur l'appareil.
+const urlsToCache = ['/manifest.json', '/offline.html'];
+
+// Chemins qui ne passent jamais par le cache (données privées, auth, paiement)
+const NEVER_CACHE_PREFIXES = ['/api/', '/auth/', '/login', '/signup', '/app', '/settings', '/admin', '/live-dashboard'];
+
+function isCacheableAsset(req, url) {
+  if (url.pathname.startsWith('/_next/static/') || url.pathname.startsWith('/icons/')) return true;
+  return (
+    req.destination === 'style' ||
+    req.destination === 'script' ||
+    req.destination === 'font' ||
+    req.destination === 'image'
+  );
+}
 
 // Installation du Service Worker
 self.addEventListener('install', (event) => {
@@ -16,96 +27,65 @@ self.addEventListener('install', (event) => {
   );
 });
 
-// Activation et nettoyage des anciens caches
+// Activation : supprime tous les anciens caches (dont ceux des versions précédentes,
+// qui pouvaient contenir des pages et réponses d'API privées)
 self.addEventListener('activate', (event) => {
   event.waitUntil(
-    caches.keys().then((cacheNames) => {
-      return Promise.all(
-        cacheNames.map((cacheName) => {
-          if (cacheName !== CACHE_NAME) {
-            return caches.delete(cacheName);
-          }
-        })
-      );
-    }).then(() => self.clients.claim())
+    caches.keys().then((cacheNames) =>
+      Promise.all(
+        cacheNames
+          .filter((cacheName) => cacheName !== CACHE_NAME)
+          .map((cacheName) => caches.delete(cacheName))
+      )
+    ).then(() => self.clients.claim())
   );
 });
 
-// Stratégies de cache différenciées
+// Vidage du cache à la déconnexion
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'CLEAR_CACHES') {
+    event.waitUntil(
+      caches.keys().then((names) => Promise.all(names.map((name) => caches.delete(name))))
+    );
+  }
+});
+
 self.addEventListener('fetch', (event) => {
   const req = event.request;
 
-  // 1) Navigations (HTML): Network-first, fallback offline.html
+  // Seulement les GET de même origine : Supabase, Stripe, etc. ne sont pas interceptés
+  if (req.method !== 'GET') return;
+  const url = new URL(req.url);
+  if (url.origin !== self.location.origin) return;
+
+  // 1) Navigations : toujours le réseau, jamais de HTML en cache.
+  //    Hors ligne, on affiche uniquement la page de repli publique.
   if (req.mode === 'navigate') {
     event.respondWith(
-      (async () => {
-        try {
-          const fresh = await fetch(req);
-          // Mémoriser une copie en cache (seulement GET)
-          if (req.method === 'GET') {
-            const cache = await caches.open(CACHE_NAME);
-            cache.put(req, fresh.clone());
-          }
-          return fresh;
-        } catch (err) {
-          // Offline → essayer le cache, sinon offline.html
-          const cached = await caches.match(req);
-          return (
-            cached ||
-            (await caches.match('/offline.html'))
-          );
-        }
-      })()
+      fetch(req).catch(async () => (await caches.match('/offline.html')) || Response.error())
     );
     return;
   }
 
-  // 2) Assets statiques: Cache-first avec mise à jour en arrière-plan
-  const url = new URL(req.url);
-  const isAsset = (
-    req.destination === 'style' ||
-    req.destination === 'script' ||
-    req.destination === 'image' ||
-    req.destination === 'font' ||
-    url.pathname.startsWith('/icons/')
-  );
+  if (NEVER_CACHE_PREFIXES.some((prefix) => url.pathname.startsWith(prefix))) return;
 
-  if (isAsset) {
+  // 2) Ressources statiques : cache d'abord, mise à jour en arrière-plan
+  if (isCacheableAsset(req, url)) {
     event.respondWith(
       (async () => {
         const cache = await caches.open(CACHE_NAME);
         const cached = await cache.match(req);
         const networkFetch = fetch(req)
           .then((res) => {
-            cache.put(req, res.clone());
+            if (res.ok) cache.put(req, res.clone());
             return res;
           })
           .catch(() => null);
-        // Retourne d'abord le cache si présent, sinon le réseau
-        return cached || (await networkFetch) || cached;
+        return cached || (await networkFetch) || Response.error();
       })()
     );
-    return;
   }
-
-  // 3) Par défaut: Network-first, fallback cache (uniquement GET)
-  event.respondWith(
-    (async () => {
-      // Ne pas mettre en cache les POST/PUT/DELETE
-      if (req.method !== 'GET') {
-        return fetch(req);
-      }
-      try {
-        const res = await fetch(req);
-        const cache = await caches.open(CACHE_NAME);
-        cache.put(req, res.clone());
-        return res;
-      } catch (err) {
-        const cached = await caches.match(req);
-        return cached || new Response('Offline', { status: 503 });
-      }
-    })()
-  );
+  // Tout le reste : comportement réseau normal, sans cache
 });
 
 // Gestion des notifications push

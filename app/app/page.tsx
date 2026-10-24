@@ -299,6 +299,15 @@ function AppHomeContent() {
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
+    // Ne laisse aucune donnée de l'utilisateur dans les caches de l'appareil
+    try {
+      if ('caches' in window) {
+        const names = await caches.keys();
+        await Promise.all(names.map((name) => caches.delete(name)));
+      }
+    } catch {
+      // Cache indisponible : rien à nettoyer
+    }
     setSession(null);
     setStreak(null);
     setUserPlan('freemium');

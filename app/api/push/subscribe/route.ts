@@ -1,27 +1,14 @@
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { createServerClient } from '@supabase/ssr';
+import { parseJsonBody, pushSubscribeSchema } from '@/lib/validation';
 
 export async function POST(req: Request) {
   try {
-    const body = await req.json();
-    type WebPushSubscription = {
-      endpoint: string;
-      expirationTime?: number | null;
-      keys?: { p256dh?: string; auth?: string };
-      [k: string]: unknown;
-    };
-    const { subscription } = (body ?? {}) as { subscription?: WebPushSubscription };
-    if (!subscription) {
-      return NextResponse.json({ error: 'subscription requis' }, { status: 400 });
-    }
-
-    const endpoint = typeof subscription.endpoint === 'string' ? subscription.endpoint.trim() : '';
-    const p256dh = subscription.keys?.p256dh ?? null;
-    const auth = subscription.keys?.auth ?? null;
-    if (!endpoint || !p256dh || !auth) {
-      return NextResponse.json({ error: 'subscription invalide (endpoint/keys manquants)' }, { status: 400 });
-    }
+    const parsedBody = await parseJsonBody(req, pushSubscribeSchema);
+    if (!parsedBody.ok) return parsedBody.response;
+    const { subscription } = parsedBody.data;
+    const endpoint = subscription.endpoint;
 
     const supabase = createServerClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -48,7 +35,7 @@ export async function POST(req: Request) {
     const row = {
       user_id: user.id,
       endpoint,
-      keys: subscription?.keys ?? null,
+      keys: subscription.keys,
       raw: subscription,
     };
 

@@ -8,12 +8,8 @@ import { touchUserStreak } from '@/lib/streaks';
 import { extractEmbeddingUsage, extractGroqUsage, estimateGroqCost, estimateEmbeddingCost } from '@/lib/aiUsage';
 import { ensureQuizQuota, QuotaError } from '@/lib/quota';
 import { logExportEvent } from '@/lib/exportEvents';
+import { parseJsonBody, generateQuizSchema, validateModelQuiz } from '@/lib/validation';
 import { createJinaEmbeddings, extractEmbeddingsFromResponse, formatJinaError } from '@/lib/jinaClient';
-
-type PageRange = {
-  start?: number | null;
-  end?: number | null;
-};
 
 type SectionRow = {
   content: string;
@@ -26,10 +22,9 @@ type SectionRow = {
 // --- Handler de la route API (POST) ---
 export async function POST(req: Request) {
   try {
-    const body = await req.json().catch(() => null);
-    if (!body || typeof body !== 'object') {
-      return NextResponse.json({ error: 'Payload invalide' }, { status: 400 });
-    }
+    const parsedBody = await parseJsonBody(req, generateQuizSchema);
+    if (!parsedBody.ok) return parsedBody.response;
+    const body = parsedBody.data;
 
     // Vérifier la configuration Supabase
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -58,23 +53,13 @@ export async function POST(req: Request) {
       );
     }
     const groq = new Groq({ apiKey: groqKey });
-    const userQuery = typeof body.query === 'string' ? body.query.trim() : '';
-    const documentPath = typeof body.documentPath === 'string' ? body.documentPath : undefined;
-    const numQuestions = typeof body.numQuestions === 'number'
-      ? body.numQuestions
-      : QUIZ_LIMITS.DEFAULT_QUESTIONS;
-    const mode = typeof body.mode === 'string' ? body.mode : 'qcu';
-    const theme = typeof body.theme === 'string' ? body.theme : undefined;
-    const pageRange = (body.pageRange && typeof body.pageRange === 'object')
-      ? (body.pageRange as PageRange)
-      : null;
-
-    const pageStart = typeof pageRange?.start === 'number' && Number.isFinite(pageRange.start)
-      ? pageRange.start
-      : null;
-    const pageEnd = typeof pageRange?.end === 'number' && Number.isFinite(pageRange.end)
-      ? pageRange.end
-      : null;
+    const userQuery = body.query;
+    const documentPath = body.documentPath;
+    const numQuestions = body.numQuestions ?? QUIZ_LIMITS.DEFAULT_QUESTIONS;
+    const mode = body.mode;
+    const theme = body.theme || undefined;
+    const pageStart = body.pageRange?.start ?? null;
+    const pageEnd = body.pageRange?.end ?? null;
 
     const allowedCounts = [5, 7, 10];
     const nearestAllowed = allowedCounts.reduce((prev, cur) => {
@@ -82,16 +67,6 @@ export async function POST(req: Request) {
       return Math.abs(cur - n) < Math.abs(prev - n) ? cur : prev;
     }, QUIZ_LIMITS.DEFAULT_QUESTIONS);
     const count = allowedCounts.includes(numQuestions) ? numQuestions : nearestAllowed;
-    if (!['qcu','qcm','vf'].includes(mode)) {
-      return NextResponse.json({ error: 'Mode invalide (qcu|qcm|vf)' }, { status: 400 });
-    }
-
-    if (!userQuery) {
-      return NextResponse.json(
-        { error: 'Question ("query") manquante' },
-        { status: 400 }
-      );
-    }
 
     // 1. Client Supabase
     const supabase = createServerClient(
@@ -255,14 +230,18 @@ export async function POST(req: Request) {
     });
 
     // 8. Parser la réponse
-    let quizData;
+    let quizData: { quiz: unknown[] };
     try {
-      quizData = JSON.parse(text);
-      if (!quizData || !Array.isArray(quizData.quiz)) {
+      const checked = validateModelQuiz(JSON.parse(text));
+      if (!checked || checked.valid.length === 0) {
         throw new Error(
-          "Le JSON reçu n'a pas la structure attendue { quiz: [...] }."
+          "Le JSON reçu n'a pas la structure attendue { quiz: [...] } ou ne contient aucune question exploitable."
         );
       }
+      if (checked.dropped > 0) {
+        console.warn(`[generate-quiz] ${checked.dropped} question(s) invalide(s) ignorée(s).`);
+      }
+      quizData = { quiz: checked.valid };
     } catch (parseError) {
       // 'parseError' est maintenant utilisé
       console.error(

@@ -2,19 +2,13 @@ import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { createServerClient, type CookieOptions } from '@supabase/ssr';
 import { touchUserStreak } from '@/lib/streaks';
-
-type Body = {
-  flashcardId: string;
-  grade: 0 | 1 | 2 | 3 | 4 | 5; // SM-2 scale
-};
+import { parseJsonBody, flashcardsReviewSchema } from '@/lib/validation';
 
 export async function POST(req: Request) {
   try {
-    const body: Body = await req.json();
-    const { flashcardId, grade } = body;
-    if (!flashcardId || grade === undefined) {
-      return NextResponse.json({ error: 'Paramètres manquants' }, { status: 400 });
-    }
+    const parsedBody = await parseJsonBody(req, flashcardsReviewSchema);
+    if (!parsedBody.ok) return parsedBody.response;
+    const { flashcardId, grade } = parsedBody.data; // grade : échelle SM-2 (0 à 5)
 
     const cookieStore = cookies();
     const supabase = createServerClient(

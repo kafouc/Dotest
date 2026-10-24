@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { createServerClient } from '@supabase/ssr';
-import { createCheckoutSession, type BillingPlan } from '@/lib/billing';
+import { createCheckoutSession } from '@/lib/billing';
+import { parseJsonBody, checkoutSchema } from '@/lib/validation';
 
 function getOrigin(request: Request): string {
   try {
@@ -14,11 +15,9 @@ function getOrigin(request: Request): string {
 
 export async function POST(request: Request) {
   try {
-    const body = await request.json().catch(() => null);
-    const plan = (body && typeof body === 'object' ? body?.plan : undefined) as BillingPlan | undefined;
-    if (!plan || plan === 'freemium') {
-      return NextResponse.json({ error: 'Plan invalide.' }, { status: 400 });
-    }
+    const parsedBody = await parseJsonBody(request, checkoutSchema);
+    if (!parsedBody.ok) return parsedBody.response;
+    const { plan } = parsedBody.data;
 
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
     const supabaseAnon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;

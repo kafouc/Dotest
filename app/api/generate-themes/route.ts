@@ -5,11 +5,7 @@ import Groq from 'groq-sdk';
 import { THEME_GENERATION_CONFIG } from '@/lib/constants';
 import { recordAiUsage } from '@/lib/metricsLogger';
 import { extractGroqUsage, estimateGroqCost } from '@/lib/aiUsage';
-
-type PageRange = {
-  start?: number | null;
-  end?: number | null;
-};
+import { parseJsonBody, generateThemesSchema } from '@/lib/validation';
 
 type SectionRow = {
   content: string;
@@ -25,11 +21,9 @@ const LOCK_TTL_MS = 30_000; // 30s de TTL de sécurité
 export async function POST(req: Request) {
   let docKey: string | undefined;
   try {
-    const body = await req.json();
-    const { documentPath, pageRange } = (body || {}) as {
-      documentPath?: string;
-      pageRange?: PageRange | null;
-    };
+    const parsedBody = await parseJsonBody(req, generateThemesSchema);
+    if (!parsedBody.ok) return parsedBody.response;
+    const { documentPath, pageRange } = parsedBody.data;
 
     const pageStart = pageRange?.start ?? null;
     const pageEnd = pageRange?.end ?? null;

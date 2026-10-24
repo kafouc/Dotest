@@ -2,13 +2,13 @@ import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { createServerClient } from '@supabase/ssr';
 import { touchUserStreak } from '@/lib/streaks';
+import { parseJsonBody, flashcardsGenerateSchema } from '@/lib/validation';
 
 export async function POST(req: Request) {
   try {
-    const { documentPath, limit = 20 } = await req.json();
-    if (!documentPath) {
-      return NextResponse.json({ error: 'documentPath requis' }, { status: 400 });
-    }
+    const parsedBody = await parseJsonBody(req, flashcardsGenerateSchema);
+    if (!parsedBody.ok) return parsedBody.response;
+    const { documentPath, limit } = parsedBody.data;
 
     const cookieStore = cookies();
     const supabase = createServerClient(

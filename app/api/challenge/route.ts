@@ -1,14 +1,7 @@
 import { NextResponse } from 'next/server';
 import { clientIp, rateLimit } from '@/lib/rateLimit';
+import { parseJsonBody, challengeSchema } from '@/lib/validation';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
-import type { QuizQuestion } from '@/lib/quiz.types';
-
-type ChallengePayload = {
-  quiz: QuizQuestion[];
-  score: number;
-  total: number;
-  authorName?: string | null;
-};
 
 let cachedClient: SupabaseClient | null = null;
 let initAttempted = false;
@@ -60,29 +53,12 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Supabase non configuré' }, { status: 500 });
   }
 
-  let payload: ChallengePayload;
+  const parsedBody = await parseJsonBody(request, challengeSchema);
+  if (!parsedBody.ok) return parsedBody.response;
+  const payload = parsedBody.data;
+  const { score, total } = payload;
 
-  try {
-    payload = (await request.json()) as ChallengePayload;
-  } catch {
-    return NextResponse.json({ error: 'Requête invalide' }, { status: 400 });
-  }
-
-  if (!Array.isArray(payload.quiz) || payload.quiz.length === 0 || payload.quiz.length > 50) {
-    return NextResponse.json({ error: 'Quiz manquant ou trop long' }, { status: 400 });
-  }
-  if (JSON.stringify(payload.quiz).length > 200_000) {
-    return NextResponse.json({ error: 'Quiz trop volumineux' }, { status: 413 });
-  }
-
-  const score = Number.parseInt(String(payload.score), 10);
-  const total = Number.parseInt(String(payload.total), 10);
-
-  if (!Number.isFinite(score) || !Number.isFinite(total) || total <= 0 || score < 0 || score > total) {
-    return NextResponse.json({ error: 'Score invalide' }, { status: 400 });
-  }
-
-  const authorName = payload.authorName?.trim().slice(0, 80) || null;
+  const authorName = payload.authorName || null;
 
   try {
     const { data, error } = await client

@@ -3,20 +3,13 @@
 // Remplace l'appel aux Edge Functions Supabase par les API routes Next.js
 
 import { NextResponse } from 'next/server';
+import { parseJsonBody, processFileSchema } from '@/lib/validation';
 
 export async function POST(req: Request) {
   try {
-    const body = await req.json().catch(() => ({}));
-    const filePath = typeof body?.filePath === 'string' ? body.filePath : '';
-    const documentId = Number(body?.documentId);
-    const mimeType = typeof body?.mimeType === 'string' ? body.mimeType : undefined;
-
-    if (!filePath || !Number.isFinite(documentId)) {
-      return NextResponse.json(
-        { error: 'Chemin du fichier ou ID de document manquant' },
-        { status: 400 }
-      );
-    }
+    const parsedBody = await parseJsonBody(req, processFileSchema);
+    if (!parsedBody.ok) return parsedBody.response;
+    const { filePath, documentId, mimeType } = parsedBody.data;
 
     // Vérifier le type de fichier supporté
     const type = (mimeType || '').toLowerCase();
