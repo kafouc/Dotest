@@ -10,6 +10,7 @@ import DocumentTabs from '@/components/app/DocumentTabs';
 import ActiveDocument from '@/components/app/ActiveDocument';
 import WelcomePanel from '@/components/app/WelcomePanel';
 import CheckoutNoticeBanner from '@/components/app/CheckoutNoticeBanner';
+import OnboardingChecklist from '@/components/app/OnboardingChecklist';
 import UploadForm from '@/components/UploadForm';
 import PWAInstallPrompt from '@/components/PWAInstallPrompt';
 import AutoEnablePushNotifications from '@/components/AutoEnablePushNotifications';
@@ -23,6 +24,7 @@ import { useDocumentTabs } from '@/hooks/useDocumentTabs';
 import { useUserPlan } from '@/hooks/useUserPlan';
 import { useUserStreak } from '@/hooks/useUserStreak';
 import { useReviewSummary } from '@/hooks/useReviewSummary';
+import { useOnboarding } from '@/hooks/useOnboarding';
 import { trackPageView } from '@/lib/trackPageView';
 import type { DocumentInfo } from '@/lib/types';
 
@@ -42,10 +44,12 @@ function AppHomeContent() {
   const { notice: checkoutNotice, dismiss: dismissCheckoutNotice } = useCheckoutNotice();
   const userPlan = useUserPlan(supabase, session, checkoutNotice);
   const { streak, refreshStreak } = useUserStreak(supabase, userId);
-  const { summary: reviewSummary } = useReviewSummary(supabase, userId);
+  const { summary: reviewSummary, refreshSummary: refreshReviewSummary } = useReviewSummary(supabase, userId);
   const { documents, isLoadingDocs, fetchDocuments, deleteDocument, deletingPath, retryDocument } = useDocuments(supabase, session);
   const tabs = useDocumentTabs(fetchDocuments);
 
+  const onboarding = useOnboarding(supabase, userId, documents.length);
+  const [creatingSample, setCreatingSample] = useState(false);
   const [isSidebarMinimized, setIsSidebarMinimized] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
@@ -77,6 +81,36 @@ function AppHomeContent() {
   const handleRetryDocument = async (doc: DocumentInfo) => {
     const result = await retryDocument(doc);
     showToast(result.ok ? "Analyse relancée." : result.message, result.ok ? 'success' : 'error');
+  };
+
+  const handleCreateSample = async () => {
+    setCreatingSample(true);
+    try {
+      const response = await fetch('/api/onboarding/sample', { method: 'POST' });
+      const data = (await response.json().catch(() => null)) as { documentPath?: string; error?: string } | null;
+      if (!response.ok || !data?.documentPath) {
+        showToast(data?.error || "Impossible de créer le document d'exemple.", 'error');
+        return;
+      }
+      await fetchDocuments(false);
+      tabs.selectDocument(data.documentPath);
+      void onboarding.refresh();
+      showToast("Document d'exemple prêt : choisissez un thème et générez votre premier quiz.", 'success');
+    } finally {
+      setCreatingSample(false);
+    }
+  };
+
+  // Une activité (quiz généré, carte révisée…) met à jour la série, les compteurs de révision et le parcours guidé
+  const handleActivity = () => {
+    void refreshStreak();
+    void refreshReviewSummary();
+    void onboarding.refresh();
+  };
+
+  const handleOpenFirstDocument = () => {
+    const first = documents[0];
+    if (first) tabs.selectDocument(first.path || first.name);
   };
 
   if (isCheckingAuth) {
@@ -157,6 +191,19 @@ function AppHomeContent() {
             />
           )}
 
+          {onboarding.loaded && !onboarding.dismissed && onboarding.completed < onboarding.total && (
+            <OnboardingChecklist
+              steps={onboarding.steps}
+              hasDocuments={documents.length > 0}
+              creatingSample={creatingSample}
+              onUpload={tabs.createNew}
+              onCreateSample={handleCreateSample}
+              onOpenFirstDocument={handleOpenFirstDocument}
+              onOpenReview={() => router.push('/review')}
+              onDismiss={onboarding.dismiss}
+            />
+          )}
+
           <main className="flex-1 overflow-y-auto bg-white">
             <div className="h-full p-6">
               {tabs.showUploadForm ? (
@@ -177,7 +224,7 @@ function AppHomeContent() {
                       deletingPath={deletingPath}
                       onDelete={handleDeleteDocument}
                       onRetry={handleRetryDocument}
-                      onActivity={refreshStreak}
+                      onActivity={handleActivity}
                     />
                   )}
                 </motion.div>
