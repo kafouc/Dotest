@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { createErrorCards } from '@/lib/flashcards';
 
 export type AttemptContext = {
   document_path?: string;
@@ -15,6 +16,9 @@ export type AnswerInput = {
   correctAnswer: string;
   justification?: string;
   isCorrect: boolean;
+  /** Texte de la bonne réponse (pour créer une carte de révision quand la question est ratée) */
+  correctAnswerText?: string;
+  sourceLabel?: string | null;
 };
 
 export async function recordQuizAttempt(
@@ -73,6 +77,21 @@ export async function recordQuizAttempt(
     const { error: ansErr } = await supabase.from('quiz_answers').insert(rows);
     if (ansErr) throw ansErr;
   }
+
+  // 3) Les questions ratées deviennent des cartes de révision (espacées par l'algorithme de répétition)
+  await createErrorCards(
+    supabase,
+    userId,
+    answers
+      .filter((a) => !a.isCorrect && a.correctAnswerText)
+      .map((a) => ({
+        question: a.question,
+        correctAnswerText: a.correctAnswerText as string,
+        justification: a.justification,
+        sourceLabel: a.sourceLabel,
+        documentPath: context?.document_path ?? null,
+      }))
+  );
 
   return attempt;
 }

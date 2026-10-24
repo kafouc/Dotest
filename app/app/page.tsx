@@ -22,6 +22,7 @@ import { useDocuments } from '@/hooks/useDocuments';
 import { useDocumentTabs } from '@/hooks/useDocumentTabs';
 import { useUserPlan } from '@/hooks/useUserPlan';
 import { useUserStreak } from '@/hooks/useUserStreak';
+import { useReviewSummary } from '@/hooks/useReviewSummary';
 import { trackPageView } from '@/lib/trackPageView';
 import type { DocumentInfo } from '@/lib/types';
 
@@ -41,6 +42,7 @@ function AppHomeContent() {
   const { notice: checkoutNotice, dismiss: dismissCheckoutNotice } = useCheckoutNotice();
   const userPlan = useUserPlan(supabase, session, checkoutNotice);
   const { streak, refreshStreak } = useUserStreak(supabase, userId);
+  const { summary: reviewSummary } = useReviewSummary(supabase, userId);
   const { documents, isLoadingDocs, fetchDocuments, deleteDocument, deletingPath, retryDocument } = useDocuments(supabase, session);
   const tabs = useDocumentTabs(fetchDocuments);
 
@@ -119,6 +121,7 @@ function AppHomeContent() {
           onCloseMobile={() => setIsMobileMenuOpen(false)}
           streak={streak}
           userPlan={userPlan}
+          reviewPending={reviewSummary ? reviewSummary.dueCount + reviewSummary.newCount : 0}
         />
 
         <div className="flex-1 flex flex-col overflow-hidden w-full">
@@ -181,6 +184,7 @@ function AppHomeContent() {
               ) : (
                 <motion.div {...fadeIn}>
                   <WelcomePanel
+                    reviewSummary={reviewSummary}
                     documents={documents}
                     onCreateNew={tabs.createNew}
                     onSelectDocument={tabs.selectDocument}

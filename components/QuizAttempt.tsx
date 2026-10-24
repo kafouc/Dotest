@@ -7,7 +7,7 @@ import { createSupabaseBrowserClient } from '@/lib/supabaseClient';
 import { recordQuizAttempt, type AttemptContext, type AnswerInput } from '@/lib/scores';
 import type { QuizQuestion } from '@/lib/quiz.types';
 import { QUIZ_CONFIG } from '@/lib/constants';
-import { calculateQuizScore, isAnswerCorrect } from '@/lib/utils';
+import { calculateQuizScore, isAnswerCorrect, correctAnswerText } from '@/lib/utils';
 import { initCardState, scheduleReview, getMetrics } from '@/lib/fsrs';
 
 type GateResultsOptions = {
@@ -125,6 +125,8 @@ export default function QuizAttempt({
           correctAnswer: normalizedCorrect,
           justification: question.justification,
           isCorrect,
+          correctAnswerText: correctAnswerText(question),
+          sourceLabel: formatSource(question.source),
         };
       });
 

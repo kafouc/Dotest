@@ -24,6 +24,8 @@ type SidebarProps = {
   onCloseMobile?: () => void;
   streak?: UserStreak | null;
   userPlan?: SubscriptionPlan;
+  /** Cartes à réviser aujourd'hui (badge du lien « Réviser ») */
+  reviewPending?: number;
 };
 
 export default function Sidebar({ 
@@ -41,6 +43,7 @@ export default function Sidebar({
   onCloseMobile,
   streak,
   userPlan,
+  reviewPending = 0,
 }: SidebarProps) {
   const currentStreak = streak?.current_streak ?? 0;
   const streakLabel = currentStreak > 0 ? `${currentStreak} jour${currentStreak > 1 ? 's' : ''}` : '0 jour';
@@ -201,6 +204,29 @@ export default function Sidebar({
 
       {/* Navigation */}
       <nav className={`${isMinimized ? 'px-2' : 'px-4'} py-4 space-y-2`}>
+        <Link
+          href="/review"
+          className={`flex items-center gap-3 px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition-colors ${
+            isMinimized ? 'justify-center px-2' : ''
+          }`}
+          title={isMinimized ? 'Réviser aujourd\'hui' : ''}
+        >
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+          </svg>
+          {!isMinimized ? (
+            <>
+              <span>Réviser aujourd&apos;hui</span>
+              {reviewPending > 0 && (
+                <span className="ml-auto inline-flex min-w-[1.5rem] items-center justify-center rounded-full bg-brand-yellow px-2 py-0.5 text-[11px] font-semibold text-brand-dark">
+                  {reviewPending > 99 ? '99+' : reviewPending}
+                </span>
+              )}
+            </>
+          ) : (
+            <span className="sr-only">Réviser aujourd&apos;hui{reviewPending > 0 ? ` (${reviewPending})` : ''}</span>
+          )}
+        </Link>
         <Link
           href="/settings"
           className={`flex items-center gap-3 px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition-colors ${

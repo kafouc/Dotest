@@ -2,15 +2,38 @@
 
 import type { DocumentInfo } from '@/lib/types';
 
+import Link from 'next/link';
+import type { ReviewSummary } from '@/lib/flashcards';
+
 type Props = {
+  /** Compteurs de révision du jour (absent tant que la migration n'est pas appliquée) */
+  reviewSummary?: ReviewSummary | null;
   documents: DocumentInfo[];
   onCreateNew: () => void;
   onSelectDocument: (documentId: string) => void;
 };
 
-export default function WelcomePanel({ documents, onCreateNew, onSelectDocument }: Props) {
+export default function WelcomePanel({ reviewSummary, documents, onCreateNew, onSelectDocument }: Props) {
+  const pending = reviewSummary ? reviewSummary.dueCount + reviewSummary.newCount : 0;
   return (
     <div className="max-w-6xl mx-auto">
+      {reviewSummary && pending > 0 && (
+        <Link
+          href="/review"
+          className="mb-6 flex items-center justify-between gap-4 rounded-xl border border-brand-yellow bg-brand-yellow-light px-5 py-4 hover:shadow-md transition-shadow"
+        >
+          <span>
+            <span className="block font-heading font-bold text-brand-dark">
+              {pending} carte{pending > 1 ? 's' : ''} à réviser aujourd&apos;hui
+            </span>
+            <span className="block text-sm text-brand-dark-light">
+              {reviewSummary.reviewedToday}/{reviewSummary.dailyGoal} faites
+              {reviewSummary.quizErrorDue > 0 ? ` · dont ${reviewSummary.quizErrorDue} tirées de vos erreurs de quiz` : ''}
+            </span>
+          </span>
+          <span className="rounded-full bg-brand-yellow px-4 py-2 text-sm font-semibold text-brand-dark">Réviser</span>
+        </Link>
+      )}
       <div className="text-center py-12">
         <h2 className="text-3xl font-heading font-bold text-brand-dark mb-4">Bienvenue sur SheetOfPaper</h2>
         <p className="text-gray-600 mb-8">

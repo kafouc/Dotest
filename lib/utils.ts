@@ -140,3 +140,18 @@ export function calculateQuizScore(quizQuestions: QuizQuestion[], selectedAnswer
   });
   return score;
 }
+
+/** Texte lisible de la bonne réponse d'une question : « B – Lyon » ou « A – x ; C – z ». */
+export function correctAnswerText(question: QuizQuestion): string {
+  const options = (question.options ?? {}) as Record<string, string>;
+  const letters = 'reponses_correctes' in question ? question.reponses_correctes ?? [] : [question.reponse_correcte];
+  return letters
+    .map((raw) => {
+      const key = String(raw ?? '').trim();
+      const text = options[key] ?? options[key.toUpperCase()] ?? options[key.toLowerCase()];
+      if (key === 'VRAI' || key === 'FAUX') return text ?? (key === 'VRAI' ? 'Vrai' : 'Faux');
+      return text ? `${key.toUpperCase()} – ${text}` : key.toUpperCase();
+    })
+    .filter(Boolean)
+    .join(' ; ');
+}
