@@ -79,6 +79,9 @@ export const RETRIEVAL_CONFIG = {
   VECTOR_THRESHOLD: 0.2,
 } as const;
 
+/** Nombre de classes actives par forfait (appliqué en base par le trigger enforce_class_limit). */
+export const CLASS_LIMITS = { freemium: 1, partial: 5, pro: 30 } as const;
+
 export const THEME_GENERATION_CONFIG = {
   MAX_CONTEXT_CHARS: 8_000,
   MAX_THEMES: 5,

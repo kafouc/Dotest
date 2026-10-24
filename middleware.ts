@@ -3,7 +3,7 @@ import type { NextRequest } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
 
 const MARKETING_PATHS = ['/', '/vitrine'];
-const PROTECTED_PREFIXES = ['/app', '/settings', '/review'];
+const PROTECTED_PREFIXES = ['/app', '/settings', '/review', '/classes'];
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -58,5 +58,5 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/', '/vitrine', '/app/:path*', '/settings/:path*', '/review/:path*'],
+  matcher: ['/', '/vitrine', '/app/:path*', '/settings/:path*', '/review/:path*', '/classes/:path*'],
 };

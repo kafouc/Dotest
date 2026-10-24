@@ -113,11 +113,14 @@ export async function createSharedQuiz(
  */
 export async function createQuizSession(
   supabase: SupabaseClient,
-  sharedQuizId: string
+  sharedQuizId: string,
+  classId?: string | null
 ): Promise<QuizSession> {
-  // Utilise une RPC sécurisée côté DB pour éviter les erreurs RLS/500
+  // Utilise une RPC sécurisée côté DB pour éviter les erreurs RLS/500.
+  // `p_class_id` n'est envoyé que si une classe est choisie (compatible avec l'ancienne signature).
   const { data, error } = await supabase.rpc('create_quiz_session', {
     p_shared_quiz_id: sharedQuizId,
+    ...(classId ? { p_class_id: classId } : {}),
   });
 
   if (error) throw error;

@@ -1,8 +1,10 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { createSupabaseBrowserClient } from '@/lib/supabaseClient';
 import { createSharedQuiz, createQuizSession } from '@/lib/liveQuiz';
+import { listClasses, type ClassRow } from '@/lib/classes';
 import type { QuizQuestion } from '@/lib/quiz.types';
 import QRCode from 'qrcode';
 import ToastContainer, { useToast } from '@/components/ui/Toast';
@@ -19,6 +21,13 @@ export default function ShareQuizButton({ quizTitle, questions }: Props) {
   const [qrCodeUrl, setQrCodeUrl] = useState<string | null>(null);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const { toasts, showToast, removeToast } = useToast();
+  const [classes, setClasses] = useState<ClassRow[]>([]);
+  const [classId, setClassId] = useState('');
+
+  // Classes de l'enseignant (liste vide si l'espace enseignant n'est pas activé : le partage fonctionne comme avant)
+  useEffect(() => {
+    listClasses(supabase).then(setClasses).catch(() => setClasses([]));
+  }, [supabase]);
 
   const handleShare = async () => {
     try {
@@ -43,7 +52,7 @@ export default function ShareQuizButton({ quizTitle, questions }: Props) {
       });
 
       // 2. Créer une session
-      const session = await createQuizSession(supabase, sharedQuiz.id);
+      const session = await createQuizSession(supabase, sharedQuiz.id, classId || null);
 
       // 3. Générer le QR code
       const joinUrl = `${window.location.origin}/join/${sharedQuiz.share_code}`;
@@ -130,15 +139,39 @@ export default function ShareQuizButton({ quizTitle, questions }: Props) {
   return (
     <>
       <ToastContainer toasts={toasts} onClose={removeToast} />
-      <button
-        type="button"
-        onClick={handleShare}
-        disabled={loading}
-        className="px-4 py-2 bg-brand-teal text-white rounded-md hover:bg-brand-teal-dark disabled:opacity-50 flex items-center gap-2 font-semibold"
-      >
-        <span>📱</span>
-        {loading ? 'Partage en cours...' : 'Partager en temps réel'}
-      </button>
+      <div className="flex flex-wrap items-center gap-2">
+        <label className="flex items-center gap-2 text-sm text-gray-700">
+          <span className="sr-only sm:not-sr-only">Classe</span>
+          <select
+            value={classId}
+            onChange={(e) => setClassId(e.target.value)}
+            disabled={loading}
+            aria-label="Classe de cette séance"
+            className="rounded-md border border-gray-300 bg-white px-2 py-2 text-sm"
+          >
+            <option value="">Sans classe</option>
+            {classes.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <button
+          type="button"
+          onClick={handleShare}
+          disabled={loading}
+          className="px-4 py-2 bg-brand-teal text-white rounded-md hover:bg-brand-teal-dark disabled:opacity-50 flex items-center gap-2 font-semibold"
+        >
+          <span>📱</span>
+          {loading ? 'Partage en cours...' : 'Partager en temps réel'}
+        </button>
+        {classes.length === 0 && (
+          <Link href="/classes" className="text-xs text-gray-500 underline-offset-2 hover:underline">
+            Créer une classe
+          </Link>
+        )}
+      </div>
     </>
   );
 }
