@@ -4,6 +4,7 @@ import { createServerClient } from '@supabase/ssr';
 import { logPageView } from '@/lib/metricsLogger';
 import type { PageViewEvent } from '@/lib/metricsLogger';
 import { createHash } from 'node:crypto';
+import { clientIp, rateLimit } from '@/lib/rateLimit';
 
 export const runtime = 'nodejs';
 
@@ -15,6 +16,10 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Supabase non configuré' }, { status: 503 });
   }
 
+  if (!rateLimit(`page-view:${clientIp(req)}`, 120, 60_000)) {
+    return NextResponse.json({ error: 'Trop de requêtes' }, { status: 429 });
+  }
+
   try {
     let payload: Partial<PageViewEvent> = {};
     try {
@@ -24,9 +29,9 @@ export async function POST(req: Request) {
     }
 
     const requestHeaders = headers();
-    const referrer = payload.referrer ?? requestHeaders.get('referer') ?? null;
-    const userAgent = payload.userAgent ?? requestHeaders.get('user-agent') ?? null;
-    const country = payload.country ?? requestHeaders.get('x-vercel-ip-country') ?? null;
+    const referrer = requestHeaders.get('referer') ?? payload.referrer ?? null;
+    const userAgent = requestHeaders.get('user-agent') ?? null;
+    const country = requestHeaders.get('x-vercel-ip-country') ?? null;
 
     const forwardedFor = requestHeaders.get('x-forwarded-for') ?? '';
     const ip = forwardedFor.split(',')[0]?.trim() || requestHeaders.get('x-real-ip') || null;

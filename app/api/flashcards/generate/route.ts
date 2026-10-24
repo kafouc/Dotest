@@ -95,7 +95,7 @@ export async function POST(req: Request) {
     }
     if ((lower.includes('does not exist') || lower.includes('relation')) && lower.includes('document_sections')) {
       return NextResponse.json({
-        error: "DOCUMENT_SECTIONS_MISSING: La table 'document_sections' est absente. Veuillez exécuter les migrations initiales (voir INSTALL_STEP_BY_STEP.sql).",
+        error: "DOCUMENT_SECTIONS_MISSING: La table 'document_sections' est absente. Veuillez exécuter les migrations initiales (voir docs/sql/INSTALL_STEP_BY_STEP.sql).",
       }, { status: 400 });
     }
     return NextResponse.json({ error: msg }, { status: 500 });

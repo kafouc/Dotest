@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { clientIp, rateLimit } from '@/lib/rateLimit';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import type { QuizQuestion } from '@/lib/quiz.types';
 
@@ -50,6 +51,10 @@ function getAdminClient(): SupabaseClient | null {
 }
 
 export async function POST(request: Request) {
+  if (!rateLimit(`challenge:${clientIp(request)}`, 10, 60 * 60_000)) {
+    return NextResponse.json({ error: 'Trop de requêtes, réessayez plus tard.' }, { status: 429 });
+  }
+
   const client = getAdminClient();
   if (!client) {
     return NextResponse.json({ error: 'Supabase non configuré' }, { status: 500 });

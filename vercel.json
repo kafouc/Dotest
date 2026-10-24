@@ -3,10 +3,6 @@
     "app/api/pdf/extract/route.ts": {
       "maxDuration": 300,
       "memory": 2048
-    },
-    "app/api/pdf/embed-batch/route.ts": {
-      "maxDuration": 300,
-      "memory": 2048
     }
   },
   "headers": [

@@ -1,7 +1,11 @@
 import { NextResponse } from 'next/server';
+import { clientIp, rateLimit } from '@/lib/rateLimit';
 
 // Simple image proxy for ibb.co page URLs -> resolves og:image (i.ibb.co direct image)
 export async function GET(req: Request) {
+  if (!rateLimit(`image-proxy:${clientIp(req)}`, 60, 60_000)) {
+    return NextResponse.json({ error: 'Trop de requêtes' }, { status: 429 });
+  }
   try {
     const { searchParams } = new URL(req.url);
     const pageUrl = searchParams.get('url');

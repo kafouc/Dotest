@@ -41,9 +41,10 @@ export async function middleware(request: NextRequest) {
     },
   });
 
+  // getUser() valide le jeton auprès de Supabase (getSession() ne fait que lire le cookie).
   const {
-    data: { session },
-  } = await supabase.auth.getSession();
+    data: { user: session },
+  } = await supabase.auth.getUser();
 
   if (isProtected && !session) {
     return NextResponse.redirect(new URL('/login', request.url));
