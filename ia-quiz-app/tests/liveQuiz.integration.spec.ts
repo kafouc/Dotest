@@ -18,16 +18,26 @@ const anonClient = SUPABASE_URL && ANON_KEY ? createClient(SUPABASE_URL, ANON_KE
 let sharedQuizId: string | undefined;
 let shareCode: string | undefined;
 let sessionId: string | undefined;
+let testUserId: string | undefined;
 
 const SKIP_REASON = !SUPABASE_URL ? 'SUPABASE_URL manquant' : !SERVICE_KEY ? 'SERVICE_ROLE_KEY manquant' : undefined;
 
 describe('Live Quiz Integration', () => {
   beforeAll(async () => {
     if (SKIP_REASON || !serviceClient) return;
-    // Créer un quiz partagé minimal (questions = tableau vide acceptable ? sinon mock)
+    // Le trigger fn_set_creator_id exige un créateur : on crée un utilisateur jetable
+    // (supprimé en afterAll, ce qui supprime aussi ses quiz par cascade).
+    const { data: created, error: userErr } = await serviceClient.auth.admin.createUser({
+      email: `integration-${Date.now()}@example.test`,
+      password: crypto.randomUUID(),
+      email_confirm: true,
+    });
+    if (userErr) throw userErr;
+    testUserId = created.user.id;
+
     const { data, error } = await serviceClient
       .from('shared_quizzes')
-      .insert({ title: 'Integration Test Quiz', questions: [{ question: 'X?', options: { A: 'a', B: 'b', C: 'c', D: 'd' }, reponse_correcte: 'A', justification: 'parce que' }], is_active: true })
+      .insert({ creator_id: testUserId, title: 'Integration Test Quiz', questions: [{ question: 'X?', options: { A: 'a', B: 'b', C: 'c', D: 'd' }, reponse_correcte: 'A', justification: 'parce que' }], is_active: true })
       .select()
       .single();
     if (error) throw error;
@@ -39,11 +49,21 @@ describe('Live Quiz Integration', () => {
     if (serviceClient && sharedQuizId) {
       await serviceClient.from('shared_quizzes').delete().eq('id', sharedQuizId);
     }
+    if (serviceClient && testUserId) {
+      await serviceClient.auth.admin.deleteUser(testUserId);
+    }
   });
 
   it('RPC create_quiz_session retourne une session waiting', async () => {
     if (SKIP_REASON || !serviceClient || !sharedQuizId) return; // skip silencieux
-    const { data, error } = await serviceClient.rpc('create_quiz_session', { p_shared_quiz_id: sharedQuizId });
+    // La RPC vérifie auth.uid() : on l'appelle en tant que créateur (utilisateur jetable connecté).
+    const password = 'Test-' + crypto.randomUUID();
+    await serviceClient.auth.admin.updateUserById(testUserId!, { password });
+    const { data: userData } = await serviceClient.auth.admin.getUserById(testUserId!);
+    const creatorClient = createClient(SUPABASE_URL!, ANON_KEY!, { auth: { autoRefreshToken: false, persistSession: false } });
+    const { error: signInErr } = await creatorClient.auth.signInWithPassword({ email: userData.user!.email!, password });
+    expect(signInErr).toBeNull();
+    const { data, error } = await creatorClient.rpc('create_quiz_session', { p_shared_quiz_id: sharedQuizId });
     expect(error).toBeNull();
     expect(data).toBeTruthy();
     expect(data.status).toBe('waiting');
