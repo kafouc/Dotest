@@ -27,7 +27,7 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "framer-motion": "^12.23.24",
-    "groq-sdk": "^0.34.0",
+    "groq-sdk": "^1.6.0",
     "gsap": "^3.13.0",
     "jszip": "^3.10.1",
     "lucide-react": "^0.556.0",
