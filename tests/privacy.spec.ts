@@ -35,6 +35,11 @@ describe('consentement', () => {
     expect(dispatched).toContain('sop-consent-changed');
     writeConsent(false);
     expect(hasAnalyticsConsent()).toBe(false);
+    const { wantsReminders } = await import('@/lib/consent');
+    expect(wantsReminders()).toBe(false);
+    writeConsent(false, true);
+    expect(wantsReminders()).toBe(true);
+    expect(hasAnalyticsConsent()).toBe(false);
   });
 
   it('ignore une valeur corrompue', async () => {

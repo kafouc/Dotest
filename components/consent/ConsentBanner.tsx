@@ -3,13 +3,23 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { CONSENT_OPEN_EVENT, readConsent, writeConsent } from '@/lib/consent';
+import { isIosDevice } from '@/lib/pushPrompt';
 
 /** Bandeau de consentement : « Accepter » et « Refuser » ont la même importance, refuser est aussi simple qu'accepter. */
 export default function ConsentBanner() {
   const [visible, setVisible] = useState(false);
+  const [canRemind, setCanRemind] = useState(false);
+  const [reminders, setReminders] = useState(false);
 
   useEffect(() => {
-    setVisible(readConsent() === null);
+    const current = readConsent();
+    setVisible(current === null);
+    setReminders(current?.reminders === true);
+    // Les notifications web n'existent sur iPhone qu'une fois l'application installée : la case n'a alors pas de sens ici
+    const standalone = window.matchMedia?.('(display-mode: standalone)').matches === true;
+    setCanRemind(
+      'Notification' in window && 'serviceWorker' in navigator && 'PushManager' in window && Notification.permission !== 'denied' && (!isIosDevice(navigator.userAgent, navigator.maxTouchPoints) || standalone)
+    );
     const open = () => setVisible(true);
     window.addEventListener(CONSENT_OPEN_EVENT, open);
     return () => window.removeEventListener(CONSENT_OPEN_EVENT, open);
@@ -18,7 +28,11 @@ export default function ConsentBanner() {
   if (!visible) return null;
 
   const choose = (analytics: boolean) => {
-    writeConsent(analytics);
+    // L'autorisation du navigateur doit être demandée pendant ce clic ; l'abonnement se termine à la connexion
+    if (canRemind && reminders && Notification.permission === 'default') {
+      void Notification.requestPermission().catch(() => undefined);
+    }
+    writeConsent(analytics, canRemind && reminders);
     setVisible(false);
   };
 
@@ -40,6 +54,14 @@ export default function ConsentBanner() {
               En savoir plus
             </Link>
           </p>
+          {canRemind && (
+            <label className="mt-2 flex cursor-pointer items-start gap-2">
+              <input type="checkbox" checked={reminders} onChange={(e) => setReminders(e.target.checked)} className="mt-0.5 h-4 w-4 accent-brand-teal" />
+              <span>
+                <span className="font-semibold text-brand-dark">Rappels de révision</span> : recevoir des notifications (matin, midi, soir). Facultatif, indépendant de la mesure d&apos;audience.
+              </span>
+            </label>
+          )}
         </div>
         <div className="flex shrink-0 gap-2">
           <button type="button" onClick={() => choose(false)} className="rounded-full border border-gray-400 px-5 py-2 text-sm font-semibold text-brand-dark hover:bg-gray-50">

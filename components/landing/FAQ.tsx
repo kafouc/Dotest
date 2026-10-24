@@ -26,12 +26,17 @@ const faqs = [
   {
     question: 'Quels formats de PDF sont supportés ?',
     answer:
-      'Nous supportons tous les PDFs standards. La limite est de 2 Mo et 20 pages par document pour garantir une génération rapide.',
+      'PDF, Word (.docx) et PowerPoint (.pptx / .ppt). La limite est de 50 Mo et environ 500 pages par document ; l\'analyse se fait en arrière-plan.',
+  },
+  {
+    question: 'Comment installer l\'application sur mon téléphone ?',
+    answer:
+      'Sur iPhone : ouvrez le site dans Safari, appuyez sur Partager puis sur « Sur l\'écran d\'accueil ». Sur Android : menu ⋮ de Chrome puis « Installer l\'application ». Aucun store n\'est nécessaire ; le détail pas à pas est dans la section « Installez Sheet of Paper sur votre téléphone ».',
   },
   {
     question: 'Puis-je utiliser Sheet of Paper hors ligne ?',
     answer:
-      'Non, Sheet of Paper nécessite une connexion internet pour la génération de quiz et la synchronisation en temps réel.',
+      'Pas complètement : la génération de quiz et la synchronisation en direct nécessitent une connexion internet. L\'application installée s\'ouvre vite et affiche une page de secours quand le réseau est coupé.',
   },
 ];
 

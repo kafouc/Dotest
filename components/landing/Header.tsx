@@ -47,6 +47,12 @@ export default function Header() {
               Comment ça marche
             </a>
             <a
+              href="#installer"
+              className="text-sm font-body text-gray-700 hover:text-brand-yellow transition-colors"
+            >
+              Installer l’app
+            </a>
+            <a
               href="#pricing"
               className="text-sm font-body text-gray-700 hover:text-brand-yellow transition-colors"
             >
@@ -131,6 +137,13 @@ export default function Header() {
               onClick={() => setIsMobileMenuOpen(false)}
             >
               Comment ça marche
+            </a>
+            <a
+              href="#installer"
+              className="block text-base font-body text-gray-700 hover:text-brand-yellow transition-colors py-2"
+              onClick={() => setIsMobileMenuOpen(false)}
+            >
+              Installer l’app
             </a>
             <a
               href="#pricing"

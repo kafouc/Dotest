@@ -31,7 +31,7 @@ const UploadForm = dynamic(() => import('@/components/UploadForm'), {
 });
 // Invites secondaires : chargées après l'affichage de l'application
 const PWAInstallPrompt = dynamic(() => import('@/components/PWAInstallPrompt'), { ssr: false });
-const AutoEnablePushNotifications = dynamic(() => import('@/components/AutoEnablePushNotifications'), { ssr: false });
+const PushPrompt = dynamic(() => import('@/components/app/PushPrompt'), { ssr: false });
 
 const fadeIn = {
   initial: { opacity: 0, y: 20 },
@@ -209,6 +209,8 @@ function AppHomeContent() {
             />
           )}
 
+          <PushPrompt hasContent={documents.length > 0} />
+
           <main className="flex-1 overflow-y-auto bg-white">
             <div className="h-full p-6">
               {tabs.showUploadForm ? (
@@ -247,7 +249,6 @@ function AppHomeContent() {
           </main>
         </div>
         <PWAInstallPrompt />
-        <AutoEnablePushNotifications />
       </div>
     </>
   );

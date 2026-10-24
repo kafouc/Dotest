@@ -4,6 +4,7 @@ import { useEffect } from 'react';
 import Header from '@/components/landing/Header';
 import Hero from '@/components/landing/Hero';
 import HowItWorks from '@/components/landing/HowItWorks';
+import InstallApp from '@/components/landing/InstallApp';
 import Pricing from '@/components/landing/Pricing';
 import FAQ from '@/components/landing/FAQ';
 import CTA from '@/components/landing/CTA';
@@ -31,6 +32,10 @@ export default function Home() {
       </div>
 
       <div className="section-gradient section-gradient--sunrise">
+        <InstallApp />
+      </div>
+
+      <div className="section-gradient section-gradient--emerald">
         <Pricing />
       </div>
 
