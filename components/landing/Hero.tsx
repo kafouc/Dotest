@@ -158,6 +158,13 @@ export default function Hero() {
               >
                 Commencer
               </button>
+              <button
+                type="button"
+                onClick={() => router.push("/essai")}
+                className="mt-4 text-sm font-semibold text-brand-dark underline underline-offset-4 hover:text-brand-dark-light md:text-base"
+              >
+                Essayer maintenant, sans compte
+              </button>
             </div>
 
             <p className="text-xs uppercase tracking-[0.3em] text-brand-dark-lighter md:text-sm">

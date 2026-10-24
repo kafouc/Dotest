@@ -4,6 +4,7 @@ const SITE_URL = 'https://sheetofpaper.app';
 
 const STATIC_ROUTES: Array<{ path: string; changeFrequency: MetadataRoute.Sitemap[0]['changeFrequency']; priority: number }> = [
   { path: '/', changeFrequency: 'weekly', priority: 0.9 },
+  { path: '/essai', changeFrequency: 'monthly', priority: 0.8 },
   { path: '/vitrine', changeFrequency: 'weekly', priority: 0.8 },
   { path: '/login', changeFrequency: 'monthly', priority: 0.5 },
   { path: '/signup', changeFrequency: 'monthly', priority: 0.6 },

@@ -116,6 +116,16 @@ export const documentStatusQuerySchema = z.object({
   id: z.string().regex(/^\d{1,15}$/, 'ID de document invalide'),
 });
 
+// ---------- Essai sans compte ----------
+
+export const DEMO_TEXT_LIMITS = { min: 200, max: 3_000 } as const;
+
+export const demoQuizSchema = z.object({
+  text: z.string().trim().min(DEMO_TEXT_LIMITS.min, 'Texte trop court').max(DEMO_TEXT_LIMITS.max, 'Texte trop long'),
+  /** Le texte envoyé est le document d'exemple : les numéros de page sont alors conservés */
+  sample: z.boolean().optional(),
+});
+
 export const processFileSchema = z.object({
   filePath: z.string().trim().min(1).max(500),
   documentId: z.number().int().positive(),

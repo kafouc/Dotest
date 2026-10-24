@@ -120,6 +120,25 @@ export async function enforceIpRateLimit(req: Request, route: RateLimitRoute): P
   if (!daily.allowed) throw new RateLimitError('day', daily.retryAfterSeconds);
 }
 
+/** Identifiant fixe du compteur partagé par tous les visiteurs (aucune donnée personnelle). */
+const GLOBAL_KEY = '00000000-0000-4000-8000-000000000001';
+
+/**
+ * Plafond global pour une route publique coûteuse : protège le budget IA contre un afflux de visiteurs
+ * (ou un robot qui change d'adresse IP à chaque requête).
+ */
+export async function enforceGlobalRateLimit(route: RateLimitRoute): Promise<void> {
+  const admin = getSupabaseAdminClient();
+  if (!admin) throw new RateLimiterUnavailableError('Configuration serveur manquante.');
+
+  const rule = RATE_LIMITS[route];
+  const burst = await consumeRateLimit(admin, GLOBAL_KEY, `${route}:minute`, rule.perMinute, MINUTE_SECONDS);
+  if (!burst.allowed) throw new RateLimitError('minute', burst.retryAfterSeconds);
+
+  const daily = await consumeRateLimit(admin, GLOBAL_KEY, `${route}:day`, rule.perDay.freemium, DAY_SECONDS);
+  if (!daily.allowed) throw new RateLimitError('day', daily.retryAfterSeconds);
+}
+
 /** Convertit les erreurs du limiteur en réponse HTTP ; retourne null pour toute autre erreur. */
 export function rateLimitErrorResponse(error: unknown): NextResponse | null {
   if (error instanceof RateLimitError) {
