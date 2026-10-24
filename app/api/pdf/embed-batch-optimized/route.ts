@@ -10,7 +10,7 @@ import { AI_MODELS, BATCH_CONFIG } from '@/lib/constants';
 import { recordAiUsage } from '@/lib/metricsLogger';
 import { extractEmbeddingUsage, estimateEmbeddingCost } from '@/lib/aiUsage';
 import { createJinaEmbeddings, extractEmbeddingsFromResponse, formatJinaError } from '@/lib/jinaClient';
-import type { ChunkPayload } from '@/app/api/pdf/extract/route';
+import type { ChunkPayload } from '@/lib/chunking';
 import { internalError } from '@/lib/apiError';
 import { logger } from '@/lib/logger';
 

@@ -11,6 +11,7 @@ import JSZip from 'jszip';
 import PPT from 'ppt';
 import { INTERNAL_AUTH_HEADER, signInternalRequest } from '@/lib/internalAuth';
 import { enforceRateLimit, rateLimitErrorResponse } from '@/lib/rateLimit';
+import { createChunks, type TextSegment } from '@/lib/chunking';
 import { read as readCFB } from 'cfb';
 import { EMBEDDING_CONFIG } from '@/lib/constants';
 import { internalError } from '@/lib/apiError';
@@ -30,105 +31,6 @@ interface ExtractPayload {
   filePath?: string;
   documentId: number;
   mimeType?: string;
-}
-
-interface TextSegment {
-  text: string;
-  page: number | null;
-}
-
-export interface ChunkPayload {
-  content: string;
-  pageStart: number | null;
-  pageEnd: number | null;
-}
-
-// Fonction de découpage du texte
-function createChunks(
-  segments: TextSegment[],
-  chunkSize: number,
-  chunkOverlap: number
-): ChunkPayload[] {
-  if (chunkOverlap >= chunkSize) {
-    throw new Error('chunkOverlap doit être plus petit que chunkSize');
-  }
-
-  const chunks: ChunkPayload[] = [];
-  let buffer = '';
-  let pageBuffer: number[] = [];
-  let hasNewContent = false;
-
-  const pushChunk = (length: number) => {
-    const effectiveLength = Math.min(length, buffer.length);
-    if (effectiveLength <= 0) {
-      return;
-    }
-
-    const chunkText = buffer.slice(0, effectiveLength);
-    const chunkPages = pageBuffer.slice(0, effectiveLength);
-    const validPages = chunkPages.filter((p) => p > 0);
-    const pageStart = validPages.length > 0 ? Math.min(...validPages) : null;
-    const pageEnd = validPages.length > 0 ? Math.max(...validPages) : null;
-
-    if (chunkText.trim().length === 0) {
-      buffer = buffer.slice(effectiveLength);
-      pageBuffer = pageBuffer.slice(effectiveLength);
-      return;
-    }
-
-    chunks.push({
-      content: chunkText,
-      pageStart,
-      pageEnd,
-    });
-
-    if (effectiveLength >= buffer.length) {
-      buffer = '';
-      pageBuffer = [];
-    } else if (chunkOverlap > 0) {
-      const start = Math.max(0, effectiveLength - chunkOverlap);
-      buffer = buffer.slice(start);
-      pageBuffer = pageBuffer.slice(start);
-    } else {
-      buffer = buffer.slice(effectiveLength);
-      pageBuffer = pageBuffer.slice(effectiveLength);
-    }
-    hasNewContent = false;
-  };
-
-  const appendPiece = (piece: string, page: number | null) => {
-    if (!piece) {
-      return;
-    }
-
-    buffer += piece;
-    const tag = page ?? -1;
-    pageBuffer.push(...Array.from({ length: piece.length }, () => tag));
-    hasNewContent = true;
-
-    while (buffer.length >= chunkSize) {
-      pushChunk(chunkSize);
-    }
-  };
-
-  segments.forEach((segment) => {
-    const text = segment.text?.trimEnd();
-    if (!text || text.trim().length === 0) {
-      return;
-    }
-
-    if (buffer.length > 0) {
-      appendPiece('\n\n', segment.page);
-    }
-
-    appendPiece(text, segment.page);
-  });
-
-  if (hasNewContent && buffer.trim().length > 0) {
-    pushChunk(buffer.length);
-  }
-
-  return chunks;
 }
 
 // Fonction pour extraire le texte d'un PDF

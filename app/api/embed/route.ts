@@ -2,29 +2,12 @@ import { NextResponse } from 'next/server';
 import { createSupabaseServerClient } from '@/lib/supabaseServerClient';
 import { extractText } from 'unpdf';
 import { EMBEDDING_CONFIG, AI_MODELS } from '@/lib/constants';
+import { chunkText } from '@/lib/chunking';
 import { recordAiUsage } from '@/lib/metricsLogger';
 import { extractEmbeddingUsage, estimateEmbeddingCost } from '@/lib/aiUsage';
 import { createJinaEmbeddings, extractEmbeddingsFromResponse } from '@/lib/jinaClient';
 import { internalError } from '@/lib/apiError';
 import { enforceRateLimit, rateLimitErrorResponse } from '@/lib/rateLimit';
-
-// --- Fonction de découpage personnalisée ---
-function createChunks(
-  text: string,
-  chunkSize: number,
-  chunkOverlap: number
-): string[] {
-  // ... (code de createChunks, inchangé)
-  const chunks: string[] = [];
-  let i = 0;
-  while (i < text.length) {
-    let endIndex = i + chunkSize;
-    if (endIndex > text.length) endIndex = text.length;
-    chunks.push(text.substring(i, endIndex));
-    i += chunkSize - chunkOverlap;
-  }
-  return chunks;
-}
 
 // --- Handler de la route API (POST) ---
 export async function POST(req: Request) {
@@ -68,7 +51,7 @@ export async function POST(req: Request) {
     // --- FIN MODIFICATION ---
 
     // 5. Découpe le texte en "chunks"
-    const textsToEmbed = createChunks(
+    const textsToEmbed = chunkText(
       text,
       EMBEDDING_CONFIG.CHUNK_SIZE,
       EMBEDDING_CONFIG.CHUNK_OVERLAP
