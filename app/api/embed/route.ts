@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
-import { createServerClient } from '@supabase/ssr';
+import { createSupabaseServerClient } from '@/lib/supabaseServerClient';
 import { extractText } from 'unpdf';
 import { EMBEDDING_CONFIG, AI_MODELS } from '@/lib/constants';
 import { recordAiUsage } from '@/lib/metricsLogger';
@@ -39,23 +38,7 @@ export async function POST(req: Request) {
     }
 
     // 1. Crée un client Supabase
-    const supabase = createServerClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      {
-        cookies: {
-          get(name: string) {
-            return cookies().get(name)?.value;
-          },
-          set(name: string, value: string, options) {
-            cookies().set(name, value, options);
-          },
-          remove(name: string, options) {
-            cookies().delete({ ...options, name });
-          },
-        },
-      }
-    );
+    const supabase = createSupabaseServerClient();
 
     // 2. Vérifie l'utilisateur
     const {

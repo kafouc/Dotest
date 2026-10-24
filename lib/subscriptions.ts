@@ -1,5 +1,5 @@
-import { createClient } from '@supabase/supabase-js';
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 
 export type SubscriptionPlan = 'freemium' | 'partial' | 'pro';
 
@@ -46,28 +46,7 @@ export async function fetchUserPlan(supabase: SupabaseClient): Promise<UserPlan 
 }
 
 export function getSupabaseAdminClient(): SupabaseClient | null {
-  if (typeof window !== 'undefined') {
-    return null;
-  }
-
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !serviceRoleKey) {
-    console.warn('[subscriptions] missing Supabase admin credentials');
-    return null;
-  }
-
-  return createClient(url, serviceRoleKey, {
-    auth: {
-      persistSession: false,
-      autoRefreshToken: false,
-    },
-    global: {
-      headers: {
-        'X-Client-Info': 'subscription-service',
-      },
-    },
-  });
+  return getSupabaseAdmin('subscription-service');
 }
 
 export async function setUserPlanAdmin(

@@ -3,9 +3,8 @@
 // Remplace: supabase/functions/embed-worker
 
 import { NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
-import { createServerClient } from '@supabase/ssr';
-import { createClient } from '@supabase/supabase-js';
+import { createSupabaseServerClient } from '@/lib/supabaseServerClient';
+import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { extractText } from 'unpdf';
 import mammoth from 'mammoth';
 import JSZip from 'jszip';
@@ -248,30 +247,12 @@ export async function POST(req: Request) {
     }
     
     // 2. Créer les clients Supabase (session utilisateur + service admin)
-    const supabase = createServerClient(
-      supabaseUrl,
-      supabaseAnon,
-      {
-        cookies: {
-          get(name: string) {
-            return cookies().get(name)?.value;
-          },
-          set(name: string, value: string, options) {
-            cookies().set(name, value, options);
-          },
-          remove(name: string, options) {
-            cookies().delete({ ...options, name });
-          },
-        },
-      }
-    );
+    const supabase = createSupabaseServerClient();
     
-    const supabaseAdmin = createClient(supabaseUrl, supabaseServiceRole, {
-      auth: {
-        persistSession: false,
-        autoRefreshToken: false,
-      },
-    });
+    const supabaseAdmin = getSupabaseAdmin('pdf-extract');
+    if (!supabaseAdmin) {
+      return NextResponse.json({ error: 'Configuration Supabase manquante' }, { status: 503 });
+    }
     
     // 3. L'utilisateur doit être connecté : cette route utilise la clé service
     let authenticatedUserId: string | null = null;
@@ -498,17 +479,8 @@ export async function POST(req: Request) {
     
     // Mettre à jour le statut du document en cas d'erreur
     if (documentId) {
-      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-      const supabaseServiceRole = process.env.SUPABASE_SERVICE_ROLE_KEY;
-      
-      if (supabaseUrl && supabaseServiceRole) {
-        const supabaseAdmin = createClient(supabaseUrl, supabaseServiceRole, {
-          auth: {
-            persistSession: false,
-            autoRefreshToken: false,
-          },
-        });
-        
+      const supabaseAdmin = getSupabaseAdmin('pdf-extract');
+      if (supabaseAdmin) {
         await supabaseAdmin
           .from('documents')
           .update({ status: 'failed', status_message: errorMessage })

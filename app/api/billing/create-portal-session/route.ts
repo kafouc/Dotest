@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
-import { createServerClient } from '@supabase/ssr';
+import { createSupabaseServerClient } from '@/lib/supabaseServerClient';
 import { createBillingPortalSession } from '@/lib/billing';
 
 function resolveOrigin(request: Request): string {
@@ -19,19 +18,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Configuration Supabase manquante.' }, { status: 503 });
     }
 
-    const supabase = createServerClient(supabaseUrl, supabaseAnon, {
-      cookies: {
-        get(name: string) {
-          return cookies().get(name)?.value;
-        },
-        set(name: string, value: string, options) {
-          cookies().set(name, value, options);
-        },
-        remove(name: string, options) {
-          cookies().delete({ ...options, name });
-        },
-      },
-    });
+    const supabase = createSupabaseServerClient();
 
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {

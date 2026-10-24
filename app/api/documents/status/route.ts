@@ -2,8 +2,7 @@
 // API pour surveiller l'état du traitement d'un document
 
 import { NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
-import { createServerClient } from '@supabase/ssr';
+import { createSupabaseServerClient } from '@/lib/supabaseServerClient';
 import { parseSearchParams, documentStatusQuerySchema } from '@/lib/validation';
 
 export const dynamic = 'force-dynamic';
@@ -25,15 +24,7 @@ export async function GET(req: Request) {
       );
     }
 
-    const supabase = createServerClient(supabaseUrl, supabaseAnon, {
-      cookies: {
-        get(name: string) {
-          return cookies().get(name)?.value;
-        },
-        set() {},
-        remove() {},
-      },
-    });
+    const supabase = createSupabaseServerClient();
 
     // 2. Vérifier l'authentification
     const { data: { user } } = await supabase.auth.getUser();

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { clientIp, rateLimit } from '@/lib/rateLimit';
-import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 
 type RpcActiveSessionRow = {
   session_id: string | null;
@@ -25,45 +25,8 @@ function stripAnswers(questions: unknown): unknown[] {
   });
 }
 
-let cachedAdminClient: SupabaseClient | null = null;
-let adminInitAttempted = false;
-
-function getAdminClient(): SupabaseClient | null {
-  if (typeof window !== 'undefined') {
-    return null;
-  }
-
-  if (cachedAdminClient) {
-    return cachedAdminClient;
-  }
-
-  if (adminInitAttempted) {
-    return null;
-  }
-
-  adminInitAttempted = true;
-
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-  if (!supabaseUrl || !serviceRoleKey) {
-    console.warn('[live-quiz] Supabase admin credentials manquants (NEXT_PUBLIC_SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY).');
-    return null;
-  }
-
-  cachedAdminClient = createClient(supabaseUrl, serviceRoleKey, {
-    auth: {
-      persistSession: false,
-      autoRefreshToken: false,
-    },
-    global: {
-      headers: {
-        'X-Client-Info': 'live-quiz-api',
-      },
-    },
-  });
-
-  return cachedAdminClient;
+function getAdminClient() {
+  return getSupabaseAdmin('live-quiz-api');
 }
 
 export async function GET(

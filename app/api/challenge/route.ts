@@ -1,46 +1,10 @@
 import { NextResponse } from 'next/server';
 import { clientIp, rateLimit } from '@/lib/rateLimit';
 import { parseJsonBody, challengeSchema } from '@/lib/validation';
-import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 
-let cachedClient: SupabaseClient | null = null;
-let initAttempted = false;
-
-function getAdminClient(): SupabaseClient | null {
-  if (typeof window !== 'undefined') {
-    return null;
-  }
-
-  if (cachedClient) {
-    return cachedClient;
-  }
-
-  if (initAttempted) {
-    return null;
-  }
-
-  initAttempted = true;
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-  if (!supabaseUrl || !serviceKey) {
-    console.warn('[challenge] Missing Supabase credentials (NEXT_PUBLIC_SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY).');
-    return null;
-  }
-
-  cachedClient = createClient(supabaseUrl, serviceKey, {
-    auth: {
-      persistSession: false,
-      autoRefreshToken: false,
-    },
-    global: {
-      headers: {
-        'X-Client-Info': 'challenge-api',
-      },
-    },
-  });
-
-  return cachedClient;
+function getAdminClient() {
+  return getSupabaseAdmin('challenge-api');
 }
 
 export async function POST(request: Request) {

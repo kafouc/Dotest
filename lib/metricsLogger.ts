@@ -1,41 +1,7 @@
-import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 
-let adminClient: SupabaseClient | null = null;
-let adminInitAttempted = false;
-
-function getAdminClient(): SupabaseClient | null {
-  if (typeof window !== 'undefined') {
-    return null;
-  }
-  if (adminClient) {
-    return adminClient;
-  }
-  if (adminInitAttempted) {
-    return null;
-  }
-  adminInitAttempted = true;
-
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-  if (!url || !serviceKey) {
-    console.warn('[metricsLogger] Supabase admin credentials manquants (NEXT_PUBLIC_SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY).');
-    return null;
-  }
-
-  adminClient = createClient(url, serviceKey, {
-    auth: {
-      persistSession: false,
-      autoRefreshToken: false,
-    },
-    global: {
-      headers: {
-        'X-Client-Info': 'metrics-logger',
-      },
-    },
-  });
-
-  return adminClient;
+function getAdminClient() {
+  return getSupabaseAdmin('metrics-logger');
 }
 
 export type PageViewEvent = {

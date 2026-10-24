@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
-import { headers, cookies } from 'next/headers';
-import { createServerClient } from '@supabase/ssr';
+import { headers } from 'next/headers';
+import { createSupabaseServerClient } from '@/lib/supabaseServerClient';
 import { logPageView } from '@/lib/metricsLogger';
 import type { PageViewEvent } from '@/lib/metricsLogger';
 import { createHash } from 'node:crypto';
@@ -37,19 +37,7 @@ export async function POST(req: Request) {
     const ip = forwardedFor.split(',')[0]?.trim() || requestHeaders.get('x-real-ip') || null;
     const ipHash = ip ? createHash('sha256').update(ip).digest('hex') : null;
 
-    const supabase = createServerClient(supabaseUrl, supabaseAnon, {
-      cookies: {
-        get(name: string) {
-          return cookies().get(name)?.value;
-        },
-        set(name: string, value: string, options) {
-          cookies().set(name, value, options);
-        },
-        remove(name: string, options) {
-          cookies().delete({ ...options, name });
-        },
-      },
-    });
+    const supabase = createSupabaseServerClient();
 
     const { data: { user } } = await supabase.auth.getUser();
 

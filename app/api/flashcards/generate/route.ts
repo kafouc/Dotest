@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
-import { createServerClient } from '@supabase/ssr';
+import { createSupabaseServerClient } from '@/lib/supabaseServerClient';
 import { touchUserStreak } from '@/lib/streaks';
 import { parseJsonBody, flashcardsGenerateSchema } from '@/lib/validation';
 
@@ -10,24 +9,7 @@ export async function POST(req: Request) {
     if (!parsedBody.ok) return parsedBody.response;
     const { documentPath, limit } = parsedBody.data;
 
-    const cookieStore = cookies();
-    const supabase = createServerClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      {
-        cookies: {
-          get(name: string) {
-            return cookieStore.get(name)?.value;
-          },
-          set(name: string, value: string, options: import('@supabase/ssr').CookieOptions) {
-            cookieStore.set({ name, value, ...options });
-          },
-          remove(name: string, options: import('@supabase/ssr').CookieOptions) {
-            cookieStore.set({ name, value: '', ...options });
-          },
-        },
-      }
-    );
+    const supabase = createSupabaseServerClient();
 
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return NextResponse.json({ error: 'Non authentifié' }, { status: 401 });

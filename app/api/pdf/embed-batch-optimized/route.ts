@@ -4,7 +4,8 @@
 
 import { NextResponse } from 'next/server';
 import { INTERNAL_AUTH_HEADER, verifyInternalRequest } from '@/lib/internalAuth';
-import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import type { SupabaseClient } from '@supabase/supabase-js';
+import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { AI_MODELS, BATCH_CONFIG } from '@/lib/constants';
 import { recordAiUsage } from '@/lib/metricsLogger';
 import { extractEmbeddingUsage, estimateEmbeddingCost } from '@/lib/aiUsage';
@@ -105,12 +106,10 @@ export async function POST(req: Request) {
     }
     
     // 2. Initialiser les clients
-    supabaseAdmin = createClient(supabaseUrl, supabaseServiceRole, {
-      auth: {
-        persistSession: false,
-        autoRefreshToken: false,
-      },
-    });
+    supabaseAdmin = getSupabaseAdmin('pdf-embed-batch');
+    if (!supabaseAdmin) {
+      return NextResponse.json({ error: 'Clé de service Supabase manquante' }, { status: 503 });
+    }
     
     // 3. Parser le payload
     const body: BatchPayload = await req.json();
@@ -367,14 +366,8 @@ export async function POST(req: Request) {
     
     // Mettre à jour le statut du document en cas d'erreur
     if (documentId) {
-      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-      const supabaseServiceRole = process.env.SUPABASE_SERVICE_ROLE_KEY;
-      
-      if (supabaseUrl && supabaseServiceRole) {
-        const supabase = createClient(supabaseUrl, supabaseServiceRole, {
-          auth: { persistSession: false, autoRefreshToken: false },
-        });
-        
+      const supabase = getSupabaseAdmin('pdf-embed-batch');
+      if (supabase) {
         await supabase
           .from('documents')
           .update({ 

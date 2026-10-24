@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
-import { createServerClient } from '@supabase/ssr';
+import { createSupabaseServerClient } from '@/lib/supabaseServerClient';
 import Groq from 'groq-sdk';
 import { EMBEDDING_CONFIG, AI_MODELS, QUIZ_LIMITS } from '@/lib/constants';
 import { recordAiUsage } from '@/lib/metricsLogger';
@@ -69,23 +68,7 @@ export async function POST(req: Request) {
     const count = allowedCounts.includes(numQuestions) ? numQuestions : nearestAllowed;
 
     // 1. Client Supabase
-    const supabase = createServerClient(
-      supabaseUrl,
-      supabaseAnon,
-      {
-        cookies: {
-          get(name: string) {
-            return cookies().get(name)?.value;
-          },
-          set(name: string, value: string, options) {
-            cookies().set(name, value, options);
-          },
-          remove(name: string, options) {
-            cookies().delete({ ...options, name });
-          },
-        },
-      }
-    );
+    const supabase = createSupabaseServerClient();
 
     // 2. Vérifier l'utilisateur
     const {
