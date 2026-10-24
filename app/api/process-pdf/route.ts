@@ -24,6 +24,7 @@ export async function POST(req: Request) {
       headers: {
         'Content-Type': 'application/json',
         'X-Deprecated': 'Use /api/process-file',
+        ...(req.headers.get('cookie') ? { Cookie: req.headers.get('cookie') as string } : {}),
       },
       body: JSON.stringify({ filePath, documentId, mimeType }),
     });

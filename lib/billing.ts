@@ -412,9 +412,12 @@ export async function syncPlanFromStripe(event: Stripe.Event): Promise<void> {
       ? new Date(subscription.current_period_end * 1000).toISOString()
       : null;
     const targetPlan = session.metadata?.target_plan ?? null;
-    const plan = (targetPlan === 'partial' || targetPlan === 'pro')
+    const resolvedPlan = (targetPlan === 'partial' || targetPlan === 'pro')
       ? targetPlan
       : await resolvePlanFromPrice(priceId);
+    // Le plan n'est accordé que si le paiement est réellement acquis.
+    const paid = session.payment_status === 'paid' || session.payment_status === 'no_payment_required';
+    const plan = paid && shouldKeepPaidPlan(status) ? resolvedPlan : 'freemium';
 
     await admin.from('billing_customers').upsert({
       user_id: userId,
@@ -453,9 +456,11 @@ export async function syncPlanFromStripe(event: Stripe.Event): Promise<void> {
     const priceId = subscription.items.data[0]?.price?.id ?? null;
     const status = subscription.status;
     const periodEnd = subscription.current_period_end ? new Date(subscription.current_period_end * 1000).toISOString() : null;
-    const plan = (targetPlan === 'partial' || targetPlan === 'pro')
+    const resolvedPlan = (targetPlan === 'partial' || targetPlan === 'pro')
       ? targetPlan
       : await resolvePlanFromPrice(priceId);
+    // Un abonnement 'incomplete' / 'canceled' / 'incomplete_expired' ne donne aucun accès payant.
+    const plan = shouldKeepPaidPlan(status) ? resolvedPlan : 'freemium';
 
     await admin.from('billing_customers').upsert({
       user_id: userId,
@@ -476,7 +481,15 @@ export async function syncPlanFromStripe(event: Stripe.Event): Promise<void> {
 
   if (event.type === 'customer.subscription.deleted') {
     const subscription = event.data.object as Stripe.Subscription;
-    const userId = subscription.metadata?.supabase_user_id ?? null;
+    let userId = subscription.metadata?.supabase_user_id ?? null;
+    if (!userId && typeof subscription.customer === 'string') {
+      const { data } = await admin
+        .from('billing_customers')
+        .select('user_id')
+        .eq('stripe_customer_id', subscription.customer)
+        .single();
+      userId = data?.user_id ?? null;
+    }
     if (!userId) return;
 
     await admin.from('billing_customers').upsert({

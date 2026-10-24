@@ -3,6 +3,7 @@
 // Traite les embeddings par lot tout en respectant les limites de l'API
 
 import { NextResponse } from 'next/server';
+import { INTERNAL_AUTH_HEADER, verifyInternalRequest } from '@/lib/internalAuth';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { AI_MODELS, BATCH_CONFIG } from '@/lib/constants';
 import { recordAiUsage } from '@/lib/metricsLogger';
@@ -115,6 +116,14 @@ export async function POST(req: Request) {
     const body: BatchPayload = await req.json();
     const { documentId: docId, chunkFilePath, totalChunks } = body;
     
+    // Route interne : seule la route d'extraction (qui connaît la clé service) peut l'appeler.
+    if (
+      typeof chunkFilePath !== 'string' ||
+      !verifyInternalRequest(`${docId}:${chunkFilePath}`, req.headers.get(INTERNAL_AUTH_HEADER))
+    ) {
+      return NextResponse.json({ error: 'Non autorisé' }, { status: 401 });
+    }
+
     documentId = docId;
     
     if (!documentId || !chunkFilePath) {

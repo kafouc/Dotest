@@ -63,8 +63,11 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Requête invalide' }, { status: 400 });
   }
 
-  if (!Array.isArray(payload.quiz) || payload.quiz.length === 0) {
-    return NextResponse.json({ error: 'Quiz manquant' }, { status: 400 });
+  if (!Array.isArray(payload.quiz) || payload.quiz.length === 0 || payload.quiz.length > 50) {
+    return NextResponse.json({ error: 'Quiz manquant ou trop long' }, { status: 400 });
+  }
+  if (JSON.stringify(payload.quiz).length > 200_000) {
+    return NextResponse.json({ error: 'Quiz trop volumineux' }, { status: 413 });
   }
 
   const score = Number.parseInt(String(payload.score), 10);

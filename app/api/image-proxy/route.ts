@@ -20,7 +20,7 @@ export async function GET(req: Request) {
     }
 
     // Fetch the ibb.co HTML page
-    const res = await fetch(pageUrl, { headers: { 'User-Agent': 'Mozilla/5.0 (compatible; SOP/1.0)' } });
+    const res = await fetch(pageUrl, { redirect: 'manual', headers: { 'User-Agent': 'Mozilla/5.0 (compatible; SOP/1.0)' } });
     if (!res.ok) {
       return NextResponse.json({ error: 'Upstream error' }, { status: 502 });
     }
@@ -38,14 +38,14 @@ export async function GET(req: Request) {
     // Only allow i.ibb.co images
     try {
       const iu = new URL(imgUrl);
-      if (!iu.hostname.endsWith('i.ibb.co')) {
+      if (iu.protocol !== 'https:' || iu.hostname !== 'i.ibb.co') {
         return NextResponse.json({ error: 'Disallowed image host' }, { status: 400 });
       }
     } catch {
       return NextResponse.json({ error: 'Invalid image URL' }, { status: 400 });
     }
 
-    const imgRes = await fetch(imgUrl, { headers: { 'User-Agent': 'Mozilla/5.0 (compatible; SOP/1.0)' } });
+    const imgRes = await fetch(imgUrl, { redirect: 'manual', headers: { 'User-Agent': 'Mozilla/5.0 (compatible; SOP/1.0)' } });
     if (!imgRes.ok || !imgRes.body) {
       return NextResponse.json({ error: 'Failed to fetch image' }, { status: 502 });
     }

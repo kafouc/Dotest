@@ -10,6 +10,7 @@ import { extractText } from 'unpdf';
 import mammoth from 'mammoth';
 import JSZip from 'jszip';
 import PPT from 'ppt';
+import { INTERNAL_AUTH_HEADER, signInternalRequest } from '@/lib/internalAuth';
 import { read as readCFB } from 'cfb';
 import { EMBEDDING_CONFIG } from '@/lib/constants';
 
@@ -272,13 +273,16 @@ export async function POST(req: Request) {
       },
     });
     
-    // 3. Récupérer l'utilisateur (si disponible)
+    // 3. L'utilisateur doit être connecté : cette route utilise la clé service
     let authenticatedUserId: string | null = null;
     try {
       const { data } = await supabase.auth.getUser();
       authenticatedUserId = data.user?.id ?? null;
     } catch (authError) {
       console.warn('[PDF Extract] Impossible de récupérer la session utilisateur:', authError);
+    }
+    if (!authenticatedUserId) {
+      return NextResponse.json({ error: 'Non autorisé' }, { status: 401 });
     }
     
     // 4. Parser le payload
@@ -309,7 +313,7 @@ export async function POST(req: Request) {
       );
     }
     
-    if (authenticatedUserId && docData.user_id !== authenticatedUserId) {
+    if (docData.user_id !== authenticatedUserId) {
       return NextResponse.json({ error: 'Accès refusé' }, { status: 403 });
     }
     
@@ -432,7 +436,10 @@ export async function POST(req: Request) {
 
     fetch(targetUrl, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        [INTERNAL_AUTH_HEADER]: signInternalRequest(`${documentId}:${chunkFileName}`),
+      },
       body: JSON.stringify({
         documentId,
         chunkFilePath: chunkFileName,
