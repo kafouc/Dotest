@@ -6,6 +6,9 @@ import type { Passage } from '@/lib/retrieval';
 
 export const DEMO_QUESTION_COUNT = 3;
 
+/** Longueur du texte accepté (caractères). Défini ici, sans dépendance serveur : la page /essai l'importe côté navigateur. */
+export const DEMO_TEXT_LIMITS = { min: 200, max: 3_000 } as const;
+
 /** Texte d'exemple proposé aux visiteurs (le même que le document d'exemple de l'application). */
 export const DEMO_SAMPLE_TEXT = SAMPLE_PAGES.map((page) => page.text).join('\n\n');
 

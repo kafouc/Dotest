@@ -3,8 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import DemoQuiz from '@/components/demo/DemoQuiz';
-import { DEMO_SAMPLE_TEXT } from '@/lib/demo';
-import { DEMO_TEXT_LIMITS } from '@/lib/validation';
+import { DEMO_SAMPLE_TEXT, DEMO_TEXT_LIMITS } from '@/lib/demo';
 import type { QuizQuestion } from '@/lib/quiz.types';
 import { trackPageView } from '@/lib/trackPageView';
 

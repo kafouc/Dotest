@@ -1,28 +1,18 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
+import type { RpcReturns, Tables, TablesInsert } from '@/lib/dbTypes';
 
 /** Accès aux classes d'un enseignant et à leurs statistiques (migration teacher_classes). */
 
-export type ClassRow = {
-  id: string;
-  name: string;
-  level: string | null;
-  archived: boolean;
-  created_at: string;
-};
+export type ClassRow = Pick<Tables<'classes'>, 'id' | 'name' | 'level' | 'archived' | 'created_at'>;
 
-export type ClassSessionSummary = {
-  session_id: string;
-  shared_quiz_id: string;
-  quiz_title: string;
+// Les colonnes ci-dessus sont vérifiées par TypeScript contre le schéma réel de la base.
+const CLASS_COLUMNS = 'id, name, level, archived, created_at' satisfies string;
+
+/** Ligne de class_sessions_summary(), typée d'après la base ; seul le statut est précisé. */
+export type ClassSessionSummary = Omit<RpcReturns<'class_sessions_summary'>[number], 'status' | 'started_at' | 'completed_at'> & {
   status: 'waiting' | 'active' | 'completed';
   started_at: string | null;
   completed_at: string | null;
-  created_at: string;
-  question_count: number;
-  participants: number;
-  answers: number;
-  avg_score_pct: number;
-  completion_pct: number;
 };
 
 export type QuestionStat = {
@@ -68,7 +58,7 @@ export function isClassLimitError(error: { code?: string; message?: string } | n
 }
 
 export async function listClasses(supabase: SupabaseClient, includeArchived = false): Promise<ClassRow[]> {
-  let query = supabase.from('classes').select('id, name, level, archived, created_at').order('created_at', { ascending: false });
+  let query = supabase.from('classes').select(CLASS_COLUMNS).order('created_at', { ascending: false });
   if (!includeArchived) query = query.eq('archived', false);
   const { data, error } = await query;
   if (error) throw error;
@@ -76,17 +66,14 @@ export async function listClasses(supabase: SupabaseClient, includeArchived = fa
 }
 
 export async function getClass(supabase: SupabaseClient, classId: string): Promise<ClassRow | null> {
-  const { data, error } = await supabase.from('classes').select('id, name, level, archived, created_at').eq('id', classId).maybeSingle();
+  const { data, error } = await supabase.from('classes').select(CLASS_COLUMNS).eq('id', classId).maybeSingle();
   if (error) throw error;
   return (data as ClassRow | null) ?? null;
 }
 
 export async function createClass(supabase: SupabaseClient, params: { name: string; level?: string | null }): Promise<ClassRow> {
-  const { data, error } = await supabase
-    .from('classes')
-    .insert({ name: params.name.trim(), level: params.level?.trim() || null })
-    .select('id, name, level, archived, created_at')
-    .single();
+  const row: TablesInsert<'classes'> = { name: params.name.trim(), level: params.level?.trim() || null };
+  const { data, error } = await supabase.from('classes').insert(row).select(CLASS_COLUMNS).single();
   if (error) throw error;
   return data as ClassRow;
 }

@@ -41,3 +41,7 @@ logs_result*.json
 
 # résultats d'évaluation IA (générés)
 evals/results/
+
+# Playwright
+/test-results/
+/playwright-report/

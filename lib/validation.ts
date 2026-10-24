@@ -1,5 +1,8 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
+import { DEMO_TEXT_LIMITS } from '@/lib/demo';
+
+export { DEMO_TEXT_LIMITS };
 
 /**
  * Validation des entrées des routes API (corps JSON, paramètres d'URL) et de la sortie du modèle.
@@ -117,8 +120,6 @@ export const documentStatusQuerySchema = z.object({
 });
 
 // ---------- Essai sans compte ----------
-
-export const DEMO_TEXT_LIMITS = { min: 200, max: 3_000 } as const;
 
 export const demoQuizSchema = z.object({
   text: z.string().trim().min(DEMO_TEXT_LIMITS.min, 'Texte trop court').max(DEMO_TEXT_LIMITS.max, 'Texte trop long'),

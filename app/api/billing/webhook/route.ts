@@ -19,8 +19,13 @@ export async function POST(request: Request) {
     await markStripeEventProcessed(event.id);
     return NextResponse.json({ received: true });
   } catch (error) {
-    logger.error('[billing] webhook error:', error);
-    const message = error instanceof Error ? error.message : 'Erreur inconnue';
-    return NextResponse.json({ error: message }, { status: 400 });
+    logger.error('[billing] erreur de webhook', error instanceof Error ? error : { error: String(error) });
+    // Signature invalide ou absente : requête rejetée. Autre erreur (base indisponible…) : 500 pour que Stripe réessaie.
+    const message = error instanceof Error ? error.message : '';
+    const isSignatureProblem = /signature|webhook secret|payload/i.test(message);
+    return NextResponse.json(
+      { error: isSignatureProblem ? 'Signature invalide.' : 'Traitement impossible, nouvel essai attendu.' },
+      { status: isSignatureProblem ? 400 : 500 }
+    );
   }
 }

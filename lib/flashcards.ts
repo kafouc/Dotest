@@ -1,13 +1,9 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
+import type { Tables } from '@/lib/dbTypes';
 
-export type Flashcard = {
-  id: string;
+/** Carte de révision, typée d'après la table `flashcards` ; `source` vaut `quiz_error` pour une carte tirée d'une question ratée. */
+export type Flashcard = Pick<Tables<'flashcards'>, 'id' | 'document_path' | 'question' | 'answer' | 'created_at'> & {
   user_id?: string;
-  document_path: string | null;
-  question: string;
-  answer: string;
-  created_at: string;
-  /** `quiz_error` : carte créée automatiquement à partir d'une question de quiz ratée */
   source?: 'generated' | 'quiz_error';
 };
 

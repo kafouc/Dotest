@@ -2,11 +2,21 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { FaSpinner, FaCheckCircle, FaTimesCircle, FaTrash, FaRedo } from 'react-icons/fa';
-import ProgressTracker from '@/components/ProgressTracker';
-import QuizGenerator from '@/components/QuizGenerator';
-import RevisionSheet from '@/components/RevisionSheet';
+import dynamic from 'next/dynamic';
 import { DOCUMENT_STATUS } from '@/lib/constants';
 import type { DocumentInfo } from '@/lib/types';
+
+// Blocs lourds (générateur de quiz, exports, fiche de révision) chargés à la demande : la page d'accueil de l'application reste légère
+function PanelSkeleton({ label }: { label: string }) {
+  return (
+    <div className="h-40 animate-pulse rounded-lg bg-gray-100" role="status" aria-label={label}>
+      <span className="sr-only">{label}</span>
+    </div>
+  );
+}
+const ProgressTracker = dynamic(() => import('@/components/ProgressTracker'), { loading: () => <PanelSkeleton label="Chargement du suivi" /> });
+const QuizGenerator = dynamic(() => import('@/components/QuizGenerator'), { loading: () => <PanelSkeleton label="Chargement du générateur de quiz" /> });
+const RevisionSheet = dynamic(() => import('@/components/RevisionSheet'), { loading: () => <PanelSkeleton label="Chargement de la fiche de révision" /> });
 
 type Props = {
   supabase: SupabaseClient;

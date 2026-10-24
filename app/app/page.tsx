@@ -11,9 +11,7 @@ import ActiveDocument from '@/components/app/ActiveDocument';
 import WelcomePanel from '@/components/app/WelcomePanel';
 import CheckoutNoticeBanner from '@/components/app/CheckoutNoticeBanner';
 import OnboardingChecklist from '@/components/app/OnboardingChecklist';
-import UploadForm from '@/components/UploadForm';
-import PWAInstallPrompt from '@/components/PWAInstallPrompt';
-import AutoEnablePushNotifications from '@/components/AutoEnablePushNotifications';
+import dynamic from 'next/dynamic';
 import ToastContainer, { useToast } from '@/components/ui/Toast';
 import { confirmDialog } from '@/components/ui/confirm';
 
@@ -27,6 +25,13 @@ import { useReviewSummary } from '@/hooks/useReviewSummary';
 import { useOnboarding } from '@/hooks/useOnboarding';
 import { trackPageView } from '@/lib/trackPageView';
 import type { DocumentInfo } from '@/lib/types';
+
+const UploadForm = dynamic(() => import('@/components/UploadForm'), {
+  loading: () => <div className="h-40 animate-pulse rounded-lg bg-gray-100" role="status" aria-label="Chargement du formulaire d'import" />,
+});
+// Invites secondaires : chargées après l'affichage de l'application
+const PWAInstallPrompt = dynamic(() => import('@/components/PWAInstallPrompt'), { ssr: false });
+const AutoEnablePushNotifications = dynamic(() => import('@/components/AutoEnablePushNotifications'), { ssr: false });
 
 const fadeIn = {
   initial: { opacity: 0, y: 20 },

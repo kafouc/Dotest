@@ -164,8 +164,13 @@ async function resolveStripePriceId(stripe: Stripe, plan: BillingPlan): Promise<
   throw new Error(`Aucun prix Stripe actif n'est configuré pour le plan ${plan}.`);
 }
 
-function shouldKeepPaidPlan(status: Stripe.Subscription.Status | null | undefined): boolean {
-  return status === 'active' || status === 'trialing' || status === 'past_due' || status === 'unpaid';
+/**
+ * Statuts qui donnent accès au forfait payant.
+ * `past_due` (prélèvement échoué, Stripe réessaie pendant quelques jours) garde l'accès : c'est la période de grâce.
+ * `unpaid` (Stripe a abandonné les relances) ne le garde plus.
+ */
+export function shouldKeepPaidPlan(status: Stripe.Subscription.Status | null | undefined): boolean {
+  return status === 'active' || status === 'trialing' || status === 'past_due';
 }
 
 async function getAdminClient(): Promise<SupabaseAdmin> {
@@ -223,6 +228,27 @@ export async function ensureStripeCustomer(userId: string, email: string | null)
   return upserted as BillingCustomerRow;
 }
 
+/**
+ * Options de TVA et de facturation du paiement. Activées par STRIPE_AUTOMATIC_TAX=true une fois Stripe Tax configuré
+ * dans le tableau de bord Stripe (adresse de l'entreprise, enregistrement TVA, prix en « taxe incluse » ou « hors taxe »).
+ * Sans cela, la facture ne contient aucune ligne de TVA : voir docs/FACTURATION.md.
+ */
+export function checkoutTaxOptions(env: Record<string, string | undefined> = process.env): Partial<Stripe.Checkout.SessionCreateParams> {
+  const options: Partial<Stripe.Checkout.SessionCreateParams> = {};
+  if (env.STRIPE_AUTOMATIC_TAX === 'true') {
+    options.automatic_tax = { enabled: true };
+    options.billing_address_collection = 'required';
+    options.tax_id_collection = { enabled: true };
+    // Obligatoire avec tax_id_collection quand le client Stripe existe déjà
+    options.customer_update = { name: 'auto', address: 'auto' };
+  }
+  // Acceptation des CGV avant paiement (l'URL des CGV doit être renseignée dans le tableau de bord Stripe)
+  if (env.STRIPE_REQUIRE_TERMS === 'true') {
+    options.consent_collection = { terms_of_service: 'required' };
+  }
+  return options;
+}
+
 export async function createCheckoutSession(opts: {
   userId: string;
   plan: BillingPlan;
@@ -265,6 +291,8 @@ export async function createCheckoutSession(opts: {
     ],
     success_url: opts.successUrl,
     cancel_url: opts.cancelUrl,
+    locale: 'fr',
+    ...checkoutTaxOptions(),
     subscription_data: {
       metadata: {
         supabase_user_id: opts.userId,
@@ -401,8 +429,33 @@ export async function syncUserPlanFromStripe(userId: string): Promise<BillingPla
   return plan;
 }
 
+/** Resynchronise le forfait à partir de l'identifiant client Stripe (événements de facturation). */
+export async function syncPlanForCustomer(customerId: string): Promise<BillingPlan | null> {
+  const admin = await getAdminClient();
+  const { data } = await admin.from('billing_customers').select('user_id').eq('stripe_customer_id', customerId).single();
+  const userId = (data as { user_id?: string } | null)?.user_id;
+  if (!userId) return null;
+  return syncUserPlanFromStripe(userId);
+}
+
 export async function syncPlanFromStripe(event: Stripe.Event): Promise<void> {
   const admin = await getAdminClient();
+
+  // Paiement asynchrone (prélèvement SEPA…) confirmé après la fin du paiement : le forfait est accordé à ce moment-là
+  if (event.type === 'checkout.session.async_payment_succeeded') {
+    const session = event.data.object as Stripe.Checkout.Session;
+    const customerId = typeof session.customer === 'string' ? session.customer : null;
+    if (customerId) await syncPlanForCustomer(customerId);
+    return;
+  }
+
+  // Factures : le résultat d'un prélèvement (réussi, échoué) change le statut de l'abonnement
+  if (event.type === 'invoice.paid' || event.type === 'invoice.payment_succeeded' || event.type === 'invoice.payment_failed') {
+    const invoice = event.data.object as Stripe.Invoice;
+    const customerId = typeof invoice.customer === 'string' ? invoice.customer : null;
+    if (customerId) await syncPlanForCustomer(customerId);
+    return;
+  }
 
   if (event.type === 'checkout.session.completed') {
     const session = event.data.object as Stripe.Checkout.Session;
@@ -459,7 +512,15 @@ export async function syncPlanFromStripe(event: Stripe.Event): Promise<void> {
   }
 
   if (event.type === 'customer.subscription.updated' || event.type === 'customer.subscription.created') {
-    const subscription = event.data.object as Stripe.Subscription;
+    // Les événements Stripe peuvent arriver dans le désordre : un ancien « updated » ne doit pas écraser l'état actuel.
+    // On relit donc l'abonnement chez Stripe (source de vérité) ; en cas d'échec, on retombe sur le contenu de l'événement.
+    const payloadSubscription = event.data.object as Stripe.Subscription;
+    let subscription = payloadSubscription;
+    try {
+      subscription = await getStripe().subscriptions.retrieve(payloadSubscription.id);
+    } catch (error) {
+      logger.warn('[billing] relecture de l’abonnement impossible, utilisation de l’événement', error instanceof Error ? error : { error: String(error) });
+    }
     let userId = subscription.metadata?.supabase_user_id ?? null;
     const targetPlan = subscription.metadata?.target_plan ?? null;
     const customerId = subscription.customer as string;
