@@ -1,6 +1,6 @@
 import Link from 'next/link';
 
-export const metadata = { title: 'Compte supprimé - Sheet of Paper', robots: { index: false } };
+export const metadata = { title: 'Compte supprimé', robots: { index: false } };
 
 export default function AccountDeletedPage() {
   return (

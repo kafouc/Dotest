@@ -169,3 +169,34 @@ test.describe('accès et erreurs', () => {
     await expect(page).toHaveURL(/\/essai/);
   });
 });
+
+test.describe('référencement', () => {
+  test('l’accueil a un seul h1, une URL canonique propre et des données structurées', async ({ page }) => {
+    await page.goto('/');
+    await expect(page.locator('h1')).toHaveCount(1);
+    await expect(page.locator('h1')).toContainText('Étudiez mieux avec l’IA');
+    await expect(page.locator('link[rel="canonical"]')).toHaveAttribute('href', 'https://sheetofpaper.app');
+    const types = await page.$$eval('script[type="application/ld+json"]', (nodes) => nodes.map((n) => JSON.parse(n.textContent ?? '{}')['@type']));
+    expect(types).toEqual(expect.arrayContaining(['Organization', 'WebSite', 'SoftwareApplication', 'FAQPage']));
+  });
+
+  test('chaque page publique a sa propre URL canonique, sans copier celle de l’accueil', async ({ page }) => {
+    for (const path of ['/essai', '/demo', '/vitrine', '/signup', '/confidentialite']) {
+      await page.goto(path);
+      await expect(page.locator('link[rel="canonical"]'), path).toHaveAttribute('href', `https://sheetofpaper.app${path}`);
+    }
+  });
+
+  test('le plan du site liste les pages publiques et robots.txt le référence', async ({ request }) => {
+    const sitemap = await (await request.get('/sitemap.xml')).text();
+    for (const path of ['/essai', '/demo', '/confidentialite']) expect(sitemap).toContain(`https://sheetofpaper.app${path}</loc>`);
+    expect(sitemap).not.toContain('/app<');
+    expect(await (await request.get('/robots.txt')).text()).toContain('Sitemap: https://sheetofpaper.app/sitemap.xml');
+  });
+
+  test('l’aperçu de partage est une image 1200×630', async ({ request }) => {
+    const res = await request.get('/opengraph-image');
+    expect(res.status()).toBe(200);
+    expect(res.headers()['content-type']).toContain('image/png');
+  });
+});
