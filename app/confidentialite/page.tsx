@@ -3,9 +3,9 @@ import Link from 'next/link';
 import ConsentPreferencesButton from '@/components/consent/ConsentPreferencesButton';
 
 export const metadata: Metadata = {
-  title: 'Politique de confidentialité - Sheet of Paper',
+  title: 'Politique de confidentialité',
   description: 'Quelles données Sheet of Paper collecte, pourquoi, combien de temps, et comment exercer vos droits.',
-  alternates: { canonical: 'https://sheetofpaper.app/confidentialite' },
+  alternates: { canonical: '/confidentialite' },
 };
 
 const UPDATED = '24 octobre 2026';

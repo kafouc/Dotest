@@ -1,6 +1,5 @@
 import type { MetadataRoute } from 'next';
-
-const SITE_URL = 'https://sheetofpaper.app';
+import { SITE_URL } from '@/lib/seo';
 
 export default function robots(): MetadataRoute.Robots {
   return {
@@ -16,6 +15,11 @@ export default function robots(): MetadataRoute.Robots {
           '/flashcards/',
           '/review/',
           '/classes/',
+          '/settings',
+          '/challenge/',
+          '/auth/',
+          '/compte-supprime',
+          '/join/',
         ],
       },
     ],

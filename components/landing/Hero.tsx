@@ -103,7 +103,9 @@ export default function Hero() {
       <div className="container relative z-20 mx-auto flex max-w-6xl flex-col items-center gap-12 px-4">
         <div className="w-full max-w-4xl rounded-[40px] border border-white/40 bg-white/25 p-8 shadow-[0_25px_120px_-40px_rgba(51,51,51,0.55)] backdrop-blur-[28px] transition duration-500 hover:border-white/60 hover:bg-white/30 md:p-12">
           <div className="flex flex-col items-center gap-8 text-center md:gap-10">
-            <div className="space-y-4">
+            <h1 className="space-y-4">
+              <span className="sr-only">Étudiez mieux avec l’IA : transformez vos PDF, cours Word et PowerPoint en quiz, fiches de révision et flashcards</span>
+              <span aria-hidden="true" className="block space-y-4">
               <div className="flex flex-wrap items-center justify-center gap-3 text-brand-dark">
                 <span className="text-3xl font-heading font-semibold sm:text-4xl md:text-5xl lg:text-6xl xl:text-7xl">Etudiez</span>
                 <span className="relative inline-flex items-center justify-center">
@@ -144,7 +146,8 @@ export default function Hero() {
                   <span className="absolute -bottom-3 left-0 right-0 h-2 rounded-full bg-gradient-to-r from-brand-yellow/80 via-white/50 to-brand-teal/70 blur" />
                 </span>
               </div>
-            </div>
+              </span>
+            </h1>
 
             <p className="max-w-2xl text-base text-brand-dark-lighter sm:text-lg md:text-xl lg:text-2xl">
               Transformez vos documents en quiz interactifs et révisez efficacement avec l&apos;intelligence artificielle.
